@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Carreta Joy</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- carregando -->
+<div id="loading" class="screen show">
+  <div class="logo"><span>Carreta</span><b>JOY</b></div>
+  <div class="bar"><i id="loadbar"></i></div>
+  <p id="loadtxt">Carregando a carreta...</p>
+</div>
+
+<!-- menu -->
+<div id="menu" class="screen">
+  <div class="menu-wrap">
+    <div class="menu-head">
+      <div class="logo small"><span>Carreta</span><b>JOY</b></div>
+      <div class="menu-actions">
+        <button id="btnConfig" class="chip">⚙️ Ajustes</button>
+      </div>
+    </div>
+    <div class="menu-body">
+      <div class="col kids">
+        <h3>Quem você controla?</h3>
+        <div class="kidcards">
+          <button class="kidcard sel" data-kid="0"><img id="thumb0" alt=""><span>Arthur</span></button>
+          <button class="kidcard" data-kid="1"><img id="thumb1" alt=""><span>Afonso</span></button>
+        </div>
+        <p class="hint">O outro irmão vem junto e ajuda!</p>
+        <div class="daynight">
+          <button id="btnDia" class="chip">☀️ Dia</button>
+          <button id="btnNoite" class="chip">🌙 Noite</button>
+        </div>
+      </div>
+      <div class="col cities">
+        <h3>Escolha a cidade</h3>
+        <div id="citylist"></div>
+      </div>
+    </div>
+    <button id="btnPlay" class="big">▶ JOGAR</button>
+  </div>
+</div>
+
+<!-- ajustes -->
+<div id="config" class="screen modal">
+  <div class="panel">
+    <h2>Ajustes</h2>
+    <label>🎵 Música <input type="range" id="volMusic" min="0" max="1" step="0.05"></label>
+    <label>🔊 Efeitos <input type="range" id="volSfx" min="0" max="1" step="0.05"></label>
+    <label>📱 Gráficos
+      <select id="quality"><option value="leve">Leve (celular simples)</option><option value="media">Médio</option><option value="alta">Alto (brilho das luzes)</option></select>
+    </label>
+    <div class="howto">
+      <b>Como jogar</b>
+      <p>⬅ ➡ trocam de faixa · <b>PULAR</b> pula · no ar faça <b>MORTAL</b>, <b>FLIP</b> e <b>ESTRELA</b> (termine antes de cair!).</p>
+      <p>No chão, a <b>ESTRELA</b> é uma rodinha que muda de faixa. Pule em cima dos carros e bancos (parkour!) e voe nas rampas.</p>
+      <p><b>DESCER/SUBIR</b> pula da carreta ou escala a lateral. <b>TROCAR</b> alterna entre Arthur e Afonso.</p>
+      <p>Na praça, toque nos botões coloridos no ritmo para os dois dançarem juntos.</p>
+    </div>
+    <button id="btnConfigOk" class="big">OK</button>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="topleft">
+    <div id="score">0</div>
+    <div id="mult" class="hidden">x2</div>
+    <div id="who"></div>
+  </div>
+  <div class="topcenter">
+    <div id="cityname"></div>
+    <div class="progress"><i id="progfill"></i><b id="progpraca">💃</b><b id="progtruck">🚚</b></div>
+  </div>
+  <div class="topright">
+    <button id="btnPause" class="round">⏸</button>
+  </div>
+  <div id="toasts"></div>
+  <div id="hint"></div>
+
+  <div id="controls">
+    <div class="left">
+      <button class="ctl dir" data-act="left">◀</button>
+      <button class="ctl dir" data-act="right">▶</button>
+    </div>
+    <div class="mid">
+      <button class="ctl ctx" id="btnCtx" data-act="ctx">DESCER</button>
+      <button class="ctl swap" id="btnSwap" data-act="swap">🔄 TROCAR</button>
+    </div>
+    <div class="right">
+      <button class="ctl trick t1" data-act="mortal">MORTAL</button>
+      <button class="ctl trick t2" data-act="flip">FLIP</button>
+      <button class="ctl trick t3" data-act="estrela">ESTRELA</button>
+      <button class="ctl jump" data-act="jump">PULAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- dança -->
+<div id="dance">
+  <div class="dtitle">💃 HORA DA DANÇA! 🕺</div>
+  <div class="dinfo"></div>
+  <div class="djudge"></div>
+  <div class="dlanes">
+    <div class="dline"></div>
+  </div>
+  <div class="dpads"></div>
+</div>
+
+<!-- pausa -->
+<div id="pause" class="screen modal">
+  <div class="panel">
+    <h2>Pausado</h2>
+    <button id="btnResume" class="big">▶ Continuar</button>
+    <button id="btnRestart" class="mid-btn">↺ Recomeçar cidade</button>
+    <button id="btnMenu" class="mid-btn">🏠 Menu</button>
+  </div>
+</div>
+
+<!-- resultado -->
+<div id="results" class="screen modal">
+  <div class="panel">
+    <h2 id="resTitle">Chegamos!</h2>
+    <div id="resStars"></div>
+    <div id="resScore"></div>
+    <div id="resInfo"></div>
+    <button id="btnNext" class="big">Próxima cidade ▶</button>
+    <button id="btnAgain" class="mid-btn">↺ Jogar de novo</button>
+    <button id="btnResMenu" class="mid-btn">🏠 Menu</button>
+  </div>
+</div>
+
+<div id="rotate">📱↻<br>Gire o celular para jogar deitado</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
