@@ -33,8 +33,8 @@ As músicas são composições originais, sintetizadas em tempo real (sem arquiv
 Baixe o APK na página de **Releases** (versões) do repositório, abra no celular
 e permita "instalar apps de fontes desconhecidas".
 
-Para publicar uma versão nova: aumente `versionCode`/`versionName` em `app/build.gradle.kts`
-e envie uma tag (`git tag v0.2.0 && git push origin v0.2.0`). O GitHub Actions compila e publica o APK.
+Para publicar uma versão nova: aumente `versionCode` e `versionName` em `app/build.gradle.kts`
+e envie para o `main`. O GitHub Actions compila e publica a versão `v<versionName>` com o APK.
 
 ## Compilar
 
