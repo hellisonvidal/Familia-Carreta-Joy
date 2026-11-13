@@ -30,8 +30,11 @@ As músicas são composições originais, sintetizadas em tempo real (sem arquiv
 
 ## Instalar
 
-Baixe o APK em **Actions → APK → (última execução) → Artifacts → carreta-joy-apk**,
-copie para o celular e abra (permita "instalar apps de fontes desconhecidas").
+Baixe o APK na página de **Releases** (versões) do repositório, abra no celular
+e permita "instalar apps de fontes desconhecidas".
+
+Para publicar uma versão nova: aumente `versionCode`/`versionName` em `app/build.gradle.kts`
+e envie uma tag (`git tag v0.2.0 && git push origin v0.2.0`). O GitHub Actions compila e publica o APK.
 
 ## Compilar
 

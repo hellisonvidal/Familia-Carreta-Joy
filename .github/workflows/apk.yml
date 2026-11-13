@@ -2,7 +2,12 @@ name: APK
 
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -22,8 +27,29 @@ jobs:
       - name: Compilar APK
         run: ./gradlew assembleDebug
 
+      - name: Renomear APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk "CarretaJoy-${GITHUB_REF_NAME//\//-}.apk"
+
       - uses: actions/upload-artifact@v4
         with:
           name: carreta-joy-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: CarretaJoy-*.apk
           retention-days: 30
+
+      # Ao enviar uma tag (ex.: v0.1.0), publica uma versão com o APK anexado
+      - name: Publicar versão
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Carreta Joy ${{ github.ref_name }}
+          files: CarretaJoy-*.apk
+          body: |
+            Jogo 3D da carreta com Arthur e Afonso. Piloto com 5 cidades: São Paulo, Rio de Janeiro, Belo Horizonte, Salvador e Curitiba.
+
+            **Instalar:** baixe o arquivo `.apk` abaixo no celular Android, abra e permita "instalar apps de fontes desconhecidas".
+            Requer Android 7.0 ou mais novo.
+
+            - Subir e descer pela lateral da carreta, mortal, flip, estrela e parkour em carros, bancos e rampas
+            - Dança em conjunto na praça (jogo de ritmo)
+            - Dia ou noite, com as luzes da carreta no ritmo da música
+            - Músicas originais em 5 estilos: funk, samba, forró, axé e eletrônico
