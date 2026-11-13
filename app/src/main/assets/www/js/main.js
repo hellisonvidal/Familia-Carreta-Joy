@@ -554,7 +554,7 @@ function beginStopParty(st) {
 }
 // todos os integrantes se reúnem no espaço de dança da praça
 function gatherAt(st) {
-  stopEscort(); G.party = st;
+  stopEscort(); G.party = st; camInit = true;
   const p = G.player;
   if (p.mode === 'drive') p.exitDrive(G);
   if (p.mode === 'pose') p.standUp(G);
