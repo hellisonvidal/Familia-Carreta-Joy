@@ -136,3 +136,26 @@ export function beamTexture() {
   g.fillStyle = gr; g.fillRect(0, 0, 64, 256);
   const t = tex(c, false); return t;
 }
+
+// Asfalto de rua da cidade aberta: 512px = 14 m de largura (4 faixas), 14 m de comprimento
+export function asphaltStreet() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = '#3c3d40'; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 9000; i++) { g.fillStyle = ['#323336', '#47484c', '#37383b', '#4e4f52'][i % 4]; g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2); }
+  const X = (lat) => (lat + 7) / 14 * 512;
+  g.fillStyle = '#e8e8e2';
+  g.fillRect(X(-6.6), 0, 6, 512); g.fillRect(X(6.6) - 6, 0, 6, 512);
+  for (const lat of [-3.5, 3.5]) for (let v = 0; v < 512; v += 128) g.fillRect(X(lat) - 3, v, 6, 64);
+  g.fillStyle = '#f2c230'; g.fillRect(X(0) - 7, 0, 4, 512); g.fillRect(X(0) + 3, 0, 4, 512);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
+export function grass() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+  const g = c.getContext('2d'); g.fillStyle = '#4f8a3a'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 2500; i++) { g.fillStyle = ['#5c9a44', '#447a32', '#62a24a'][i % 3]; g.fillRect(Math.random() * 128, Math.random() * 128, 2, 3); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
