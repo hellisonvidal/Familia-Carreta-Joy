@@ -30,12 +30,11 @@
         <button class="tab" data-tab="tCarreta">🚚 Carreta</button>
         <button class="tab" data-tab="tTempo">⏱ Tempo</button>
       </div>
-      <button id="btnConfig" class="chip">⚙️</button>
+      <button id="btnConfig" class="chip">⚙️ Ajustes</button>
     </div>
     <div class="menu-body">
       <div class="tabpage show" id="tCidade">
         <div id="citylist" class="grid"></div>
-        <div class="row"><span>Hora:</span><button id="btnDia" class="chip">☀️ Dia</button><button id="btnNoite" class="chip">🌙 Noite</button></div>
       </div>
       <div class="tabpage" id="tPers">
         <div id="charlist" class="grid chars"></div>
@@ -51,6 +50,10 @@
       </div>
     </div>
     <div class="menu-foot">
+      <div class="dn" role="group" aria-label="Dia ou noite">
+        <button id="btnDia">☀️<span>DIA</span></button>
+        <button id="btnNoite">🌙<span>NOITE</span></button>
+      </div>
       <div id="summary"></div>
       <button id="btnPlay" class="big">▶ JOGAR</button>
     </div>
@@ -69,6 +72,13 @@
     <label>📱 Gráficos
       <select id="quality"><option value="leve">Leve (celular simples)</option><option value="media">Médio</option><option value="alta">Alto (brilho das luzes)</option></select>
     </label>
+    <div class="updbox">
+      <b>🔄 Atualizações</b>
+      <div class="row"><span id="verAtual">Versão</span><button id="btnUpd" class="chip">Verificar</button></div>
+      <div id="updStatus"></div>
+      <button id="btnUpdGo" class="big hidden">⬇ Baixar e instalar</button>
+    </div>
+    <div id="padStatus" class="hint">🎮 Conecte um controle PlayStation/Xbox (Bluetooth ou USB) e aperte um botão.</div>
     <div class="howto">
       <b>Como jogar</b>
       <p>🕹️ Joystick: anda para onde quiser · <b>🏃 CORRER</b> liga/desliga a corrida · arraste a tela para girar a câmera.</p>
@@ -76,6 +86,7 @@
       <p><b>PULAR</b> · no ar: <b>MORTAL</b>, <b>FLIP</b>, <b>ESTRELA</b> (termine antes de cair!). Corra contra muros baixos e carros para escalar (parkour). Rampas fazem voar!</p>
       <p><b>SUBIR</b> perto da carreta escala a lateral · <b>DESCER</b> pula do teto · <b>DIRIGIR</b> assume o volante.</p>
       <p>Na praça a carreta para: toque os botões coloridos no ritmo e todo mundo dança junto!</p>
+      <p>🎮 Controle: analógico esquerdo anda · direito gira a câmera · A/✕ pula · X/▢ mortal · Y/△ flip · B/○ estrela · RB/R1 correr · LB/L1 subir/descer · RT/R2 acelera · LT/L2 freia · ▲ dirigir · ▼ dança combo · Start pausa · Select personagens.</p>
     </div>
     <button id="btnConfigOk" class="big">OK</button>
   </div>

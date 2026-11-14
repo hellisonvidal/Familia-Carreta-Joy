@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, pick, range } from './cities.js';
 import * as TX from './textures.js';
+import { vehicleGeometry, pickVehicle } from './vehicles.js';
 
 // =====================================================================
 // Cidade em MUNDO ABERTO: grade de quarteirões com ladeiras.
@@ -201,13 +202,13 @@ export class City {
       const tx = -nz, tz = nx; // direção ao longo da rua
       const cx = sx + nx * 13, cz = sz + nz * 13; // centro da pista
       const spots = [];
-      for (const [row, n] of [[0, 5], [1, 5]]) for (let k = 0; k < n; k++) {
-        const off = (k - (n - 1) / 2) * 3.2 + (row ? 1.6 : 0) * 0;
+      for (const [row, n] of [[0, 6], [1, 6]]) for (let k = 0; k < n; k++) {
+        const off = (k - (n - 1) / 2) * 2.9;
         const x = cx + tx * off + nx * row * 3.4, z = cz + tz * off + nz * row * 3.4;
         spots.push({ x, z, yaw: Math.atan2(-nx, -nz) });
       }
       // a ordem: frente-centro primeiro (para o jogador)
-      const order = [2, 1, 3, 0, 4, 7, 6, 8, 5, 9];
+      const order = [2, 3, 1, 4, 0, 5, 8, 9, 7, 10, 6, 11];
       const st = { x: sx, z: sz, block: b, nome: b.nome || 'Praça Inicial', inicio: b.type === 'inicio', n: [nx, nz], t: [tx, tz], cx, cz, spots: order.map(i => spots[i]) };
       this.stops.push(st);
       const hw = 10, d0 = 6.5, d1 = 21; // retângulo reservado
@@ -511,16 +512,17 @@ export class City {
     this.notes = [];
     const note = (x, z, y, gold = false) => this.notes.push({ p: new THREE.Vector3(x, y, z), gold, taken: false });
     const carColors = [0xe53935, 0x1e88e5, 0xfdd835, 0x43a047, 0xffffff, 0x8e24aa, 0x212121, 0xff7043];
+    const vcache = new Map();
     const car = (x, z, alongX) => {
-      const y = this.floorY(x, z), ry = alongX ? Math.PI / 2 : 0, col = pick(r, carColors);
+      const y = this.floorY(x, z), ry = alongX ? (r() < 0.5 ? Math.PI / 2 : -Math.PI / 2) : (r() < 0.5 ? 0 : Math.PI);
+      const { type, color } = pickVehicle(r); const key = type + color;
+      if (!vcache.has(key)) vcache.set(key, vehicleGeometry(type, color));
+      const V = vcache.get(key);
       const m = M4(x, y, z, ry);
-      acc.add(new THREE.BoxGeometry(1.9, 0.75, 4.2).translate(0, 0.65, 0), m, col);
-      acc.add(new THREE.BoxGeometry(1.72, 0.5, 2.3).translate(0, 1.25, -0.2), m, 0x1c2833);
-      acc.add(new THREE.BoxGeometry(1.74, 0.08, 2.35).translate(0, 1.52, -0.2), m, col);
-      for (const [wx, wz] of [[-0.9, 1.35], [0.9, 1.35], [-0.9, -1.35], [0.9, -1.35]]) acc.add(new THREE.CylinderGeometry(0.34, 0.34, 0.26, 10).rotateZ(Math.PI / 2).translate(wx, 0.34, wz), m, 0x111111);
-      const [hw, hl] = alongX ? [2.1, 0.95] : [0.95, 2.1];
-      this.addCollider({ x0: x - hw, x1: x + hw, z0: z - hl, z1: z + hl, top: y + 1.5, walk: true, kind: 'carro', truck: true });
-      for (let k = -1; k <= 1; k++) note(x + (alongX ? k * 1.5 : 0), z + (alongX ? 0 : k * 1.5), y + 2.6);
+      const g = V.geo.clone(); g.applyMatrix4(m); g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); acc.parts.push(g);
+      const [hw, hl] = alongX ? [V.len / 2, V.w / 2] : [V.w / 2, V.len / 2];
+      this.addCollider({ x0: x - hw, x1: x + hw, z0: z - hl, z1: z + hl, top: y + V.h, walk: true, kind: 'carro', truck: true });
+      for (let k = -1; k <= 1; k++) note(x + (alongX ? k * 1.5 : 0), z + (alongX ? 0 : k * 1.5), y + V.h + 1.1);
     };
     const bench = (x, z, alongX) => {
       const y = this.floorY(x, z), m = M4(x, y, z, alongX ? Math.PI / 2 : 0);

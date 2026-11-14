@@ -14,6 +14,7 @@ import { CHARACTERS, COSTUMES, KID_COSTUMES, makeBody, POSES } from './character
 import { Music, STYLES } from './music.js';
 import { Dance, PADS } from './dance.js';
 import { Life } from './life.js';
+import { prepareClips, CLIP_INFO } from './anim.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -88,10 +89,16 @@ async function loadModels() {
   const files = { carreta: 'models/carreta.glb', afonsoFull: 'models/Afonso.glb', arthurHead: 'models/ArthurHead.glb', afonsoHead: 'models/AfonsoHead.glb', arthurBody: 'models/ArthurBody.glb', afonsoBody: 'models/AfonsoBody.glb' };
   const prog = {};
   const upd = () => { const v = Object.values(prog); const l = v.reduce((a, p) => a + p.l, 0), t = v.reduce((a, p) => a + p.t, 0) || 1; $('loadbar').style.width = `${Math.round(100 * l / t)}%`; };
+  files.xbot = 'models/xbot.glb';
+  for (const n of Object.keys(CLIP_INFO)) files['anim_' + n] = `anims/${n}.glb`;
+  const raw = {};
   await Promise.all(Object.entries(files).map(([k, url]) => new Promise((res, rej) => {
     prog[k] = { l: 0, t: 1 };
-    loader.load(url, (g) => { assets[k] = g.scene; prog[k].l = prog[k].t; upd(); res(); }, (e) => { prog[k] = { l: e.loaded, t: e.total || e.loaded || 1 }; upd(); }, rej);
+    loader.load(url, (g) => { assets[k] = g.scene; raw[k] = g; prog[k].l = prog[k].t; upd(); res(); }, (e) => { prog[k] = { l: e.loaded, t: e.total || e.loaded || 1 }; upd(); }, rej);
   })));
+  // animações capturadas (Mixamo)
+  const anims = {}; for (const n of Object.keys(CLIP_INFO)) if (raw['anim_' + n]) anims[n] = raw['anim_' + n];
+  assets.clips = prepareClips(anims);
   // pele/cabelo dos meninos sem "metal" (era isso que deixava eles escuros)
   for (const k of ['afonsoFull', 'arthurHead', 'afonsoHead']) assets[k].traverse(o => {
     if (o.isMesh) { o.material.metalness = 0; o.material.metalnessMap = null; o.material.roughness = 0.78; o.material.envMapIntensity = 0.8; o.material.needsUpdate = true; o.frustumCulled = false; }
@@ -171,7 +178,31 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
 $('btnDia').onclick = () => { G.night = false; buildMenu(); menuScene(); };
 $('btnNoite').onclick = () => { G.night = true; buildMenu(); menuScene(); };
 $('btnPlay').onclick = () => { music.init(); save.city = G.cityIdx; persist(); startCity(G.cityIdx, G.night ?? CITIES[G.cityIdx].noite); };
+// ---------------- atualizador (dentro do app Android) ----------------
+const APP = window.CarretaApp;
+let updUrl = null;
+function curVersion() { try { return APP ? APP.version() : 'navegador'; } catch (e) { return '?'; } }
+const vnum = (v) => (v || '').replace(/^v/, '').split('.').map(n => parseInt(n) || 0);
+const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) > (y[i] || 0)) return true; if ((x[i] || 0) < (y[i] || 0)) return false; } return false; };
+window.onUpdateInfo = (json) => {
+  try {
+    const r = JSON.parse(json);
+    if (r.erro) { $('updStatus').textContent = '⚠️ Não consegui verificar: ' + r.erro; return; }
+    const tag = r.tag_name, apk = (r.assets || []).find(a => /\.apk$/i.test(a.name));
+    if (newer(tag, curVersion()) && apk) { updUrl = apk.browser_download_url; $('updStatus').innerHTML = `✨ Nova versão <b>${tag}</b> disponível!`; $('btnUpdGo').classList.remove('hidden'); }
+    else $('updStatus').textContent = `✅ Você já tem a versão mais nova (${tag || curVersion()}).`;
+  } catch (e) { $('updStatus').textContent = '⚠️ Resposta inesperada.'; }
+};
+window.onUpdateProgress = (pct) => { $('updStatus').textContent = pct >= 100 ? '📦 Abrindo o instalador...' : `⬇ Baixando... ${pct}%`; };
+window.onUpdateError = (msg) => { $('updStatus').textContent = '⚠️ ' + msg; };
+$('btnUpd').onclick = () => {
+  if (!APP) { $('updStatus').textContent = 'O atualizador funciona no app Android. No navegador, baixe em Releases no GitHub.'; return; }
+  $('updStatus').textContent = 'Verificando...'; APP.checkUpdate();
+};
+$('btnUpdGo').onclick = () => { if (APP && updUrl) { APP.downloadAndInstall(updUrl); $('btnUpdGo').classList.add('hidden'); } };
+
 function openConfig() {
+  $('verAtual').textContent = 'Versão instalada: ' + curVersion();
   const s = save.settings;
   $('volMusic').value = s.music; $('volSfx').value = s.sfx; $('quality').value = s.quality; $('bright').value = s.bright; $('contrast').value = s.contrast; $('satur').value = s.satur;
   show('config', true);
@@ -197,7 +228,7 @@ function clearWorld() {
 }
 function roofSpots(T) {
   const spots = [], zs = [T.roofZ[1] - 1.2, T.roofZ[1] - 3.6, T.roofZ[1] - 6, T.roofZ[1] - 8.4, T.roofZ[0] + 1.2];
-  for (const z of zs) for (const x of [-0.75, 0.75]) spots.push(new THREE.Vector3(x, T.roofY, z));
+  for (const z of zs) for (const x of [-0.95, 0.95, 0]) spots.push(new THREE.Vector3(x, T.roofY, z));
   return spots;
 }
 function buildWorld(idx, night, variantId) {
@@ -487,8 +518,65 @@ addEventListener('keydown', (e) => {
   const a = KEYS[e.key.toLowerCase()]; if (a) { act(a); e.preventDefault(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+// ---------------- controle PlayStation / Xbox ----------------
+const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, down: new Set(), native: false, name: '' };
+const dz = (v) => Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82;
+// mapeamento: índice padrão do navegador -> nome; e código de tecla do Android -> nome
+const STD = { 0: 'A', 1: 'B', 2: 'X', 3: 'Y', 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT', 8: 'SELECT', 9: 'START', 12: 'UP', 13: 'DOWN', 14: 'LEFT', 15: 'RIGHT' };
+const AND = { 96: 'A', 97: 'B', 99: 'X', 100: 'Y', 102: 'LB', 103: 'RB', 104: 'LT', 105: 'RT', 109: 'SELECT', 108: 'START', 19: 'UP', 20: 'DOWN', 21: 'LEFT', 22: 'RIGHT', 23: 'A' };
+function padPress(b) {
+  music.init();
+  const shown = (id) => $(id).classList.contains('show');
+  if (shown('menu')) {
+    if (b === 'A') $('btnPlay').click();
+    else if (b === 'LEFT' || b === 'RIGHT') { G.cityIdx = (G.cityIdx + (b === 'RIGHT' ? 1 : CITIES.length - 1)) % CITIES.length; G.night = null; buildMenu(); menuScene(); music.sfx('click'); }
+    else if (b === 'UP' || b === 'DOWN') { G.night = !(G.night ?? CITIES[G.cityIdx].noite); buildMenu(); menuScene(); music.sfx('click'); }
+    else if (b === 'X') { const i = CHARACTERS.findIndex(d => d.id === save.char); save.char = CHARACTERS[(i + 1) % CHARACTERS.length].id; persist(); buildMenu(); music.sfx('click'); }
+    else if (b === 'Y') { const i = VARIANTS.findIndex(v => v.id === save.truck); save.truck = VARIANTS[(i + 1) % VARIANTS.length].id; persist(); buildMenu(); menuScene(true); music.sfx('click'); }
+    else if (b === 'START') openConfig();
+    return;
+  }
+  if (shown('results')) { if (b === 'A') $('btnNext').click(); else if (b === 'B') $('btnResMenu').click(); else if (b === 'X') $('btnAgain').click(); return; }
+  if (shown('config')) { if (b === 'B' || b === 'START') { persist(); show('config', false); } return; }
+  if (shown('picker')) { if (b === 'B' || b === 'START' || b === 'A') $('btnPickOk').click(); else if (b === 'LEFT' || b === 'RIGHT') { const i = G.actors.indexOf(G.player); switchTo(G.actors[(i + (b === 'RIGHT' ? 1 : G.actors.length - 1)) % G.actors.length]); buildPicker(); } return; }
+  if (shown('pause')) { if (b === 'START' || b === 'A') togglePause(false); else if (b === 'B') $('btnMenu').click(); return; }
+  if (b === 'START') { togglePause(); return; }
+  if (G.dancing) { const m = { X: 0, LEFT: 0, Y: 1, UP: 1, A: 2, DOWN: 2, B: 3, RIGHT: 3 }; if (m[b] !== undefined) dance.press(m[b]); return; }
+  const map = { A: 'jump', B: 'estrela', X: 'mortal', Y: 'flip', LB: 'ctx', RB: 'run', SELECT: 'chars', UP: 'drive', DOWN: 'combo', LEFT: 'horn', RIGHT: 'party' };
+  if (G.player && G.player.mode === 'drive' && (b === 'A')) { act('horn'); return; }
+  if (map[b]) act(map[b]);
+}
+function padSet(b, down) {
+  if (down && !pad.down.has(b)) { pad.down.add(b); padPress(b); }
+  else if (!down) pad.down.delete(b);
+  if (b === 'RT') holds.gas = down; if (b === 'LT') holds.brake = down;
+}
+// eventos vindos do app Android (botões e analógicos do controle)
+window.onPadKey = (code, down) => { pad.native = true; const b = AND[code]; if (b) padSet(b, down); };
+window.onPadAxes = (lx, ly, rx, ry, lt, rt, hx, hy) => {
+  pad.native = true; pad.lx = dz(lx); pad.ly = dz(ly); pad.rx = dz(rx); pad.ry = dz(ry); pad.lt = lt; pad.rt = rt;
+  holds.gas = rt > 0.3 || pad.down.has('RT'); holds.brake = lt > 0.3 || pad.down.has('LT');
+  padSet('LEFT', hx < -0.5); padSet('RIGHT', hx > 0.5); padSet('UP', hy < -0.5); padSet('DOWN', hy > 0.5);
+  padHello('Controle');
+};
+let padSeen = false;
+function padHello(name) { if (padSeen) return; padSeen = true; $('padStatus').textContent = `🎮 ${name} conectado!`; if (G.phase === 'play') toast('🎮 Controle conectado!', 'small'); }
+// Gamepad API do navegador
+function pollGamepad(dt) {
+  if (pad.native || !navigator.getGamepads) return;
+  const gp = [...navigator.getGamepads()].find(g => g && g.connected); if (!gp) return;
+  padHello(gp.id.split('(')[0].trim() || 'Controle');
+  pad.lx = dz(gp.axes[0] || 0); pad.ly = dz(gp.axes[1] || 0); pad.rx = dz(gp.axes[2] || 0); pad.ry = dz(gp.axes[3] || 0);
+  for (const [i, b] of Object.entries(STD)) { const bt = gp.buttons[i]; if (bt) padSet(b, bt.pressed || bt.value > 0.5); }
+  holds.gas = (gp.buttons[7] && gp.buttons[7].value > 0.3) || false; holds.brake = (gp.buttons[6] && gp.buttons[6].value > 0.3) || false;
+}
+addEventListener('gamepadconnected', (e) => padHello(e.gamepad.id.split('(')[0].trim() || 'Controle'));
+function padCamera(dt) {
+  if (pad.rx || pad.ry) { camYaw -= pad.rx * dt * 2.6; camPitch = clamp(camPitch + pad.ry * dt * 1.4, 0.08, 1.1); camDragT = G.now; }
+}
+
 function stickInput() {
-  let x = joy.x, y = joy.y;
+  let x = joy.x + pad.lx, y = joy.y - pad.ly;
   if (keys.has('a') || keys.has('arrowleft')) x -= 1; if (keys.has('d') || keys.has('arrowright')) x += 1;
   if (keys.has('w') || keys.has('arrowup')) y += 1; if (keys.has('s') || keys.has('arrowdown')) y -= 1;
   const m = Math.hypot(x, y); if (m > 1) { x /= m; y /= m; }
@@ -840,8 +928,9 @@ function frame(nowMs) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
   if (!G.city) return;
-  if (G.paused) { render(); return; }
+  if (G.paused) { pollGamepad(dt); render(); return; }
   G.now += dt;
+  pollGamepad(dt); padCamera(dt);
   music.update(dt);
   G.beat = music.playing ? music.beatPos() : G.now * 2;
   if (G.phase === 'intro') { G.phaseT += dt; if (G.phaseT > 1.5) { G.phase = 'play'; toast('VAI! 🎉', 'big gold'); } }

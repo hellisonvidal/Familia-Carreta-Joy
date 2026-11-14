@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { SkinnedBody } from './skinned.js';
 import { HumanBody } from './human.js';
+import { XBotBody } from './xbotbody.js';
+import { Driver } from './anim.js';
 
 // =====================================================================
 // Corpos articulados (braços, pernas, tronco e cabeça se mexem) feitos
@@ -123,7 +125,8 @@ export const COSTUMES = {
   arthur:   { nome: 'Roupa do Arthur', tronco: 0x1736c9, manga: 'curta', bracos: SKIN, maos: SKIN, calca: 0x0d1748, faixa: 0x1f7a52, sapatos: 0x1a1a1a, emblema: null },
   afonso:   { nome: 'Roupa do Afonso', tronco: 0x1736c9, manga: 'longa', bracos: 0xb8bcc2, maos: SKIN, calca: 0x14161c, faixa: 0x1f7a52, sapatos: 0xd8263a, sola: 0xffffff },
   barril:   { nome: 'Moleque do Barril', tronco: { padrao: 'listras', a: 0xe9dcc0, b: 0xb48a5a }, manga: 'curta', bracos: SKIN, maos: SKIN, calca: { padrao: 'remendo', a: 0x8a6a3d, b: 0x6d8a3d }, sapatos: 0x5a3b22, suspensorio: 0x6b4a2a, chapeu: 'bone_xadrez' },
-  bochecha: { nome: 'Bochechudo', tronco: 0x1e88e5, manga: 'longa', bracos: 0xe53935, maos: 0xffffff, calca: 0xe53935, sapatos: 0x222222, gola: 0xffffff, emblema: 'joy' },
+  bochecha: { nome: 'Bochechudo', tronco: { padrao: 'listras', a: 0xffffff, b: 0xe53935 }, manga: 'curta', bracos: SKIN, maos: SKIN, calca: 0x1e3a8a, sapatos: 0x5d4037, jardineira: 0x1e3a8a, laco: 0xffc400 },
+  kiko: { nome: 'Kiko', tronco: 0xffffff, manga: 'curta', bracos: SKIN, maos: SKIN, calca: 0x1a237e, shorts: 0x1a237e, pernasPele: SKIN, meias: 0xffffff, sapatos: 0x111111, golaMarinheiro: 0x1a237e, laco: 0xd32f2f, chapeu: 'marinheiro' },
   vermelho: { nome: 'Herói Vermelho', tronco: 0xd81e1e, manga: 'longa', bracos: 0xd81e1e, maos: 0xd81e1e, calca: 0xd81e1e, shorts: 0xffd400, sapatos: 0xffd400, emblema: 'coracao', chapeu: 'antenas', capuz: 0xd81e1e },
   caraverde:{ nome: 'Cara Verde', tronco: 0xffc400, manga: 'longa', bracos: 0xffc400, maos: 0x7ed321, calca: 0xffc400, sapatos: 0x7a4a2a, gravata: 0xe53935, chapeu: 'chapeu_amarelo' },
   teia:     { nome: 'Herói Teia', tronco: { padrao: 'teia', a: 0xd5212b, b: 0x1a1a1a }, manga: 'longa', bracos: { padrao: 'teia', a: 0xd5212b, b: 0x1a1a1a }, maos: 0xd5212b, calca: 0x1f4fbf, sapatos: 0xd5212b, emblema: 'aranha' },
@@ -131,7 +134,7 @@ export const COSTUMES = {
   gigante:  { nome: 'Gigante Verde', tronco: 0x4caf2f, manga: 'nenhuma', bracos: 0x4caf2f, maos: 0x4caf2f, calca: 0x6a2c91, shorts: 0x6a2c91, pernasPele: 0x4caf2f, sapatos: 0x4caf2f, rasgado: true },
   garras:   { nome: 'Garras', tronco: 0xffc400, manga: 'longa', bracos: 0x1a3fa8, maos: 0x1a3fa8, calca: 0x1a3fa8, sapatos: 0x1a3fa8, cinto: 0xd32f2f, garras: true, ombreiras: 0x1a3fa8, chapeu: 'mascara_garras' },
 };
-export const KID_COSTUMES = ['normal', 'barril', 'bochecha', 'vermelho', 'caraverde', 'teia', 'capitao', 'gigante', 'garras'];
+export const KID_COSTUMES = ['normal', 'barril', 'bochecha', 'kiko', 'vermelho', 'caraverde', 'teia', 'capitao', 'gigante', 'garras'];
 
 // ---------- personagens ----------
 export const CHARACTERS = [
@@ -139,6 +142,7 @@ export const CHARACTERS = [
   { id: 'afonso', nome: 'Afonso', kid: true, altura: 1.18, cabeca: 'afonsoHead', corpo: 'afonsoBody', roupa: 'afonso', estilo: 1, poseInicial: true },
   { id: 'barril', nome: 'Moleque do Barril', altura: 1.64, roupa: 'barril', estilo: 2, pele: 0xf1c6a3, olho: 0x6b4423, rosto: { pele: 0xf1c6a3, sardas: true, sobrancelha: 0x5a3b22 }, cabelo: 0x8a4b2a },
   { id: 'bochecha', nome: 'Bochechudo', altura: 1.7, roupa: 'bochecha', estilo: 3, pele: 0xf3cfb3, olho: 0x3b6e8f, rosto: { pele: 0xf3cfb3, bochechas: true, nariz: 0xff7a8a, boca: 'sorriso' }, bochechas: true, cabelo: 0x2a1a12, estiloCabelo: 'longo' },
+  { id: 'kiko', nome: 'Kiko', altura: 1.52, roupa: 'kiko', estilo: 4, pele: 0xf6d2b8, olho: 0x3b6e8f, cabecaGrande: 1.12, bochechas: true, rosto: { pele: 0xf6d2b8, bochechas: true, boca: 'sorriso', sobrancelha: 0x8a5a2a }, cabelo: 0xa0602a, estiloCabelo: 'curto' },
   { id: 'vermelho', nome: 'Herói Vermelho', altura: 1.66, roupa: 'vermelho', estilo: 4, pele: 0xd8a27c, olho: 0x4a2e1a, rosto: { pele: 0xd8a27c, mascara: { tipo: 'capuz', cor: 0xd81e1e } } },
   { id: 'caraverde', nome: 'Cara Verde', altura: 1.8, roupa: 'caraverde', estilo: 5, pele: 0xe2b48c, olho: 0x2f6b2f, rosto: { pele: 0x7ed321, boca: 'dentes', sobrancelha: 0x2f5d10 }, cabecaGrande: 1.08 },
   { id: 'teia', nome: 'Herói Teia', altura: 1.78, roupa: 'teia', estilo: 6, pele: 0xd5212b, rosto: { pele: 0xd5212b, mascara: { tipo: 'total', cor: 0xd5212b, teia: true }, olhos: 'lente' } },
@@ -306,6 +310,11 @@ export class Body {
         const b = new THREE.Mesh(new THREE.SphereGeometry(H * 0.07, 8, 6), mat(0xd81e1e)); b.position.set(s * H * 0.28, H * 1.36, 0); head.add(b);
       }
       if (kid) { const band = new THREE.Mesh(new THREE.TorusGeometry(H * 0.42, H * 0.04, 6, 18), mat(0xd81e1e)); band.rotation.x = Math.PI / 2 - 0.3; band.position.y = H * 0.85; head.add(band); }
+    } else if (kind === 'marinheiro') {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(H * 0.55, H * 0.5, H * 0.32, 20), mat(0xffffff)); cap.position.y = H * 0.95; head.add(cap);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(H * 0.62, H * 0.62, H * 0.06, 20), mat(0xffffff)); top.position.y = H * 1.12; head.add(top);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(H * 0.51, H * 0.51, H * 0.09, 20), mat(0x111111)); band.position.y = H * 0.82; head.add(band);
+      const visor = new THREE.Mesh(new THREE.CylinderGeometry(H * 0.32, H * 0.32, H * 0.03, 16, 1, false, -Math.PI / 2, Math.PI), mat(0x111111)); visor.position.set(0, H * 0.79, H * 0.32); head.add(visor);
     } else if (kind === 'bone_xadrez') {
       const cap = new THREE.Mesh(new THREE.SphereGeometry(H * 0.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ map: patternTex('xadrez', 0x6b8e4e, 0x8a5a2a), roughness: 0.8 }));
       cap.position.y = H * (kid ? 0.82 : 0.78); cap.scale.set(1.08, 0.75, 1.1); head.add(cap);
@@ -427,11 +436,55 @@ export const POSES = {
 // Corpo real (modelo do Meshy com esqueleto automático) quando é a roupa normal dos meninos;
 // corpo articulado com a cabeça real quando é fantasia.
 export function makeBody(def, costume, assets) {
-  if (def.kid && (!costume || costume === 'normal') && def.corpo && assets[def.corpo]) return new SkinnedBody(assets[def.corpo], def.corpo, def.altura);
-  if (!def.kid) return humanWithProps(def);
-  return new Body(def, costume, assets);
+  let b;
+  if (def.kid && (!costume || costume === 'normal') && def.corpo && assets[def.corpo]) b = new SkinnedBody(assets[def.corpo], def.corpo, def.altura);
+  else if (!def.kid && assets.xbot) return humanoid(def, assets);
+  else if (!def.kid) return humanWithProps(def);
+  else b = new Body(def, costume, assets);
+  // esqueleto-guia invisível: as animações tocam nele e são copiadas para o corpo
+  if (assets.xbot) {
+    b.drv = new Driver(assets.xbot, assets.clips, false);
+    const limit = b instanceof SkinnedBody;
+    b.update = (dt, st) => {
+      b.drv.update(dt, st);
+      b.drv.retarget(b.j, (bob) => { if (b.rest) b.j.hips.position.set(b.rest.hips.x, b.rest.hips.y + bob, b.rest.hips.z); else b.j.hips.position.y = bob; });
+      if (limit) for (const n of ['shL', 'shR']) { const q = b.j[n].quaternion, a = 2 * Math.acos(Math.min(1, Math.abs(q.w))); if (a > 1.5) q.slerp(new THREE.Quaternion(), 1 - 1.5 / a); }
+    };
+  }
+  return b;
 }
 
+// adulto humanoide (X Bot) + rosto, cabelo e acessórios da fantasia
+function humanoid(def, assets) {
+  const C = COSTUMES[def.roupa];
+  const b = new XBotBody(assets.xbot, assets.clips, def, C, { patternTex, emblemTex });
+  const T = b.headTopLocal, hg = b.headGroup, HC = b.headC, HR = b.headR, R = HR.x;
+  const m = def.rosto && def.rosto.mascara, skin = def.pele ?? 0xe8b896;
+  const faceCol = m && m.tipo !== 'olhos' ? m.cor : skin;
+  const std = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.65 });
+  if (!(m && m.tipo === 'total')) { const nose = new THREE.Mesh(new THREE.SphereGeometry(R * 0.17, 10, 8), std(def.rosto && def.rosto.nariz || faceCol)); nose.scale.set(0.8, 1.1, 1.1); nose.position.set(HC.x, HC.y - HR.y * 0.2, HC.z + HR.z * 1.0); hg.add(nose); }
+  for (const s2 of [-1, 1]) { const ear = new THREE.Mesh(new THREE.SphereGeometry(R * 0.2, 8, 6), std(faceCol)); ear.scale.set(0.45, 1.1, 0.75); ear.position.set(HC.x + s2 * HR.x * 0.98, HC.y + HR.y * 0.02, HC.z - HR.z * 0.05); hg.add(ear); }
+  if (def.bochechas) for (const s2 of [-1, 1]) { const c = new THREE.Mesh(new THREE.SphereGeometry(R * 0.34, 12, 10), std(faceCol)); c.position.set(HC.x + s2 * HR.x * 0.55, HC.y - HR.y * 0.33, HC.z + HR.z * 0.6); c.scale.set(1, 0.9, 0.8); hg.add(c); }
+  if (def.cabelo !== undefined && !(m && m.tipo !== 'olhos') && !C.chapeu) {
+    const hm = new THREE.MeshStandardMaterial({ color: def.cabelo, roughness: 0.85 });
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hm);
+    cap.scale.set(HR.x * 1.1, HR.y * 1.05, HR.z * 1.12); cap.position.set(HC.x, HC.y + HR.y * 0.05, HC.z - HR.z * 0.08); cap.rotation.x = -0.45; hg.add(cap);
+    if (def.estiloCabelo === 'longo') { const back = new THREE.Mesh(new THREE.CapsuleGeometry(HR.x * 0.85, HR.y * 0.9, 4, 12), hm); back.scale.set(1.1, 1, 0.55); back.position.set(HC.x, HC.y - HR.y * 0.35, HC.z - HR.z * 0.65); hg.add(back); }
+  }
+  { const g2 = new THREE.Group(); g2.position.set(HC.x, HC.y - HR.y * 1.05, HC.z); hg.add(g2); Body.prototype.addHeadwear.call(b, g2, C.chapeu, HR.y * 1.9, false); }
+  if (C.garras) for (const g of [b.hand.Left, b.hand.Right]) for (let k = -1; k <= 1; k++) {
+    const cl = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.16, 0.008), mat({ cor: 0xdfe6ee, metal: 0.9, rough: 0.2 }));
+    cl.position.set(0, -0.15, k * 0.02 + 0.03); g.add(cl);
+  }
+  if (C.escudo) {
+    const shd = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.03, 28), [mat(0xd32f2f), new THREE.MeshStandardMaterial({ map: emblemTex('escudo'), metalness: 0.4, roughness: 0.35 }), mat(0xd32f2f)]);
+    shd.rotation.z = Math.PI / 2; shd.position.set(0.08, -0.13, 0); b.fore.Left.add(shd);
+  }
+  b.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return b;
+}
+
+// (corpo procedural antigo, usado só se o X Bot não carregar)
 // adulto com corpo humano + acessórios da fantasia
 function humanWithProps(def) {
   const C = COSTUMES[def.roupa];

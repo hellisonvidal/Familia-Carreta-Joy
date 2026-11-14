@@ -8,7 +8,7 @@ import { makeBones, applyPose } from './skinned.js';
 // rosto (olhos, íris, sobrancelhas, nariz, lábios) e a roupa/fantasia.
 // =====================================================================
 const SEG = 16;
-const AT = { // regiões do atlas (frações do canvas 512x1024)
+export const AT = { // regiões do atlas (frações do canvas 512x1024)
   head: [0, 0, 1, 0.25], torso: [0, 0.25, 1, 0.5625], arm: [0, 0.5625, 0.5, 1], leg: [0.5, 0.5625, 1, 1],
 };
 const W = 512, Hc = 1024;
@@ -74,7 +74,7 @@ function fillPattern(g, spec, x, y, w, h, tools) {
 }
 function noise(g, x, y, w, h, n, a) { for (let i = 0; i < n; i++) { g.fillStyle = Math.random() < 0.5 ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a})`; g.fillRect(x + Math.random() * w, y + Math.random() * h, 2, 2); } }
 
-function paintAtlas(def, C, tools) {
+export function paintAtlas(def, C, tools) {
   const c = document.createElement('canvas'); c.width = W; c.height = Hc;
   const g = c.getContext('2d');
   const F = def.rosto || {}, skin = def.pele ?? F.pele ?? 0xe8b896;
@@ -100,6 +100,7 @@ function paintAtlas(def, C, tools) {
       else if (m.tipo === 'olhos') g.fillRect(x, Y(0.6), w, h * 0.18);
       if (m.teia) { g.strokeStyle = '#111'; g.lineWidth = 1.3; for (let a = 0; a < 18; a++) { g.beginPath(); g.moveTo(cx, eyeY); g.lineTo(cx + Math.cos(a / 18 * 6.28) * w, eyeY + Math.sin(a / 18 * 6.28) * h); g.stroke(); } for (let r = 12; r < w; r += 14) { g.beginPath(); g.ellipse(cx, eyeY, r, r * 0.6, 0, 0, 7); g.stroke(); } }
     }
+    if (!tools.noFace) {
     if (F.olhos === 'lente') {
       for (const s of [-1, 1]) { g.fillStyle = '#111'; g.beginPath(); g.ellipse(U(s * 0.05), eyeY, 15, 11, s * -0.4, 0, 7); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.ellipse(U(s * 0.05), eyeY, 12, 8, s * -0.4, 0, 7); g.fill(); }
     } else {
@@ -134,6 +135,7 @@ function paintAtlas(def, C, tools) {
       for (const s of [-1, 1]) { g.beginPath(); g.arc(cx + s * w * 0.075, Y(0.3), F.bochechas ? 16 : 11, 0, 7); g.fill(); }
       if (F.sardas) { g.fillStyle = 'rgba(150,80,40,0.45)'; for (let k = 0; k < 24; k++) g.fillRect(cx - 30 + Math.random() * 60, Y(0.36) + Math.random() * 12, 2, 2); }
     }
+    }
     // cabelo pintado (linha do cabelo)
     if (def.cabelo !== undefined && !(m && m.tipo !== 'olhos')) {
       g.fillStyle = hex(def.cabelo);
@@ -157,6 +159,14 @@ function paintAtlas(def, C, tools) {
     if (C.suspensorio !== undefined) { g.fillStyle = hex(C.suspensorio); for (const u of [0.42, 0.58, 0.08, -0.08 + 1]) g.fillRect(x + w * u - 6, Y(0.98), 12, h * 0.75); }
     if (C.gravata !== undefined) { g.fillStyle = hex(C.gravata); g.beginPath(); g.moveTo(cx - 8, Y(0.97)); g.lineTo(cx + 8, Y(0.97)); g.lineTo(cx + 13, Y(0.55)); g.lineTo(cx, Y(0.48)); g.lineTo(cx - 13, Y(0.55)); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx - 40, Y(1)); g.lineTo(cx - 10, Y(0.6)); g.moveTo(cx + 40, Y(1)); g.lineTo(cx + 10, Y(0.6)); g.stroke(); }
     if (C.emblema) { const e = tools.emblemTex(C.emblema).image; g.drawImage(e, cx - 42, Y(0.82), 84, 84); }
+    if (C.jardineira !== undefined) { // macacão: peitilho na frente e alças
+      g.fillStyle = hex(C.jardineira); g.fillRect(x, Y(0.3), w, h * 0.3); g.fillRect(cx - 55, Y(0.72), 110, h * 0.42);
+      for (const u of [-45, 45]) g.fillRect(cx + u - 8, Y(1), 16, h * 0.3);
+      g.fillRect(x + w * 0.02, Y(1), 16, h * 0.7); g.fillRect(x + w * 0.98 - 16, Y(1), 16, h * 0.7);
+      g.fillStyle = '#ffc400'; for (const u of [-38, 38]) { g.beginPath(); g.arc(cx + u, Y(0.7), 7, 0, 7); g.fill(); }
+    }
+    if (C.golaMarinheiro !== undefined) { g.fillStyle = hex(C.golaMarinheiro); g.beginPath(); g.moveTo(cx - 70, Y(1)); g.lineTo(cx, Y(0.72)); g.lineTo(cx + 70, Y(1)); g.fill(); g.fillRect(x, Y(1), w * 0.22, h * 0.22); g.fillRect(x + w * 0.78, Y(1), w * 0.22, h * 0.22); g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx - 58, Y(0.99)); g.lineTo(cx, Y(0.76)); g.lineTo(cx + 58, Y(0.99)); g.stroke(); }
+    if (C.laco !== undefined) { g.fillStyle = hex(C.laco); const ly = C.golaMarinheiro !== undefined ? Y(0.75) : Y(0.94); g.beginPath(); g.moveTo(cx, ly); g.lineTo(cx - 34, ly - 16); g.lineTo(cx - 34, ly + 16); g.closePath(); g.moveTo(cx, ly); g.lineTo(cx + 34, ly - 16); g.lineTo(cx + 34, ly + 16); g.closePath(); g.fill(); g.beginPath(); g.arc(cx, ly, 8, 0, 7); g.fill(); }
     if (C.rasgado) { g.fillStyle = hex(C.bracos); for (let k = 0; k < w; k += 20) { g.beginPath(); g.moveTo(x + k, Y(0.22)); g.lineTo(x + k + 10, Y(0.15)); g.lineTo(x + k + 20, Y(0.22)); g.fill(); } }
     // costura lateral e sombra
     g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(x + w * 0.24, y, 3, h); g.fillRect(x + w * 0.75, y, 3, h);
@@ -170,6 +180,7 @@ function paintAtlas(def, C, tools) {
     if (sleeve) fillPattern(g, C.bracos ?? C.tronco, x, y, w, h * sleeve, tools);
     if (C.manga === 'curta') fillPattern(g, C.tronco, x, y, w, h * sleeve, tools);
     if (C.maos !== undefined && C.maos !== skin) { g.fillStyle = hex(C.maos); g.fillRect(x, Y(0.69), w, h * 0.31); }
+    if (C.maos === undefined || C.maos === skin) { g.fillStyle = hex(skin); g.fillRect(x, Y(0.8), w, h * 0.2); }
     noise(g, x, y, w, h, 1200, 0.03);
   }
   // ---- pernas ----
@@ -177,6 +188,8 @@ function paintAtlas(def, C, tools) {
     const [x, y, w, h] = rg(AT.leg), Y = (t) => y + h * t;
     fillPattern(g, C.calca, x, y, w, h, tools);
     if (C.shorts !== undefined) { fillPattern(g, C.shorts, x, y, w, h * 0.42, tools); g.fillStyle = hex(C.pernasPele ?? (C.shorts === C.calca ? C.calca : C.calca)); if (C.pernasPele !== undefined) g.fillRect(x, Y(0.42), w, h * 0.58); }
+    if (C.meias !== undefined) { g.fillStyle = hex(C.meias); g.fillRect(x, Y(0.78), w, h * 0.2); }
+    g.fillStyle = hex(C.sapatos ?? 0x222222); g.fillRect(x, Y(0.96), w, h * 0.04 + 1); // sapato (pés)
     if (C.faixa !== undefined) { g.fillStyle = hex(C.faixa); g.fillRect(x + w * 0.25 - 4, y, 8, h); g.fillRect(x + w * 0.75 - 4, y, 8, h); }
     g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(x, Y(0.5), w, 3);
     noise(g, x, y, w, h, 1500, 0.03);

@@ -187,3 +187,19 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: 0; }
 #meter span { position: absolute; inset: 0; font-size: 8.5px; font-weight: 900; text-align: center; line-height: 12px; letter-spacing: 1px; }
 #meter.full i { background: linear-gradient(90deg, #ffc400, #ff3d7f); animation: pulse 0.8s infinite; }
 @media (max-height: 420px) { .ctl.runbtn { bottom: 150px; left: calc(26px + var(--safe-l)); height: 40px; font-size: 12px; } }
+
+/* tela inicial: mais contraste e Dia/Noite sempre visível */
+#menu { background: linear-gradient(180deg, rgba(18,6,36,0.72), rgba(18,6,36,0.92)) !important; }
+.card, .ccard { background: rgba(40, 16, 80, 0.85) !important; }
+.card.sel { background: rgba(255,61,127,0.35) !important; }
+.tab { background: rgba(40,16,80,0.85); font-size: 16px; }
+.menu-foot { background: rgba(10,4,25,0.75); border-radius: 18px; padding: 8px 10px; }
+.dn { display: flex; border-radius: 16px; overflow: hidden; border: 3px solid rgba(255,255,255,0.35); flex-shrink: 0; }
+.dn button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 16px; font-size: 26px; background: rgba(255,255,255,0.08); min-width: 86px; }
+.dn button span { font-size: 13px; font-weight: 900; letter-spacing: 1px; }
+.dn #btnDia.sel { background: linear-gradient(180deg, #ffd54f, #ff9800); color: #3a2300; }
+.dn #btnNoite.sel { background: linear-gradient(180deg, #3949ab, #1a237e); }
+.updbox { text-align: left; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 8px 12px; margin: 8px 0; font-size: 14px; }
+#updStatus { font-size: 13px; opacity: 0.9; min-height: 18px; }
+.gp-focus { outline: 4px solid #ffc400 !important; outline-offset: 2px; }
+@media (max-height: 420px) { .dn button { font-size: 20px; min-width: 70px; padding: 4px 10px; } }

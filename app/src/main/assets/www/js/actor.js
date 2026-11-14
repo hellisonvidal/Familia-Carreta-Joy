@@ -54,6 +54,13 @@ export class Actor {
     this.body.rig.visible = true; this.root.visible = true;
   }
 
+  // toca um clipe (animação capturada) ou uma pose do jogo no corpo
+  drive(dt, st) {
+    const B = this.body;
+    if (B.update) B.update(dt, st.clip ? st : { pose: st.pose });
+    else if (st.pose) B.apply(st.pose);
+  }
+  clipDur(n) { return this.body.drv ? this.body.drv.clipDur(n) : 1; }
   setCostume(key) {
     this.root.remove(this.body.root);
     this.body = makeBody(this.def, key, this.assets); this.root.add(this.body.root);
@@ -268,7 +275,7 @@ export class Actor {
     this.ct += dt; const k = clamp01(this.ct / this.lDur);
     this.pos.lerpVectors(this.lFrom, this.lTo, k); this.pos.y = this.lFrom.y + (this.lTo.y - this.lFrom.y) * Math.min(1, k * 1.4) + Math.sin(k * Math.PI) * 0.3;
     if (k >= 1) { this.mode = 'normal'; this.grounded = true; this.vel.set(0, 0, 0); this.pos.copy(this.lTo); }
-    this.place(G); this.cur = POSES.climb(this.ct); this.body.apply(this.cur); this.body.pivot.rotation.set(0, 0, 0);
+    this.place(G); this.cur = POSES.climb(this.ct); this.drive(1 / 60, { pose: this.cur }); this.body.pivot.rotation.set(0, 0, 0);
   }
   updateClimbTruck(dt, G) {
     this.ct += dt; const t = this.ct, p = this.pos, T1 = 0.25, T2 = 1.0, T3 = 1.3;
@@ -278,14 +285,15 @@ export class Actor {
     else if (t < T3) { const k = (t - T2) / (T3 - T2); p.lerpVectors(this.cTop, this.cTo, ease(k)); p.y += Math.sin(k * Math.PI) * 0.5; }
     else { this.mode = 'normal'; p.copy(this.cTo); this.grounded = true; this.vel.set(0, 0, 0); G.onEvent('subiu', this); }
     this.yaw = face; this.place(G);
-    this.cur = t > T1 && t < T2 ? POSES.climb(t) : POSES.idle(t, this.seed); this.body.apply(this.cur); this.body.pivot.rotation.set(0, 0, 0);
+    this.cur = t > T1 && t < T2 ? POSES.climb(t) : POSES.idle(t, this.seed); this.drive(dt, { pose: this.cur }); this.body.pivot.rotation.set(0, 0, 0);
   }
   updateDescend(dt, G) {
     this.ct += dt; const D = 0.9, k = clamp01(this.ct / D), p = this.pos;
     p.lerpVectors(this.dFrom, this.dTo, k); p.y = this.dFrom.y * (1 - k * k) + Math.sin(k * Math.PI) * 1.6;
     this.yaw = this.dSide > 0 ? Math.PI / 2 : -Math.PI / 2;
     this.place(G);
-    this.cur = POSES.air(1, 1); this.body.apply(this.cur); this.body.pivot.rotation.set(-ease(k) * Math.PI * 2, 0, 0);
+    if (this.body.drv) { this.drive(dt, { clip: 'mortal', ts: this.clipDur('mortal') / D, restart: this.ct <= dt }); this.body.pivot.rotation.set(0, 0, 0); }
+    else { this.cur = POSES.air(1, 1); this.body.apply(this.cur); this.body.pivot.rotation.set(-ease(k) * Math.PI * 2, 0, 0); }
     if (k >= 1) {
       const w = G.truck.toWorld(this.dTo, new THREE.Vector3());
       this.frame = 'world'; this.pos.copy(w); this.pos.y = G.city.groundAt(w.x, w.z, w.y + 1.5).h; this.yaw += G.truck.yaw;
@@ -312,9 +320,9 @@ export class Actor {
   animate(dt, G, hs) {
     const B = this.body;
     let rx = 0, ry = 0, rz = 0;
-    if (this.mode === 'pose') { this.cur = POSES.crouchStart(); B.apply(this.cur); B.pivot.rotation.set(0, 0, 0); return; }
-    if (this.mode === 'stand') { this.cur = lerpPose(POSES.crouchStart(), POSES.idle(0), ease(clamp01(this.standT / 0.7))); B.apply(this.cur); B.pivot.rotation.set(0, 0, 0); return; }
-    let pose;
+    if (this.mode === 'pose') { this.cur = POSES.crouchStart(); this.drive(dt, { pose: this.cur }); B.pivot.rotation.set(0, 0, 0); return; }
+    if (this.mode === 'stand') { this.cur = lerpPose(POSES.crouchStart(), POSES.idle(0), ease(clamp01(this.standT / 0.7))); this.drive(dt, { pose: this.cur }); B.pivot.rotation.set(0, 0, 0); return; }
+    let pose, idle = false;
     const tr = this.trick;
     if (tr) {
       const k = clamp01(tr.t / tr.dur), e = ease(k);
@@ -336,7 +344,26 @@ export class Actor {
       if (this.dance) { this.dance.t += dt; mk = clamp01(this.dance.t / this.dance.dur); mv = this.dance.type; if (this.dance.type === 'mortal') rx = -ease(mk) * Math.PI * 2; if (mv === 'cima') ry = ease(mk) * Math.PI * 2; if (this.dance.t > this.dance.dur) this.dance = null; }
       pose = POSES.dance(G.beat, this.def.estilo, mv === 'mortal' ? 'cima' : mv, mk);
       if (mv === 'cima' || mv === 'mortal') pose.bob = (pose.bob || 0) + Math.sin(mk * Math.PI) * 0.9;
-    } else pose = POSES.idle(G.now, this.seed);
+    } else { pose = POSES.idle(G.now, this.seed); idle = true; }
+    // ---- animações capturadas (Mixamo) ----
+    let clip = null, ts = 1, restart = false;
+    if (B.drv && this.mode === 'normal') {
+      const S = this.H / 1.8;
+      if (tr && !tr.ground && (tr.type === 'mortal' || tr.type === 'flip')) { clip = tr.type; ts = this.clipDur(clip) / tr.dur; restart = !tr.started; tr.started = true; }
+      else if (!tr && this.stumble > 0) { clip = 'tombo'; ts = this.clipDur('tombo') / 1.0; restart = !this.stumbleOn; this.stumbleOn = true; }
+      else if (!tr && !this.grounded) { clip = 'pulo'; ts = 1.1; restart = !!this.wasGrounded; }
+      else if (!tr && this.grounded && hs > 0.5 && !G.dancing) {
+        if (hs < 3.2) { clip = 'andar'; ts = Math.max(0.5, Math.min(2.2, hs / (1.45 * S))); }
+        else { clip = 'correr'; ts = Math.max(0.6, Math.min(1.7, hs / (5.2 * S))); }
+      } else if (idle && this.grounded && this.frame === 'world' && !this.landT) clip = 'idle';
+    }
+    if (this.stumble <= 0) this.stumbleOn = false;
+    this.wasGrounded = this.grounded;
+    if (clip) {
+      this.drive(dt, { clip, ts, restart });
+      B.pivot.rotation.set(0, 0, 0);
+      return;
+    }
     // aterrissagem: dobra os joelhos
     if (this.landT > 0 && this.grounded && !tr) { this.landT -= dt; pose = lerpPose(pose, POSES.land(), Math.min(1, this.landT / 0.12)); }
     // inclina nas curvas
@@ -356,7 +383,7 @@ export class Actor {
     // transição suave entre as poses (rápida nas manobras)
     const k = 1 - Math.exp(-dt * (tr || !this.grounded ? 22 : 13));
     this.cur = this.cur ? lerpPose(this.cur, pose, k) : pose;
-    B.apply(this.cur);
+    this.drive(dt, { pose: this.cur });
     B.pivot.rotation.set(rx, ry, rz, 'YXZ');
     if (tr && tr.type === 'estrela') B.pivot.rotation.set(0, 0, rz);
   }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { N, HALF, RW, lineC, TRAFFIC } from './city.js';
+import { vehicleGeometry, CAR_COLORS } from './vehicles.js';
 
 // =====================================================================
 // Vida na cidade: trânsito, pedestres andando, pombos que voam quando
@@ -42,16 +43,16 @@ export class Life {
 
   // ---------------- trânsito ----------------
   buildCars() {
-    const cols = [0xe53935, 0x1e88e5, 0xfdd835, 0x43a047, 0xffffff, 0x8e24aa, 0x212121, 0xff7043, 0x90a4ae];
-    const geos = cols.map(c => this.d(carGeo(c, this.night)));
+    const types = ['sedan', 'hatch', 'suv', 'taxi', 'van', 'picape', 'fusca', 'onibus', 'sedan', 'hatch', 'suv', 'fusca'];
+    const geos = types.map((t, i) => { const V = vehicleGeometry(t, t === 'taxi' ? 0xffc400 : t === 'onibus' ? 0x1565c0 : CAR_COLORS[i % CAR_COLORS.length]); this.d(V.geo); return V; });
     const mat = this.d(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.35 }));
     this.cars = [];
     const lines = [...TRAFFIC.x.map(k => ['x', k]), ...TRAFFIC.z.map(k => ['z', k])];
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 20; i++) {
       const [axis, k] = lines[i % lines.length];
-      const mesh = new THREE.Mesh(geos[i % geos.length], mat); mesh.castShadow = true; mesh.matrixAutoUpdate = false;
+      const V = geos[i % geos.length]; const mesh = new THREE.Mesh(V.geo, mat); mesh.castShadow = true; mesh.matrixAutoUpdate = false;
       this.group.add(mesh);
-      this.cars.push({ axis, k, dir: Math.random() < 0.5 ? 1 : -1, s: rnd(-HALF + 20, HALF - 20), v: 0, cruise: rnd(6.5, 9.5), mesh, honk: 0, yaw: 0, x: 0, z: 0 });
+      this.cars.push({ axis, k, dir: Math.random() < 0.5 ? 1 : -1, s: rnd(-HALF + 20, HALF - 20), v: 0, cruise: V.len > 8 ? 6 : rnd(6.5, 9.5), mesh, honk: 0, yaw: 0, x: 0, z: 0, len: V.len, w: V.w, h: V.h });
     }
     this.carLimit = [lineC(0) + RW + 3, lineC(N) - RW - 3];
   }
@@ -97,8 +98,9 @@ export class Life {
       const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
       const dx = a.pos.x - c.x, dz = a.pos.z - c.z;
       const along = dx * fx + dz * fz, lat = dx * fz - dz * fx;
-      if (Math.abs(along) > 2.5 || Math.abs(lat) > 1.35 || a.pos.y > this.city.floorY(c.x, c.z) + 1.55) continue;
-      const pushLat = (1.35 - Math.abs(lat)) * Math.sign(lat || 1), pushAlong = (2.5 - Math.abs(along)) * Math.sign(along || 1);
+      const hl = c.len / 2 + 0.3, hw = c.w / 2 + 0.35;
+      if (Math.abs(along) > hl || Math.abs(lat) > hw || a.pos.y > this.city.floorY(c.x, c.z) + c.h + 0.1) continue;
+      const pushLat = (hw - Math.abs(lat)) * Math.sign(lat || 1), pushAlong = (hl - Math.abs(along)) * Math.sign(along || 1);
       if (Math.abs(pushLat) < Math.abs(pushAlong)) { a.pos.x += fz * pushLat; a.pos.z -= fx * pushLat; } else { a.pos.x += fx * pushAlong; a.pos.z += fz * pushAlong; }
     }
   }

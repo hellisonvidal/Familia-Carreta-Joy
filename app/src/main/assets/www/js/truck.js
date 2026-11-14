@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as TX from './textures.js';
 import { RING } from './city.js';
+import { buildDesign } from './truckdesigns.js';
 
 // Comprimento da carreta (metros) depois de escalar o modelo do Meshy
 export const TRUCK_LEN = 17;
@@ -15,7 +16,10 @@ export const VARIANTS = [
   { id: 'neon', nome: 'Neon Azul', desc: 'Tubos de neon nas laterais', filtro: 'hue-rotate(170deg) saturate(1.5)', hue: [0.5, 0.25], extra: 'neon', cor: '#00e5ff' },
   { id: 'rosa', nome: 'Rosa Choque', desc: 'Com balões de coração', filtro: 'sepia(1) saturate(4) hue-rotate(285deg) brightness(1.05)', hue: [0.9, 0.12], extra: 'coracoes', cor: '#ff4fb8' },
   { id: 'brasil', nome: 'Verde-Amarela', desc: 'Bandeiras do Brasil', filtro: 'sepia(1) saturate(3.5) hue-rotate(40deg)', hue: [0.2, 0.15], extra: 'bandeiras', cor: '#00c853' },
-  { id: 'trio', nome: 'Trio Elétrico', desc: 'Torre de som gigante', filtro: 'grayscale(0.5) contrast(1.3) brightness(0.85)', hue: [0.75, 0.35], extra: 'torre', cor: '#7c4dff' },
+  { id: 'trio', nome: 'Carreta Paredão', desc: 'Torre de som no teto', filtro: 'grayscale(0.5) contrast(1.3) brightness(0.85)', hue: [0.75, 0.35], extra: 'torre', cor: '#455a64' },
+  { id: 'trioGigante', design: 'trioGigante', nome: 'Trio Elétrico Gigante', desc: 'Paredões de som e palco no alto', hue: [0.75, 0.35], extra: null, cor: '#7c4dff' },
+  { id: 'onibus2', design: 'onibus2', nome: 'Ônibus da Alegria', desc: 'Dois andares, andar de cima aberto', hue: [0.08, 0.2], extra: null, cor: '#ff6d00' },
+  { id: 'palco', design: 'palco', nome: 'Caminhão-Palco', desc: 'Palco com treliça e painel de LED', hue: [0.95, 0.3], extra: null, cor: '#e53935' },
 ];
 
 function recolor(model, filtro) {
@@ -42,21 +46,28 @@ export class Truck {
     this.variant = variant;
     this.root = new THREE.Group();
     this.root.matrixAutoUpdate = false;
-    const model = gltfScene.clone(true);
-    recolor(model, variant.filtro);
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    const S = TRUCK_LEN / size.x;
-    this.S = S;
-    model.scale.setScalar(S);
-    model.rotation.y = Math.PI / 2; // cabine para +Z (frente)
-    model.position.y = -box.min.y * S;
-    model.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
-    this.root.add(model);
-    this.height = size.y * S;
-    this.roofY = this.height - 0.12;
-    this.halfW = size.z * S / 2;
-    this.roofZ = [-0.86 * S, 0.58 * S];
+    if (variant.design) {
+      // outro modelo de carreta, montado peça a peça
+      const D = buildDesign(variant.design);
+      this.root.add(D.group); D.group.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+      this.S = 1; this.height = D.height; this.roofY = D.roofY; this.halfW = D.halfW; this.roofZ = D.roofZ;
+    } else {
+      const model = gltfScene.clone(true);
+      recolor(model, variant.filtro);
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const S = TRUCK_LEN / size.x;
+      this.S = S;
+      model.scale.setScalar(S);
+      model.rotation.y = Math.PI / 2; // cabine para +Z (frente)
+      model.position.y = -box.min.y * S;
+      model.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+      this.root.add(model);
+      this.height = size.y * S;
+      this.roofY = this.height - 0.12;
+      this.halfW = size.z * S / 2;
+      this.roofZ = [-0.86 * S, 0.58 * S];
+    }
     // estado de direção
     this.x = 0; this.z = 0; this.y = 0; this.yaw = 0; this.v = 0; this.steer = 0; this.pitch = 0; this.roll = 0;
     this.autoS = 0; this.autoDist = 0; this.route = null;
