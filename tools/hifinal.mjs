@@ -13,7 +13,7 @@ async function body(src, out, ratio) {
   const steps = [weld()];
   if (ratio < 1) steps.push(simplify({ simplifier: MeshoptSimplifier, ratio, error: 0.0004 }));
   steps.push(prune(), dedup(),
-    textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [2048, 2048], quality: 92, slots: /baseColor/ }),
+    textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [2048, 2048], quality: 96, slots: /baseColor/ }),
     textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [2048, 2048], quality: 90, slots: /normal/ }),
     reorder({ encoder: MeshoptEncoder }),
     // precisão alta: posição 16 bits, normal 12 bits, UV 14 bits, pesos 16 bits
@@ -24,5 +24,5 @@ async function body(src, out, ratio) {
   const p = d.getRoot().listMeshes()[0].listPrimitives()[0];
   console.log(out.split('/').pop(), 'tris', p.getIndices().getCount() / 3);
 }
-await body('/home/user/rig_in/out/arthur_rig.glb', `${W}/ArthurRig.glb`, 0.85);
+await body('/home/user/rig_in/out/arthur_rig.glb', `${W}/ArthurRig.glb`, 1);
 await body('/home/user/rig_in/out/afonso_hi.glb', `${W}/AfonsoRig.glb`, 1);

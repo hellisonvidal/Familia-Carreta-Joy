@@ -31,11 +31,12 @@ export class RigBody {
     root.traverse(o => {
       if (!o.isMesh) return;
       o.frustumCulled = false; o.castShadow = true;
-      const m = o.material; if (m) { m.metalness = 0; m.metalnessMap = null; m.roughnessMap = null; m.roughness = 0.95; m.envMapIntensity = 0.35; m.normalScale && m.normalScale.set(0.5, 0.5); m.needsUpdate = true; }
+      const m = o.material; if (m) { if (m.map) m.map.anisotropy = 8; if (m.normalMap) m.normalMap.anisotropy = 4; m.metalness = 0; m.metalnessMap = null; m.roughnessMap = null; m.roughness = 0.95; m.envMapIntensity = 0.35; m.normalScale && m.normalScale.set(0.5, 0.5); m.needsUpdate = true; }
     });
     // volta o menino para a pose de fábrica
     this.own.bones.forEach((b, i) => b.quaternion.copy(this.own.bindLocal[i]));
     root.updateMatrixWorld(true);
+    this.fixWaist();
     // alinhamento: rotação que leva a direção de cada osso do menino para a do X Bot (pose T)
     this.map = [];
     for (const [n, child] of CHAIN) {
@@ -65,6 +66,46 @@ export class RigBody {
     this.H = def.altura;
   }
 
+  // A camiseta acima da virilha estava presa aos ossos das coxas (pesos do Meshy):
+  // ao levantar a perna, a barra da camiseta afinava a cintura. Passa esses pesos para o quadril.
+  fixWaist() {
+    const own = this.own, root = own.root, inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    const yL = own.Pbind.get(own.b.LeftUpLeg).y, yR = own.Pbind.get(own.b.RightUpLeg).y;
+    const hipY = own.Pbind.get(own.b.Hips).y, legY = Math.min(yL, yR);
+    const H = own.Pbind.get(own.b.Head).y - legY;
+    const lo = legY - H * 0.02, hi = legY + H * 0.12; // abaixo de "lo": perna; acima de "hi": tronco
+    const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const v = new THREE.Vector3();
+    root.traverse(o => {
+      if (!o.isSkinnedMesh) return;
+      const bones = o.skeleton.bones, hipsI = bones.findIndex(b => /Hips$/.test(b.name));
+      if (hipsI < 0) return;
+      const legI = new Set(bones.map((b, i) => /(Left|Right)(UpLeg|Leg)$/.test(b.name) ? i : -1).filter(i => i >= 0));
+      const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight, pos = o.geometry.attributes.position;
+      const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+      let changed = 0;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i); o.applyBoneTransform(i, v); v.applyMatrix4(m);
+        const f = ss(lo, hi, v.y); if (f <= 0) continue;
+        let moved = 0, hipSlot = -1;
+        for (let k = 0; k < 4; k++) {
+          const j = si.getComponent(i, k), w = sw.getComponent(i, k);
+          if (j === hipsI) hipSlot = k;
+          if (legI.has(j) && w > 0) { moved += w * f; sw.setComponent(i, k, w * (1 - f)); }
+        }
+        if (moved <= 0) continue;
+        if (hipSlot < 0) { // usa o espaço de menor peso
+          let mk = 0; for (let k = 1; k < 4; k++) if (sw.getComponent(i, k) < sw.getComponent(i, mk)) mk = k;
+          moved += sw.getComponent(i, mk); si.setComponent(i, mk, hipsI); sw.setComponent(i, mk, 0); hipSlot = mk;
+        }
+        sw.setComponent(i, hipSlot, sw.getComponent(i, hipSlot) + moved);
+        changed++;
+      }
+      si.needsUpdate = sw.needsUpdate = true;
+      this.waistFixed = (this.waistFixed || 0) + changed;
+    });
+  }
+
   update(dt, st) {
     if (st.clip && this.alias[st.clip]) st = { ...st, clip: this.alias[st.clip] };
     const own = this.own;
@@ -75,14 +116,32 @@ export class RigBody {
     } else {
       this.src.update(dt, st);
       // retarget: mundo_menino = (mundo_xbot * pose_T_xbot^-1) * menino_em_T
+      const D = new Map(), Delta = new Map();
+      for (const m of this.map) { const d = this.src.worldQ(m.sb, new THREE.Quaternion()).multiply(m.srcTinv); Delta.set(m.n, d); }
+      // coluna: espalha a torção/curva da cintura igualmente por Spine, Spine1 e Spine2
+      // (concentrada numa junta só, a cintura do menino "estrangula")
+      const dh = Delta.get('Hips'), d2 = Delta.get('Spine2');
+      if (dh && d2 && Delta.get('Spine') && Delta.get('Spine1')) {
+        const rel = dh.clone().invert().multiply(d2);
+        // limita a torção total (em torno do eixo vertical do corpo)
+        const ax = new THREE.Vector3(0, 1, 0), proj = ax.clone().multiplyScalar(ax.dot(new THREE.Vector3(rel.x, rel.y, rel.z)));
+        const twist = new THREE.Quaternion(proj.x, proj.y, proj.z, rel.w).normalize();
+        const swing = rel.clone().multiply(twist.clone().invert());
+        const tAng = 2 * Math.acos(Math.min(1, Math.abs(twist.w))), maxT = 0.55;
+        if (tAng > maxT) twist.slerp(new THREE.Quaternion(), 1 - maxT / tAng);
+        const relC = swing.multiply(twist);
+        const I = new THREE.Quaternion();
+        Delta.set('Spine', dh.clone().multiply(I.clone().slerp(relC, 1 / 3)));
+        Delta.set('Spine1', dh.clone().multiply(I.clone().slerp(relC, 2 / 3)));
+        Delta.set('Spine2', dh.clone().multiply(relC));
+      }
       const W = new Map();
       for (const m of this.map) {
-        const sw = this.src.worldQ(m.sb, _q);
-        const desired = sw.multiply(m.srcTinv).multiply(m.tgtT);
+        const desired = Delta.get(m.n).clone().multiply(m.tgtT);
         const parent = m.kb.parent;
         const pw = parent && W.has(parent) ? W.get(parent) : own.worldQ(parent, _q2);
         m.kb.quaternion.copy(pw.clone().invert().multiply(desired));
-        W.set(m.kb, desired.clone());
+        W.set(m.kb, desired);
       }
       own.b.Hips.position.copy(this.hipRest); own.b.Hips.position.y += (this.src.bob || 0) * this.hipScale; // pulinho do quadril, na escala do menino
     }
