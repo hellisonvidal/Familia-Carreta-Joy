@@ -24,7 +24,7 @@ const SAVE_KEY = 'carretaJoy.v2';
 let save = {
   best: {}, stars: {}, city: 0, night: null, char: 'arthur', truck: 'arcoiris', minutes: 10,
   costumes: { arthur: 'normal', afonso: 'normal' },
-  settings: { music: 0.8, sfx: 0.9, quality: 'media', bright: 1.2, contrast: 1.05, satur: 1.1 },
+  settings: { music: 0.8, sfx: 0.9, quality: 'media', bright: 1.2, contrast: 1.05, satur: 1.1, fps: 30, vibrar: true },
 };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) save = { ...save, ...s, settings: { ...save.settings, ...(s.settings || {}) }, costumes: { ...save.costumes, ...(s.costumes || {}) } }; } catch (e) { }
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { } };
@@ -34,7 +34,7 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: save.settings.quality !== 'leve', powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.shadowMap.enabled = save.settings.quality !== 'leve';
+renderer.shadowMap.enabled = save.settings.quality === 'alta';
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -70,11 +70,30 @@ function applyLook() {
   renderer.toneMappingExposure = s.bright * (G.night ? 1.05 : 1);
   canvas.style.filter = `contrast(${s.contrast}) saturate(${s.satur})`;
 }
+// ---------------- desempenho / temperatura ----------------
+const perf = { scale: 1, hot: false, temp: null, fpsCap: 30, slow: 0, fast: 0 };
+function basePR() { const q = save.settings.quality; return Math.min(window.devicePixelRatio || 1, q === 'alta' ? 1.75 : q === 'media' ? 1.25 : 0.9); }
 function applyQuality() {
-  const q = save.settings.quality;
-  const pr = Math.min(window.devicePixelRatio || 1, q === 'alta' ? 2 : q === 'media' ? 1.5 : 1);
+  const pr = Math.max(0.6, basePR() * perf.scale * (perf.hot ? 0.75 : 1));
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr); resize();
+  perf.fpsCap = perf.hot ? 30 : (save.settings.fps || 30);
 }
+function bloomAllowed() { return save.settings.quality === 'alta' && !perf.hot; }
+function shadowsAllowed() { return save.settings.quality === 'alta' && !perf.hot; }
+// temperatura da bateria (app Android): esquentou => modo economia automático
+function checkTemp() {
+  const A = window.CarretaApp; if (!A || !A.temperature) return;
+  let t = -1; try { t = A.temperature(); } catch (e) { }
+  if (t <= 0) return; perf.temp = t;
+  const was = perf.hot;
+  if (!perf.hot && t >= 41) perf.hot = true; else if (perf.hot && t <= 38) perf.hot = false;
+  if (was !== perf.hot) {
+    applyQuality(); if (G.city) setupShadows(); useBloom = useBloom && bloomAllowed();
+    toast(perf.hot ? `🌡️ Celular quente (${t.toFixed(0)}°C): modo economia` : '✅ Temperatura normal', 'small');
+  }
+  const el = $('tempInfo'); if (el) el.textContent = `🌡️ Bateria: ${t.toFixed(1)}°C${perf.hot ? ' · modo economia ligado' : ''}`;
+}
+setInterval(checkTemp, 15000); setTimeout(checkTemp, 3000);
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false); composer.setSize(w, h); bloom.resolution.set(w / 2, h / 2);
@@ -89,7 +108,8 @@ async function loadModels() {
   const files = { carreta: 'models/carreta.glb', afonsoFull: 'models/Afonso.glb', arthurHead: 'models/ArthurHead.glb', afonsoHead: 'models/AfonsoHead.glb', arthurBody: 'models/ArthurBody.glb', afonsoBody: 'models/AfonsoBody.glb' };
   const prog = {};
   const upd = () => { const v = Object.values(prog); const l = v.reduce((a, p) => a + p.l, 0), t = v.reduce((a, p) => a + p.t, 0) || 1; $('loadbar').style.width = `${Math.round(100 * l / t)}%`; };
-  files.xbot = 'models/xbot.glb';
+  files.xbot = 'models/xbot.glb'; files.arthurRig = 'models/ArthurRig.glb'; files.afonsoRig = 'models/AfonsoRig.glb';
+  delete files.arthurBody; delete files.afonsoBody;
   for (const n of Object.keys(CLIP_INFO)) files['anim_' + n] = `anims/${n}.glb`;
   const raw = {};
   await Promise.all(Object.entries(files).map(([k, url]) => new Promise((res, rej) => {
@@ -126,7 +146,14 @@ function makeThumb(obj, key) {
   thumbs[key] = cv.toDataURL(); return thumbs[key];
 }
 function renderThumbs() {
-  for (const def of CHARACTERS) { const b = makeBody(def, def.kid ? save.costumes[def.id] : null, assets); b.apply(POSES.dance(0.5, def.estilo, null, 0)); makeThumb(b.root, def.id); }
+  for (const def of CHARACTERS) {
+    try {
+      const b = makeBody(def, def.kid ? save.costumes[def.id] : null, assets);
+      const pose = { pose: POSES.dance(0.5, def.estilo, null, 0) };
+      if (b.update) { for (let k = 0; k < 3; k++) b.update(0.1, pose); } else b.apply(pose.pose);
+      makeThumb(b.root, def.id);
+    } catch (e) { console.warn('retrato', def.id, e); }
+  }
 }
 
 // ---------------- menu ----------------
@@ -203,6 +230,7 @@ $('btnUpdGo').onclick = () => { if (APP && updUrl) { APP.downloadAndInstall(updU
 
 function openConfig() {
   $('verAtual').textContent = 'Versão instalada: ' + curVersion();
+  $('fpsSel').value = String(save.settings.fps || 30); $('vibrar').checked = save.settings.vibrar !== false; checkTemp();
   const s = save.settings;
   $('volMusic').value = s.music; $('volSfx').value = s.sfx; $('quality').value = s.quality; $('bright').value = s.bright; $('contrast').value = s.contrast; $('satur').value = s.satur;
   show('config', true);
@@ -214,7 +242,9 @@ $('volSfx').oninput = (e) => { save.settings.sfx = +e.target.value; music.setVol
 $('bright').oninput = (e) => { save.settings.bright = +e.target.value; applyLook(); };
 $('contrast').oninput = (e) => { save.settings.contrast = +e.target.value; applyLook(); };
 $('satur').oninput = (e) => { save.settings.satur = +e.target.value; applyLook(); };
-$('quality').onchange = (e) => { save.settings.quality = e.target.value; applyQuality(); if (G.city) setupShadows(); };
+$('quality').onchange = (e) => { save.settings.quality = e.target.value; perf.scale = 1; applyQuality(); if (G.city) setupShadows(); useBloom = bloomAllowed() && G.night; };
+$('fpsSel').onchange = (e) => { save.settings.fps = +e.target.value; applyQuality(); };
+$('vibrar').onchange = (e) => { save.settings.vibrar = e.target.checked; buzz(20); };
 $('btnConfigOk').onclick = () => { persist(); show('config', false); };
 function show(id, on) { $(id).classList.toggle('show', on); }
 
@@ -252,7 +282,7 @@ function buildWorld(idx, night, variantId) {
     return a;
   });
   G.player = G.actors[0];
-  useBloom = save.settings.quality !== 'leve' && (night || save.settings.quality === 'alta');
+  useBloom = bloomAllowed() && night;
   bloom.strength = night ? 0.7 : 0.3; bloom.threshold = night ? 0.93 : 0.97;
   camLight.intensity = night ? 1.1 : 0.7;
   setupShadows();
@@ -260,9 +290,9 @@ function buildWorld(idx, night, variantId) {
 }
 function setupShadows() {
   const sun = G.city.sun, q = save.settings.quality;
-  renderer.shadowMap.enabled = q !== 'leve';
-  sun.castShadow = q !== 'leve';
-  sun.shadow.mapSize.set(q === 'alta' ? 2048 : 1024, q === 'alta' ? 2048 : 1024);
+  renderer.shadowMap.enabled = shadowsAllowed();
+  sun.castShadow = shadowsAllowed();
+  sun.shadow.mapSize.set(1024, 1024);
   const c = sun.shadow.camera; c.left = -32; c.right = 32; c.top = 32; c.bottom = -32; c.near = 10; c.far = 600; c.updateProjectionMatrix();
   sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.04;
   G.truck.root.traverse(o => { if (o.isMesh && !o.material.transparent) o.castShadow = true; });
@@ -445,16 +475,31 @@ const joy = { x: 0, y: 0, id: null };
 const holds = { gas: false, brake: false };
 let running = false;
 const keys = new Set();
-const joyEl = $('joy'), knob = $('knob');
-function joyMove(e) {
-  const r = joyEl.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2;
-  let dx = (e.clientX - cx) / R, dy = (e.clientY - cy) / R; const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
-  joy.x = dx; joy.y = -dy; knob.style.transform = `translate(${dx * R * 0.6}px, ${dy * R * 0.6}px)`;
+const joyEl = $('joy'), knob = $('knob'), joyZone = $('joyZone');
+const buzz = (ms = 12) => { try { if (save.settings.vibrar !== false && navigator.vibrate) navigator.vibrate(ms); } catch (e) { } };
+let joyHome = null, joyC = { x: 0, y: 0 };
+// joystick flutuante: o centro é onde o dedo encostou; a base segue o dedo se passar do limite
+function joyPlace(x, y) {
+  const zr = joyZone.getBoundingClientRect(), R = joyEl.offsetWidth / 2;
+  joyEl.style.left = `${x - zr.left - R}px`; joyEl.style.bottom = `${zr.bottom - y - R}px`;
 }
-joyEl.addEventListener('pointerdown', (e) => { e.preventDefault(); joy.id = e.pointerId; joyEl.setPointerCapture(e.pointerId); joyMove(e); });
-joyEl.addEventListener('pointermove', (e) => { if (e.pointerId === joy.id) joyMove(e); });
-const joyEnd = (e) => { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; };
-joyEl.addEventListener('pointerup', joyEnd); joyEl.addEventListener('pointercancel', joyEnd);
+function joyMove(e) {
+  const R = joyEl.offsetWidth / 2;
+  let dx = (e.clientX - joyC.x) / R, dy = (e.clientY - joyC.y) / R, m = Math.hypot(dx, dy);
+  if (m > 1) { joyC.x += (dx / m) * (m - 1) * R; joyC.y += (dy / m) * (m - 1) * R; joyPlace(joyC.x, joyC.y); dx /= m; dy /= m; m = 1; }
+  // zona morta pequena + curva de resposta (mais preciso no começo, rápido no fim)
+  const dead = 0.1, k = m < dead ? 0 : Math.min(1, (m - dead) / (1 - dead)), out = m > 0 ? Math.pow(k, 0.85) / m : 0;
+  joy.x = dx * out; joy.y = -dy * out;
+  knob.style.transform = `translate(${dx * R * 0.62}px, ${dy * R * 0.62}px)`;
+}
+joyZone.addEventListener('pointerdown', (e) => {
+  e.preventDefault(); if (joy.id !== null) return;
+  joy.id = e.pointerId; joyZone.setPointerCapture(e.pointerId);
+  joyC = { x: e.clientX, y: e.clientY }; joyPlace(e.clientX, e.clientY); joyEl.classList.add('active'); joyMove(e);
+});
+joyZone.addEventListener('pointermove', (e) => { if (e.pointerId === joy.id) { e.preventDefault(); joyMove(e); } });
+const joyEnd = (e) => { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; joyEl.classList.remove('active'); joyEl.style.left = ''; joyEl.style.bottom = ''; };
+joyZone.addEventListener('pointerup', joyEnd); joyZone.addEventListener('pointercancel', joyEnd); joyZone.addEventListener('lostpointercapture', joyEnd);
 // arrastar a tela gira a câmera
 let camYaw = 0, camPitch = 0.32, camDragT = -10, drag = null;
 canvas.addEventListener('pointerdown', (e) => { drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
@@ -478,7 +523,7 @@ function act(a) {
   if (p.mode === 'drive') return;
   if (p.mode === 'pose') { p.standUp(G); return; }
   switch (a) {
-    case 'jump': if (p.jump()) music.sfx('jump'); p.climbIntent = true; setTimeout(() => p.climbIntent = false, 400); break;
+    case 'jump': if (p.jump()) music.sfx('jump'); else p.jumpBuf = 0.18; p.climbIntent = true; setTimeout(() => p.climbIntent = false, 400); break;
     case 'mortal': case 'flip': case 'estrela': {
       const wasGround = p.grounded;
       if (a === 'estrela' && p.grounded) { if (p.startTrick('estrela')) { p.trick.dir = joy.x > 0.2 ? -1 : 1; music.sfx('trick'); } break; }
@@ -499,13 +544,13 @@ function toggleDrive() {
   hint('▲ acelera, ▼ ré/freio, vire com o joystick. Pare numa praça 💃 para a FESTA!', 4);
 }
 document.querySelectorAll('#controls .ctl[data-act]').forEach(b => {
-  b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.classList.add('on'); act(b.dataset.act); });
-  const off = () => b.classList.remove('on'); b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); try { b.setPointerCapture(e.pointerId); } catch (x) { } b.classList.add('on'); buzz(); act(b.dataset.act); });
+  const off = () => b.classList.remove('on'); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
 });
 document.querySelectorAll('#controls .ctl[data-hold]').forEach(b => {
   const k = b.dataset.hold;
-  b.addEventListener('pointerdown', (e) => { e.preventDefault(); holds[k] = true; b.classList.add('on'); });
-  const off = () => { holds[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (x) { } holds[k] = true; b.classList.add('on'); buzz(8); });
+  const off = () => { holds[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
 });
 $('btnChars').onclick = () => act('chars');
 const KEYS = { ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', e: 'ctx', f: 'drive', h: 'horn', g: 'party', q: 'chars', r: 'run', v: 'combo' };
@@ -584,7 +629,7 @@ function stickInput() {
 }
 PADS.forEach((p, i) => {
   const b = document.createElement('button'); b.className = 'dpad'; b.style.background = p.cor; b.innerHTML = `${p.label}<small>${p.nome}</small>`;
-  b.addEventListener('pointerdown', (e) => { e.preventDefault(); dance.press(i); }); document.querySelector('.dpads').appendChild(b);
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); buzz(10); dance.press(i); }); document.querySelector('.dpads').appendChild(b);
 });
 
 // ---------------- trocar personagem / fantasia ----------------
@@ -926,9 +971,13 @@ function goMenu() {
 let last = performance.now(), fpsAcc = 0, fpsN = 0, lowFps = 0;
 function frame(nowMs) {
   requestAnimationFrame(frame);
+  // limite de quadros por segundo (30 por padrão: o celular esquenta bem menos)
+  const cap = G.paused || G.phase === 'menu' ? 20 : perf.fpsCap;
+  if (nowMs - last < 1000 / cap - 3) return;
   const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
   if (!G.city) return;
-  if (G.paused) { pollGamepad(dt); render(); return; }
+  if (G.paused) { pollGamepad(dt); if (!G.pausedDrawn) { render(); G.pausedDrawn = true; } return; }
+  G.pausedDrawn = false;
   G.now += dt;
   pollGamepad(dt); padCamera(dt);
   music.update(dt);
@@ -977,7 +1026,13 @@ function frame(nowMs) {
   if (G.phase === 'play' || G.phase === 'intro') { updateControls(); drawMinimap(); }
   render();
   fpsAcc += dt; fpsN++;
-  if (fpsAcc > 2) { const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; if (fps < 24 && useBloom) { if (++lowFps >= 2) useBloom = false; } else lowFps = 0; }
+  if (fpsAcc > 2) {
+    const fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0;
+    if (fps < 24 && useBloom) { if (++lowFps >= 2) useBloom = false; } else lowFps = 0;
+    // resolução dinâmica: se não aguenta o limite de quadros, desenha menos pixels
+    if (fps < perf.fpsCap * 0.8) { if (++perf.slow >= 2 && perf.scale > 0.6) { perf.scale = Math.max(0.6, perf.scale - 0.12); perf.slow = 0; applyQuality(); } perf.fast = 0; }
+    else if (fps > perf.fpsCap * 0.95) { if (++perf.fast >= 5 && perf.scale < 1) { perf.scale = Math.min(1, perf.scale + 0.1); perf.fast = 0; applyQuality(); } perf.slow = 0; }
+  }
 }
 function render() { if (useBloom) composer.render(); else renderer.render(scene, camera); }
 

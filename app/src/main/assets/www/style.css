@@ -203,3 +203,10 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: 0; }
 #updStatus { font-size: 13px; opacity: 0.9; min-height: 18px; }
 .gp-focus { outline: 4px solid #ffc400 !important; outline-offset: 2px; }
 @media (max-height: 420px) { .dn button { font-size: 20px; min-width: 70px; padding: 4px 10px; } }
+
+/* joystick flutuante: a zona inteira do lado esquerdo recebe o toque */
+#joyZone { position: absolute; left: 0; bottom: 0; width: 42%; height: 82%; pointer-events: auto; touch-action: none; }
+#joy { pointer-events: none !important; transition: opacity 0.15s; opacity: 0.55; }
+#joy.active { opacity: 1; transition: none; }
+#knob { transition: none; }
+.ctl { touch-action: none; -webkit-touch-callout: none; }

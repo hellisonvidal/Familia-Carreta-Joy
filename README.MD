@@ -19,6 +19,13 @@ Jogo 3D para Android da carreta da alegria, com os irmãos **Arthur** e **Afonso
 - **5 cidades**: São Paulo, Rio de Janeiro, Belo Horizonte, Salvador e Curitiba, de dia ou de noite, cada uma com sua música original.
 - **Imagem mais clara**: ajustes de Brilho, Contraste e Cores no menu ⚙️.
 
+## Novidades da versão 0.5
+
+- **Meninos com os corpos novos do rascunho**, já com esqueleto Mixamo. As animações do X Bot passam por *retarget* (cada osso recebe só a rotação relativa à pose T, com a direção dos ossos alinhada), por isso o corpo não deforma. O andar e o correr do Arthur e a dança do Afonso (Gangnam) tocam direto no próprio esqueleto.
+- **Dança Gangnam** nas festas e no teto da carreta, para todos os personagens.
+- **Controles de tela mais responsivos**: joystick flutuante (nasce onde o dedo toca no lado esquerdo), zona morta menor, botões que não soltam se o dedo escorregar, vibração, pulo com tolerância (antes de pousar e logo depois de sair da borda) e personagem acelerando/virando mais rápido.
+- **Menos aquecimento**: 30 quadros por segundo por padrão (60 opcional), resolução mais baixa no Médio, sombras e brilho só no Alto, resolução dinâmica quando o celular não aguenta, menu e pausa desenhando bem menos, e **modo economia automático** quando a bateria passa de 41 °C (a temperatura aparece em Ajustes).
+
 ## Novidades da versão 0.4
 
 - **Animações capturadas (Mixamo)**: parado, andar, correr, pulo, mortal, flip e tombo vindos do pacote de animações. A velocidade da animação acompanha a velocidade real do personagem (sem "escorregar" o pé). Os meninos recebem os mesmos movimentos por *retarget*.

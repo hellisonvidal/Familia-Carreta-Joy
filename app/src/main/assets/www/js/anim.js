@@ -12,6 +12,7 @@ export const CLIP_INFO = {
   pulo: { from: 0.55, to: 1.08 }, mortal: { from: 0.5, to: 1.55 }, flip: { from: 0.29, to: 0.95 },
   mortal2: { from: 0.17, to: 1.35 }, tombo: { from: 0.0, to: 1.6 }, queda: { from: 0.6, to: 2.4 },
   ladoE: { loop: true }, ladoD: { loop: true },
+  danca: { loop: true }, andarK: { loop: true }, correrK: { loop: true },
 };
 const MAP = { hips: 'Hips', spine: 'Spine', chest: 'Spine2', neck: 'Neck', head: 'Head', shL: 'LeftArm', elL: 'LeftForeArm', shR: 'RightArm', elR: 'RightForeArm', thL: 'LeftUpLeg', knL: 'LeftLeg', thR: 'RightUpLeg', knR: 'RightLeg' };
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -53,6 +54,12 @@ export class Driver {
     this.ct = 0;
     this.cur = null;
     this.hipRest = this.b.Hips.position.clone();
+    // pose de fábrica (antes de abaixar os braços): base para o retarget
+    this.root.updateMatrixWorld(true);
+    this.bindLocal = this.bones.map(b => b.quaternion.clone());
+    this.Wbind = new Map(); for (const b of this.bones) this.Wbind.set(b, this.worldQ(b).clone());
+    this.Pbind = new Map(); const invR = new THREE.Matrix4().copy(this.root.matrixWorld).invert();
+    for (const b of this.bones) this.Pbind.set(b, b.getWorldPosition(new THREE.Vector3()).applyMatrix4(invR));
     this.buildNeutral();
     this.prev = this.bones.map(b => b.quaternion.clone());
     this.first = true;

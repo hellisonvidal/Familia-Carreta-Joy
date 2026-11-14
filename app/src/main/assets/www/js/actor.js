@@ -75,7 +75,9 @@ export class Actor {
 
   // ---------------- comandos ----------------
   jump(boost = 1) {
-    if (this.mode !== 'normal' || !this.grounded || this.stumble > 0) return false;
+    // "tempo de coiote": ainda pode pular logo depois de sair da borda
+    const coyote = !this.grounded && this.airTime < 0.12 && this.vel.y <= 0 && this.airTricks.length === 0 && !this.trick;
+    if (this.mode !== 'normal' || (!this.grounded && !coyote) || this.stumble > 0) return false;
     this.vel.y = this.jumpV * boost; this.grounded = false; this.airTricks = []; this.airTime = 0;
     return true;
   }
@@ -137,6 +139,7 @@ export class Actor {
   // inp = { mx, mz (direção desejada no mundo, 0..1), want (0..1) }
   update(dt, G, inp) {
     this.invul = Math.max(0, this.invul - dt);
+    if (this.jumpBuf > 0) this.jumpBuf -= dt;
     this.stumble = Math.max(0, this.stumble - dt);
     const T = G.truck;
     if (this.mode === 'drive') { this.pos.copy(T.toWorld(_v.set(0, 2, TRUCK_LEN / 2 - 1.5))); return; }
@@ -157,11 +160,11 @@ export class Actor {
       const lx = mx * c + mz * s, lz = -mx * s + mz * c; mx = lx; mz = lz;
     }
     const sp = this.speedMax * (this.boost || 1) * want * (this.frame === 'truck' ? 0.55 : 1);
-    const acc = this.grounded ? 30 : 9;
+    const acc = this.grounded ? 48 : 16;
     const tvx = mx * sp, tvz = mz * sp;
     this.vel.x += Math.max(-acc * dt, Math.min(acc * dt, tvx - this.vel.x));
     this.vel.z += Math.max(-acc * dt, Math.min(acc * dt, tvz - this.vel.z));
-    if (want > 0.1) { let d = Math.atan2(mx, mz) - this.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; this.yaw += d * Math.min(1, dt * 12); }
+    if (want > 0.1) { let d = Math.atan2(mx, mz) - this.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; this.yaw += d * Math.min(1, dt * 18); }
 
     // estrela no chão: rodinha para o lado
     if (this.trick && this.trick.ground) { const s2 = Math.sin(this.yaw + Math.PI / 2), c2 = Math.cos(this.yaw + Math.PI / 2); this.vel.x = s2 * 4.5 * (this.trick.dir || 1); this.vel.z = c2 * 4.5 * (this.trick.dir || 1); }
@@ -263,6 +266,7 @@ export class Actor {
     }
     const list = this.airTricks; this.airTricks = [];
     if (this.airTime > 0.25) this.landT = Math.min(0.3, 0.12 + this.airTime * 0.12);
+    if (this.jumpBuf > 0) { this.jumpBuf = 0; this.grounded = true; setTimeout(() => this.jump(), 0); }
     G.onEvent('pousou', this, list, top, this.airTime);
   }
   crash(G, fromTrick) {
@@ -322,7 +326,7 @@ export class Actor {
     let rx = 0, ry = 0, rz = 0;
     if (this.mode === 'pose') { this.cur = POSES.crouchStart(); this.drive(dt, { pose: this.cur }); B.pivot.rotation.set(0, 0, 0); return; }
     if (this.mode === 'stand') { this.cur = lerpPose(POSES.crouchStart(), POSES.idle(0), ease(clamp01(this.standT / 0.7))); this.drive(dt, { pose: this.cur }); B.pivot.rotation.set(0, 0, 0); return; }
-    let pose, idle = false;
+    let pose, idle = false, danceCtx = false;
     const tr = this.trick;
     if (tr) {
       const k = clamp01(tr.t / tr.dur), e = ease(k);
@@ -343,6 +347,7 @@ export class Actor {
       let mk = 0, mv = null;
       if (this.dance) { this.dance.t += dt; mk = clamp01(this.dance.t / this.dance.dur); mv = this.dance.type; if (this.dance.type === 'mortal') rx = -ease(mk) * Math.PI * 2; if (mv === 'cima') ry = ease(mk) * Math.PI * 2; if (this.dance.t > this.dance.dur) this.dance = null; }
       pose = POSES.dance(G.beat, this.def.estilo, mv === 'mortal' ? 'cima' : mv, mk);
+      if (!mv) danceCtx = true;
       if (mv === 'cima' || mv === 'mortal') pose.bob = (pose.bob || 0) + Math.sin(mk * Math.PI) * 0.9;
     } else { pose = POSES.idle(G.now, this.seed); idle = true; }
     // ---- animações capturadas (Mixamo) ----
@@ -355,7 +360,8 @@ export class Actor {
       else if (!tr && this.grounded && hs > 0.5 && !G.dancing) {
         if (hs < 3.2) { clip = 'andar'; ts = Math.max(0.5, Math.min(2.2, hs / (1.45 * S))); }
         else { clip = 'correr'; ts = Math.max(0.6, Math.min(1.7, hs / (5.2 * S))); }
-      } else if (idle && this.grounded && this.frame === 'world' && !this.landT) clip = 'idle';
+      } else if (danceCtx && this.grounded && B.drv.clips.danca) { clip = 'danca'; ts = 1; }
+      else if (idle && this.grounded && this.frame === 'world' && !this.landT) clip = 'idle';
     }
     if (this.stumble <= 0) this.stumbleOn = false;
     this.wasGrounded = this.grounded;

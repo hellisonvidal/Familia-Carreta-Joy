@@ -2,6 +2,8 @@ package com.familia.carretajoy
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -101,6 +103,13 @@ class MainActivity : AppCompatActivity() {
         fun version(): String = try {
             packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
         } catch (e: Exception) { "?" }
+
+        /** temperatura da bateria em °C (para o modo economia automático) */
+        @JavascriptInterface
+        fun temperature(): Double = try {
+            val i = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            (i?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1) / 10.0
+        } catch (e: Exception) { -1.0 }
 
         @JavascriptInterface
         fun checkUpdate() {

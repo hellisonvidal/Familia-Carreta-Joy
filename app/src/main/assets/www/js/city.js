@@ -914,7 +914,8 @@ export class City {
   update(dt, t, beat, energy, truckPos, camera, partyAt) {
     this.sky.position.copy(camera.position); this.skyObj.position.copy(camera.position);
     if (this.blinkMesh) this.blinkMesh.visible = (t % 1.4) < 0.7;
-    this.updateCrowd(t, beat, truckPos, partyAt);
+    this.tick = (this.tick || 0) + 1;
+    if (this.tick % 2 === 0) this.updateCrowd(t, beat, truckPos, partyAt); // público: a cada 2 quadros
     this.updateNotes(t, dt);
     if (this.waterNormal) { this.waterNormal.offset.x = t * 0.012; this.waterNormal.offset.y = t * 0.007; }
     if (this.clouds) for (const c of this.clouds) { c.position.x += dt * 4; if (c.position.x > 1600) c.position.x = -1600; }

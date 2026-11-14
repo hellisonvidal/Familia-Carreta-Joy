@@ -3,6 +3,7 @@ import { SkinnedBody } from './skinned.js';
 import { HumanBody } from './human.js';
 import { XBotBody } from './xbotbody.js';
 import { Driver } from './anim.js';
+import { RigBody } from './rigbody.js';
 
 // =====================================================================
 // Corpos articulados (braços, pernas, tronco e cabeça se mexem) feitos
@@ -437,6 +438,12 @@ export const POSES = {
 // corpo articulado com a cabeça real quando é fantasia.
 export function makeBody(def, costume, assets) {
   let b;
+  const rigKey = def.id === 'arthur' ? 'arthurRig' : def.id === 'afonso' ? 'afonsoRig' : null;
+  if (def.kid && (!costume || costume === 'normal') && rigKey && assets[rigKey] && assets.clips) {
+    // corpo real com esqueleto: o Arthur usa o andar/correr feitos para ele
+    const opt = def.id === 'arthur' ? { alias: { andar: 'andarK', correr: 'correrK' }, native: ['andarK', 'correrK'] } : { native: ['danca'] };
+    return new RigBody(assets[rigKey], assets.clips, def, { ...opt, xbot: assets.xbot });
+  }
   if (def.kid && (!costume || costume === 'normal') && def.corpo && assets[def.corpo]) b = new SkinnedBody(assets[def.corpo], def.corpo, def.altura);
   else if (!def.kid && assets.xbot) return humanoid(def, assets);
   else if (!def.kid) return humanWithProps(def);

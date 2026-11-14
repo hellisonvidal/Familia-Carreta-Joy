@@ -70,8 +70,13 @@
     <label>◐ Contraste <input type="range" id="contrast" min="0.8" max="1.4" step="0.05"></label>
     <label>🎨 Cores <input type="range" id="satur" min="0.7" max="1.6" step="0.05"></label>
     <label>📱 Gráficos
-      <select id="quality"><option value="leve">Leve (celular simples)</option><option value="media">Médio</option><option value="alta">Alto (brilho das luzes)</option></select>
+      <select id="quality"><option value="leve">Leve (celular simples)</option><option value="media">Médio (recomendado)</option><option value="alta">Alto (sombras e brilho, esquenta mais)</option></select>
     </label>
+    <label>🎞️ Quadros por segundo
+      <select id="fpsSel"><option value="30">30 (economia, recomendado)</option><option value="60">60 (mais suave, esquenta mais)</option></select>
+    </label>
+    <label>📳 Vibrar ao tocar <input type="checkbox" id="vibrar"></label>
+    <div id="tempInfo" class="hint"></div>
     <div class="updbox">
       <b>🔄 Atualizações</b>
       <div class="row"><span id="verAtual">Versão</span><button id="btnUpd" class="chip">Verificar</button></div>
@@ -123,6 +128,7 @@
   <div id="hint"></div>
 
   <div id="controls">
+    <div id="joyZone"></div>
     <div id="joy"><div id="knob"></div></div>
     <button class="ctl runbtn" id="btnRun" data-act="run">🚶 ANDAR</button>
     <div class="mid">
