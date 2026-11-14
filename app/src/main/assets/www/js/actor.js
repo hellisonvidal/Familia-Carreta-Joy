@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { makeBody, POSES, lerpPose } from './characters.js';
+const SEED = () => Math.random() * 10;
 import { TRUCK_LEN } from './truck.js';
 
 export const TRICKS = {
@@ -48,6 +49,7 @@ export class Actor {
     this.grounded = true; this.ground = 0; this.mode = 'normal'; this.trick = null; this.queue = null; this.airTricks = [];
     this.stumble = 0; this.invul = 0; this.airTime = 0; this.runPhase = Math.random() * 6; this.dance = null; this.standT = 0;
     this.controlled = false; this.ai = { t: 0 }; this.onTop = null; this.lastPushT = 0;
+    this.cur = null; this.landT = 0; this.seed = this.seed ?? SEED(); this.prevYaw = 0; this.turn = 0;
     if (this.fullModel) this.fullModel.visible = false;
     this.body.rig.visible = true; this.root.visible = true;
   }
@@ -177,6 +179,7 @@ export class Actor {
     const C = G.city, T = G.truck;
     // colisões com prédios, carros, quiosques...
     const hit = C.collide(this.pos, 0.32, this.pos.y);
+    if (G.life) G.life.pushActor(this);
     if (hit && hit.c.walk && this.mode === 'normal') {
       const ledge = C.topAt(hit.c, this.pos.x - hit.nx * 0.6, this.pos.z - hit.nz * 0.6) - this.pos.y;
       const pushing = (this.vel.x * -hit.nx + this.vel.z * -hit.nz) > 0.5 || G.now - this.lastPushT < 0.15;
@@ -252,6 +255,7 @@ export class Actor {
       this.airTricks.push(this.trick.type); this.trick = null;
     }
     const list = this.airTricks; this.airTricks = [];
+    if (this.airTime > 0.25) this.landT = Math.min(0.3, 0.12 + this.airTime * 0.12);
     G.onEvent('pousou', this, list, top, this.airTime);
   }
   crash(G, fromTrick) {
@@ -264,7 +268,7 @@ export class Actor {
     this.ct += dt; const k = clamp01(this.ct / this.lDur);
     this.pos.lerpVectors(this.lFrom, this.lTo, k); this.pos.y = this.lFrom.y + (this.lTo.y - this.lFrom.y) * Math.min(1, k * 1.4) + Math.sin(k * Math.PI) * 0.3;
     if (k >= 1) { this.mode = 'normal'; this.grounded = true; this.vel.set(0, 0, 0); this.pos.copy(this.lTo); }
-    this.place(G); this.body.apply(POSES.climb(this.ct)); this.body.pivot.rotation.set(0, 0, 0);
+    this.place(G); this.cur = POSES.climb(this.ct); this.body.apply(this.cur); this.body.pivot.rotation.set(0, 0, 0);
   }
   updateClimbTruck(dt, G) {
     this.ct += dt; const t = this.ct, p = this.pos, T1 = 0.25, T2 = 1.0, T3 = 1.3;
@@ -274,14 +278,14 @@ export class Actor {
     else if (t < T3) { const k = (t - T2) / (T3 - T2); p.lerpVectors(this.cTop, this.cTo, ease(k)); p.y += Math.sin(k * Math.PI) * 0.5; }
     else { this.mode = 'normal'; p.copy(this.cTo); this.grounded = true; this.vel.set(0, 0, 0); G.onEvent('subiu', this); }
     this.yaw = face; this.place(G);
-    this.body.apply(t > T1 && t < T2 ? POSES.climb(t) : POSES.idle(t)); this.body.pivot.rotation.set(0, 0, 0);
+    this.cur = t > T1 && t < T2 ? POSES.climb(t) : POSES.idle(t, this.seed); this.body.apply(this.cur); this.body.pivot.rotation.set(0, 0, 0);
   }
   updateDescend(dt, G) {
     this.ct += dt; const D = 0.9, k = clamp01(this.ct / D), p = this.pos;
     p.lerpVectors(this.dFrom, this.dTo, k); p.y = this.dFrom.y * (1 - k * k) + Math.sin(k * Math.PI) * 1.6;
     this.yaw = this.dSide > 0 ? Math.PI / 2 : -Math.PI / 2;
     this.place(G);
-    this.body.apply(POSES.air(1, 1)); this.body.pivot.rotation.set(-ease(k) * Math.PI * 2, 0, 0);
+    this.cur = POSES.air(1, 1); this.body.apply(this.cur); this.body.pivot.rotation.set(-ease(k) * Math.PI * 2, 0, 0);
     if (k >= 1) {
       const w = G.truck.toWorld(this.dTo, new THREE.Vector3());
       this.frame = 'world'; this.pos.copy(w); this.pos.y = G.city.groundAt(w.x, w.z, w.y + 1.5).h; this.yaw += G.truck.yaw;
@@ -308,8 +312,8 @@ export class Actor {
   animate(dt, G, hs) {
     const B = this.body;
     let rx = 0, ry = 0, rz = 0;
-    if (this.mode === 'pose') { B.apply(POSES.crouchStart()); B.pivot.rotation.set(0, 0, 0); return; }
-    if (this.mode === 'stand') { B.apply(lerpPose(POSES.crouchStart(), POSES.idle(0), ease(clamp01(this.standT / 0.7)))); B.pivot.rotation.set(0, 0, 0); return; }
+    if (this.mode === 'pose') { this.cur = POSES.crouchStart(); B.apply(this.cur); B.pivot.rotation.set(0, 0, 0); return; }
+    if (this.mode === 'stand') { this.cur = lerpPose(POSES.crouchStart(), POSES.idle(0), ease(clamp01(this.standT / 0.7))); B.apply(this.cur); B.pivot.rotation.set(0, 0, 0); return; }
     let pose;
     const tr = this.trick;
     if (tr) {
@@ -322,14 +326,37 @@ export class Actor {
     } else if (this.stumble > 0) {
       const k = 1 - this.stumble; rx = Math.sin(k * Math.PI) * 1.1; pose = POSES.air(-1, 0.5);
     } else if (!this.grounded) pose = POSES.air(this.vel.y, 0);
-    else if (hs > 0.6) { this.runPhase += dt * (6 + hs * 1.6); pose = POSES.run(this.runPhase, Math.min(1, hs / 6), this.H); }
-    else if (this.frame === 'truck' || G.dancing || G.party || this.dance) {
+    else if (hs > 0.5) {
+      const L = this.H / 1.75; // passo proporcional à altura
+      if (hs < 3.2) { this.runPhase += dt * hs * 3.2 / L; pose = POSES.walk(this.runPhase, Math.min(1, hs / 2.2)); }
+      else { this.runPhase += dt * (5 + hs * 1.5) / Math.sqrt(L); pose = POSES.run(this.runPhase, Math.min(1, hs / 6), this.H); }
+    }
+    else if (this.frame === 'truck' || (G.dancing && (!G.comboDance || this.controlled || this.comboJoin)) || G.party || this.dance) {
       let mk = 0, mv = null;
       if (this.dance) { this.dance.t += dt; mk = clamp01(this.dance.t / this.dance.dur); mv = this.dance.type; if (this.dance.type === 'mortal') rx = -ease(mk) * Math.PI * 2; if (mv === 'cima') ry = ease(mk) * Math.PI * 2; if (this.dance.t > this.dance.dur) this.dance = null; }
       pose = POSES.dance(G.beat, this.def.estilo, mv === 'mortal' ? 'cima' : mv, mk);
       if (mv === 'cima' || mv === 'mortal') pose.bob = (pose.bob || 0) + Math.sin(mk * Math.PI) * 0.9;
-    } else pose = POSES.idle(G.now);
-    B.apply(pose);
+    } else pose = POSES.idle(G.now, this.seed);
+    // aterrissagem: dobra os joelhos
+    if (this.landT > 0 && this.grounded && !tr) { this.landT -= dt; pose = lerpPose(pose, POSES.land(), Math.min(1, this.landT / 0.12)); }
+    // inclina nas curvas
+    let dy = this.yaw - this.prevYaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI; this.prevYaw = this.yaw;
+    this.turn += ((dt > 0 ? dy / dt : 0) - this.turn) * Math.min(1, dt * 6);
+    if (hs > 2 && this.grounded) pose.sway = (pose.sway || 0) - Math.max(-0.25, Math.min(0.25, this.turn * 0.05 * hs / 6));
+    // olha para a câmera quando está parado perto dela
+    if (hs < 0.5 && !tr && G.camPos && this.mode === 'normal') {
+      const wp = this.worldPos(G, new THREE.Vector3());
+      const d = G.camPos.distanceTo(wp);
+      if (d < 9) {
+        const yawW = this.frame === 'truck' ? this.yaw + G.truck.yaw : this.yaw;
+        let a = Math.atan2(G.camPos.x - wp.x, G.camPos.z - wp.z) - yawW; while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI;
+        if (Math.abs(a) < 1.8) { pose.head = [(pose.head ? pose.head[0] : 0) - 0.05, Math.max(-0.8, Math.min(0.8, a)) * 0.8, pose.head ? pose.head[2] || 0 : 0]; }
+      }
+    }
+    // transição suave entre as poses (rápida nas manobras)
+    const k = 1 - Math.exp(-dt * (tr || !this.grounded ? 22 : 13));
+    this.cur = this.cur ? lerpPose(this.cur, pose, k) : pose;
+    B.apply(this.cur);
     B.pivot.rotation.set(rx, ry, rz, 'YXZ');
     if (tr && tr.type === 'estrela') B.pivot.rotation.set(0, 0, rz);
   }

@@ -13,6 +13,7 @@ import { Actor, TRICKS } from './actor.js';
 import { CHARACTERS, COSTUMES, KID_COSTUMES, makeBody, POSES } from './characters.js';
 import { Music, STYLES } from './music.js';
 import { Dance, PADS } from './dance.js';
+import { Life } from './life.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -32,6 +33,8 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: save.settings.quality !== 'leve', powerPreference: 'high-performance' });
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = save.settings.quality !== 'leve';
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -54,6 +57,8 @@ const G = {
   score: 0, combo: 0, comboT: 0, beat: 0, now: 0, paused: false, freeze: false, dancing: false,
   stats: {}, shake: 0, timeLeft: 600, total: 600, visited: new Set(), stopState: null,
   onEvent: (...a) => onEvent(...a),
+  // som com distância: longe da câmera não toca
+  sfx: (name, src) => { if (src && G.camPos) { const p = src.p || src; if (Math.hypot(p.x - G.camPos.x, p.z - G.camPos.z) > 45) return; } music.sfx(name); },
 };
 window.__G = G;
 const assets = {};
@@ -178,12 +183,13 @@ $('volSfx').oninput = (e) => { save.settings.sfx = +e.target.value; music.setVol
 $('bright').oninput = (e) => { save.settings.bright = +e.target.value; applyLook(); };
 $('contrast').oninput = (e) => { save.settings.contrast = +e.target.value; applyLook(); };
 $('satur').oninput = (e) => { save.settings.satur = +e.target.value; applyLook(); };
-$('quality').onchange = (e) => { save.settings.quality = e.target.value; applyQuality(); };
+$('quality').onchange = (e) => { save.settings.quality = e.target.value; applyQuality(); if (G.city) setupShadows(); };
 $('btnConfigOk').onclick = () => { persist(); show('config', false); };
 function show(id, on) { $(id).classList.toggle('show', on); }
 
 // ---------------- montar o mundo ----------------
 function clearWorld() {
+  if (G.life) { G.life.dispose(); G.life = null; }
   if (G.city) G.city.dispose();
   if (G.truck) scene.remove(G.truck.root);
   for (const a of G.actors) scene.remove(a.root, a.shadow);
@@ -199,6 +205,7 @@ function buildWorld(idx, night, variantId) {
   const def = CITIES[idx];
   G.cityDef = def; G.night = night; G.builtNight = night;
   G.city = new City(scene, def, night);
+  G.life = new Life(scene, G.city, night);
   const variant = VARIANTS.find(v => v.id === variantId) || VARIANTS[0];
   G.truck = new Truck(assets.carreta, variant); scene.add(G.truck.root);
   G.truck.setNight(night);
@@ -217,7 +224,25 @@ function buildWorld(idx, night, variantId) {
   useBloom = save.settings.quality !== 'leve' && (night || save.settings.quality === 'alta');
   bloom.strength = night ? 0.7 : 0.3; bloom.threshold = night ? 0.93 : 0.97;
   camLight.intensity = night ? 1.1 : 0.7;
+  setupShadows();
   applyLook();
+}
+function setupShadows() {
+  const sun = G.city.sun, q = save.settings.quality;
+  renderer.shadowMap.enabled = q !== 'leve';
+  sun.castShadow = q !== 'leve';
+  sun.shadow.mapSize.set(q === 'alta' ? 2048 : 1024, q === 'alta' ? 2048 : 1024);
+  const c = sun.shadow.camera; c.left = -32; c.right = 32; c.top = 32; c.bottom = -32; c.near = 10; c.far = 600; c.updateProjectionMatrix();
+  sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.04;
+  G.truck.root.traverse(o => { if (o.isMesh && !o.material.transparent) o.castShadow = true; });
+  for (const a of G.actors) a.root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+}
+// o sol acompanha a câmera para a sombra ficar sempre nítida perto do jogador
+const SUN_DIR = new THREE.Vector3(-0.45, 0.8, -0.35).normalize();
+function updateSun() {
+  if (!G.city) return;
+  const sun = G.city.sun, t = camLook;
+  sun.position.copy(t).addScaledVector(SUN_DIR, 300); sun.target.position.copy(t); sun.target.updateMatrixWorld();
 }
 
 // cena de fundo do menu
@@ -246,7 +271,7 @@ function startCity(idx, night) {
   G.stats = { tricks: 0, notes: 0, gold: 0, tombos: 0, best: 0, dance: [], parkour: 0, km: 0 };
   G.total = save.minutes * 60; G.timeLeft = G.total;
   G.phase = 'intro'; G.phaseT = 0; G.paused = false; G.freeze = false; G.dancing = false;
-  G.party = null; G.escort = null; G.startedEscort = false; escortRound = 0;
+  G.party = null; G.escort = null; G.startedEscort = false; escortRound = 0; G.meter = 0; G.comboDance = false;
   ['menu', 'pause', 'results', 'picker'].forEach(s => show(s, false));
   $('hud').classList.remove('hidden');
   $('cityname').textContent = `${G.cityDef.nome} · 🎵 ${STYLES[G.cityDef.musica].nome}`;
@@ -262,6 +287,21 @@ function startCity(idx, night) {
 function mult() { return Math.min(8, 1 + Math.floor(G.combo / 2)); }
 function addScore(pts, a) { const v = Math.round(pts * mult() * (a && a !== G.player ? 0.4 : 1)); G.score += v; return v; }
 function bump() { G.combo++; G.comboT = 4.5; G.stats.best = Math.max(G.stats.best, G.combo); }
+// medidor de combo: acrobacias enchem; cheio => DANÇA COMBO (pontos multiplicados)
+const COMBO_FULL = 1200;
+function fillCombo(pts) {
+  if (G.comboDance) return;
+  const was = G.meter >= COMBO_FULL; G.meter = Math.min(COMBO_FULL, (G.meter || 0) + pts);
+  if (!was && G.meter >= COMBO_FULL) { toast('💃 COMBO CHEIO! Toque DANÇA COMBO!', 'gold'); music.sfx('combo'); }
+}
+function startComboDance() {
+  const p = G.player;
+  if (G.meter < COMBO_FULL || G.dancing || G.phase !== 'play' || p.mode !== 'normal' || !p.grounded) return;
+  G.dancing = true; G.comboDance = true; G.meter = 0; G.comboPts = 0; camInit = true;
+  // quem está perto entra na dança também
+  for (const a of G.actors) if (a !== p && a.worldPos(G, _w).distanceTo(p.worldPos(G, _v2)) < 14) a.comboJoin = true;
+  dance.start(16); music.sfx('cheer'); hint('💃 DANÇA COMBO! Cada acerto vale o triplo!', 2.5);
+}
 let lastCoin = 0;
 function onEvent(type, a, x, y, airTime) {
   if (G.phase === 'menu') return;
@@ -271,16 +311,16 @@ function onEvent(type, a, x, y, airTime) {
     case 'desceu': music.sfx('land'); break;
     case 'subiu': if (me) { music.sfx('climb'); toast('No teto da carreta! +20', 'small'); addScore(20, a); } break;
     case 'escalou': if (me) { music.sfx('climb'); G.stats.parkour++; const p = addScore(x > 1.2 ? 40 : 15, a); bump(); if (x > 1.2) toast(`ESCALOU! +${p}`, 'small'); } break;
-    case 'manobra': { const pts = addScore(TRICKS[x].pts, a); bump(); G.stats.tricks++; if (me) { toast(`${TRICKS[x].nome}! +${pts}`); music.sfx('trick'); } break; }
+    case 'manobra': { const pts = addScore(TRICKS[x].pts, a); bump(); if (me) fillCombo(pts); G.stats.tricks++; if (me) { toast(`${TRICKS[x].nome}! +${pts}`); music.sfx('trick'); } break; }
     case 'pousou': {
       const list = x, top = y;
       if (list.length) {
         let base = list.reduce((s, t) => s + TRICKS[t].pts, 0); if (list.length > 1) base *= 1 + (list.length - 1) * 0.5;
-        const pts = addScore(base, a); bump(); G.stats.tricks += list.length;
+        const pts = addScore(base, a); bump(); if (me) fillCombo(pts); G.stats.tricks += list.length;
         if (me) { toast(`${list.map(t => TRICKS[t].nome).join(' + ')}! +${pts}`, list.length > 1 ? 'gold' : ''); music.sfx(list.length > 1 ? 'combo' : 'trick'); }
       }
       if (top && ['carro', 'banco', 'quiosque', 'container', 'loja', 'caixa', 'palco', 'tubo', 'degrau'].includes(top.kind) && me && airTime > 0.25) {
-        const pts = addScore(top.kind === 'banco' ? 15 : 40, a); bump(); G.stats.parkour++; toast(`PARKOUR! +${pts}`, 'small');
+        const pts = addScore(top.kind === 'banco' ? 15 : 40, a); bump(); fillCombo(pts); G.stats.parkour++; toast(`PARKOUR! +${pts}`, 'small');
       }
       if (me) music.sfx('land');
       break;
@@ -296,9 +336,10 @@ function onDanceJudge(q, move, streak) {
   if (q === 'erro') { music.sfx('miss'); return; }
   music.sfx(q === 'perfeito' ? 'perfect' : 'good');
   const special = streak > 0 && streak % 8 === 0;
-  for (const a of G.actors) if (a.mode === 'normal' && (a.frame === 'truck' || a === G.player || a.kid)) a.danceMove(special ? 'mortal' : move);
+  for (const a of G.actors) if (a.mode === 'normal' && (G.comboDance ? (a === G.player || a.comboJoin) : (a.frame === 'truck' || a === G.player || a.kid))) a.danceMove(special ? 'mortal' : move);
   if (special) { toast(`SEQUÊNCIA ${streak}! MORTAL JUNTOS!`, 'gold'); music.sfx('cheer'); }
-  G.score += q === 'perfeito' ? 50 : q === 'bom' ? 30 : 15;
+  const base = q === 'perfeito' ? 50 : q === 'bom' ? 30 : 15;
+  if (G.comboDance) { const v = base * 3 * mult(); G.score += v; G.comboPts += v; } else G.score += base;
   updateHUD();
 }
 
@@ -333,6 +374,10 @@ function updateControls() {
   drv.disabled = busy || !(driving || nearCab);
   $('btnHorn').classList.toggle('hidden', !driving);
   $('btnParty').classList.toggle('hidden', !partyStopAvailable());
+  const full = G.meter >= COMBO_FULL;
+  $('meterFill').style.width = `${Math.min(100, 100 * (G.meter || 0) / COMBO_FULL)}%`; $('meter').classList.toggle('full', full);
+  $('btnCombo').classList.toggle('hidden', !(full && !driving && !G.dancing));
+  $('btnRun').classList.toggle('hidden', driving);
   $('controls').style.visibility = G.dancing ? 'hidden' : 'visible';
   $('timer').textContent = '⏱ ' + fmtTime(G.timeLeft); $('timer').classList.toggle('low', G.timeLeft < 30);
 }
@@ -366,6 +411,7 @@ function drawMinimap() {
 // ---------------- controles ----------------
 const joy = { x: 0, y: 0, id: null };
 const holds = { gas: false, brake: false };
+let running = false;
 const keys = new Set();
 const joyEl = $('joy'), knob = $('knob');
 function joyMove(e) {
@@ -395,6 +441,8 @@ function act(a) {
   if (a === 'horn') { music.sfx('horn'); return; }
   if (a === 'party') { const st = partyStopAvailable(); if (st) beginStopParty(st); return; }
   if (a === 'drive') { toggleDrive(); return; }
+  if (a === 'run') { running = !running; $('btnRun').classList.toggle('on2', running); $('btnRun').innerHTML = running ? '🏃 CORRENDO' : '🚶 ANDAR'; music.sfx('click'); return; }
+  if (a === 'combo') { startComboDance(); return; }
   if (p.mode === 'drive') return;
   if (p.mode === 'pose') { p.standUp(G); return; }
   switch (a) {
@@ -428,7 +476,7 @@ document.querySelectorAll('#controls .ctl[data-hold]').forEach(b => {
   const off = () => { holds[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
 });
 $('btnChars').onclick = () => act('chars');
-const KEYS = { ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', e: 'ctx', f: 'drive', h: 'horn', g: 'party', q: 'chars' };
+const KEYS = { ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', e: 'ctx', f: 'drive', h: 'horn', g: 'party', q: 'chars', r: 'run', v: 'combo' };
 const DKEYS = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 2, ArrowRight: 3 };
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -463,7 +511,7 @@ function buildPicker() {
     b.onclick = () => { switchTo(a); buildPicker(); };
     el.appendChild(b);
   }
-  const apply = () => { for (const a of G.actors) if (a.kid) a.setCostume(save.costumes[a.def.id]); buildPicker(); toast('Fantasia trocada! ✨', 'small'); };
+  const apply = () => { for (const a of G.actors) if (a.kid) a.setCostume(save.costumes[a.def.id]); setupShadows(); buildPicker(); toast('Fantasia trocada! ✨', 'small'); };
   costumeChips($('pCostA'), 'arthur', apply); costumeChips($('pCostB'), 'afonso', apply);
 }
 function switchTo(a) {
@@ -484,6 +532,7 @@ function aiInput(a, dt) {
   a.ai.t += dt;
   if (a.mode !== 'normal' && a.mode !== 'stand') return null;
   const pw = p.worldPos(G, new THREE.Vector3()), aw = a.worldPos(G, new THREE.Vector3());
+  if (a.comboJoin && G.comboDance) return { mx: 0, mz: 0, want: 0 };
   // 1) festa na praça: vai para o seu lugar na pista e dança
   if (G.party && a.partySpot) {
     if (a.frame === 'truck') { if (a.mode === 'normal') a.beginDescend(G); return null; }
@@ -536,7 +585,8 @@ function aiInput(a, dt) {
   const target = T.toWorld(new THREE.Vector3(side * (T.halfW + 1), 0, clamp(l.z, T.roofZ[0] + 1, T.roofZ[1] - 1)), new THREE.Vector3());
   const dx = target.x - aw.x, dz = target.z - aw.z, d = Math.hypot(dx, dz) || 1;
   a.ai.back = (a.ai.back || 0) + dt;
-  if (a.ai.back > 10 || d > 70) { a.ai.back = 0; a.frame = 'truck'; a.pos.copy(a.spot); a.vel.set(0, 0, 0); a.grounded = true; burst(T.toWorld(a.spot, new THREE.Vector3()), 0xff3d7f); return null; }
+  // carreta andando: em vez de correr atrás e ficar empurrando a lateral, reaparece no teto
+  if ((Math.abs(T.v) > 0.8 && a.ai.back > 1.2) || a.ai.back > 6 || d > 40) { a.ai.back = 0; a.frame = 'truck'; a.pos.copy(a.spot); a.vel.set(0, 0, 0); a.grounded = true; burst(T.toWorld(a.spot, new THREE.Vector3()), 0xff3d7f); return null; }
   if (Math.hypot(a.vel.x, a.vel.z) < 0.5 && a.grounded && a.ai.t > 0.8) { a.jump(); a.ai.t = 0; }
   return { mx: dx / d, mz: dz / d, want: 1 };
 }
@@ -555,6 +605,7 @@ function beginStopParty(st) {
 // todos os integrantes se reúnem no espaço de dança da praça
 function gatherAt(st) {
   stopEscort(); G.party = st; camInit = true;
+  if (G.life) G.life.confetti(new THREE.Vector3(st.cx, G.city.floorY(st.cx, st.cz) + 1, st.cz));
   const p = G.player;
   if (p.mode === 'drive') p.exitDrive(G);
   if (p.mode === 'pose') p.standUp(G);
@@ -588,6 +639,7 @@ function startEscort() {
   const offs = [[W + 2.3, 6], [W + 2.3, -1], [W + 2.3, -8], [W + 5.4, 2.5], [W + 5.4, -4.5]];
   pick.forEach((a, i) => { a.escort = new THREE.Vector3(offs[i][0], 0, offs[i][1]); a.boost = 1.55; a.ai.trickT = 1 + Math.random() * 2; });
   G.escort = { list: pick, until: G.now + 55 };
+  if (G.life) G.life.confetti(G.truck.toWorld(new THREE.Vector3(0, G.truck.roofY + 1, 0)));
   hint('🤸 Saída da carreta! Olha a turma fazendo acrobacias na rua!', 3.5);
 }
 function stopEscort() {
@@ -654,6 +706,10 @@ function updateCamera(dt) {
     const a = G.now * 0.12;
     desired = T.toWorld(tmpV.set(Math.sin(a) * 16 - 4, 6 + Math.sin(G.now * 0.3), Math.cos(a) * 16)).clone();
     look = T.toWorld(tmpL.set(0, 3.5, 0)).clone(); k = 1 - Math.exp(-dt * 3);
+  } else if (G.comboDance) {
+    const w = p.worldPos(G, new THREE.Vector3()), a = G.now * 0.4;
+    desired = new THREE.Vector3(w.x + Math.sin(a) * 6, w.y + 2.6, w.z + Math.cos(a) * 6);
+    look = new THREE.Vector3(w.x, w.y + p.H * 0.6, w.z); k = 1 - Math.exp(-dt * 3);
   } else if (G.party) {
     const st = G.party, sw = Math.sin(G.now * 0.3) * 7, y0 = G.city.floorY(st.cx, st.cz);
     const cx = st.cx + st.n[0] * 1.7, cz = st.cz + st.n[1] * 1.7;
@@ -684,6 +740,7 @@ function updateCamera(dt) {
   camera.position.copy(camPos);
   if (G.shake > 0) { G.shake -= dt; camera.position.x += (Math.random() - 0.5) * G.shake; camera.position.y += (Math.random() - 0.5) * G.shake; }
   camera.lookAt(camLook);
+  G.camPos = camera.position;
   const off = G.dancing;
   if (off !== camera.userData.off) { camera.userData.off = off; if (off) camera.setViewOffset(innerWidth, innerHeight, innerWidth * 0.2, 0, innerWidth, innerHeight); else camera.clearViewOffset(); }
   camLight.position.copy(camera.position).add(tmpV.set(0, 4, 0)); camLight.target.position.copy(camLook);
@@ -791,6 +848,11 @@ function frame(nowMs) {
   if (G.dancing) {
     const r = dance.update();
     if (r) {
+      if (G.comboDance) {
+        G.dancing = false; G.comboDance = false; for (const a of G.actors) a.comboJoin = false;
+        toast(`DANÇA COMBO! +${G.comboPts}`, 'big gold'); music.sfx('cheer'); updateHUD();
+        return render();
+      }
       G.stats.dance.push(r); G.dancing = false; G.stopState = null; endParty();
       toast(r.pct >= 85 ? `ARRASARAM! ${r.pct}%` : r.pct >= 60 ? `Muito bem! ${r.pct}%` : `Boa! ${r.pct}%`, 'gold');
       music.sfx('cheer'); music.sfx('horn'); hint('A carreta vai seguir! Bora pra rua! 🚚', 3);
@@ -809,15 +871,19 @@ function frame(nowMs) {
       else {
         const fwdX = Math.sin(camYaw), fwdZ = Math.cos(camYaw), rx = -Math.cos(camYaw), rz = Math.sin(camYaw);
         const mx = fwdX * st.y + rx * st.x, mz = fwdZ * st.y + rz * st.x, m = Math.hypot(mx, mz) || 1;
-        inp = { mx: mx / m, mz: mz / m, want: st.m };
+        const run = running || keys.has('shift');
+        a.boost = a.partySpot || a.escort ? a.boost : (run ? 1.12 : 1);
+        inp = { mx: mx / m, mz: mz / m, want: st.m * (run ? 1 : 0.42) };
       }
     } else inp = aiInput(a, dt);
     a.update(dt, G, inp);
   }
   if (G.comboT > 0) { G.comboT -= dt; if (G.comboT <= 0) { G.combo = 0; updateHUD(); } }
   G.city.update(dt, G.now, G.beat, music.energy, G.truck, camera, G.stopState ? G.stopState.st : null);
+  if (G.life) G.life.update(dt, G);
   updateBursts(dt);
   updateCamera(dt);
+  updateSun();
   if (G.phase === 'play' || G.phase === 'intro') { updateControls(); drawMinimap(); }
   render();
   fpsAcc += dt; fpsN++;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SkinnedBody } from './skinned.js';
+import { HumanBody } from './human.js';
 
 // =====================================================================
 // Corpos articulados (braços, pernas, tronco e cabeça se mexem) feitos
@@ -22,7 +23,7 @@ function canvasTex(key, w, h, draw, repeat = false) {
 }
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
-function patternTex(kind, a, b) {
+export function patternTex(kind, a, b) {
   return canvasTex(`p:${kind}:${a}:${b}`, 128, 128, (g, w, h) => {
     g.fillStyle = hex(a); g.fillRect(0, 0, w, h);
     g.strokeStyle = hex(b); g.fillStyle = hex(b);
@@ -39,7 +40,7 @@ function patternTex(kind, a, b) {
   }, true);
 }
 
-function emblemTex(kind) {
+export function emblemTex(kind) {
   return canvasTex('e:' + kind, 128, 128, (g, w, h) => {
     g.clearRect(0, 0, w, h);
     const star = (cx, cy, R, r, col) => { g.fillStyle = col; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R; g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } g.closePath(); g.fill(); };
@@ -136,14 +137,14 @@ export const KID_COSTUMES = ['normal', 'barril', 'bochecha', 'vermelho', 'carave
 export const CHARACTERS = [
   { id: 'arthur', nome: 'Arthur', kid: true, altura: 1.32, cabeca: 'arthurHead', corpo: 'arthurBody', roupa: 'arthur', estilo: 0 },
   { id: 'afonso', nome: 'Afonso', kid: true, altura: 1.18, cabeca: 'afonsoHead', corpo: 'afonsoBody', roupa: 'afonso', estilo: 1, poseInicial: true },
-  { id: 'barril', nome: 'Moleque do Barril', altura: 1.62, roupa: 'barril', estilo: 2, rosto: { pele: SKIN, sardas: true, olhosGrandes: true, sobrancelha: 0x5a3b22 }, cabelo: 0x8a4b2a },
-  { id: 'bochecha', nome: 'Bochechudo', altura: 1.7, roupa: 'bochecha', estilo: 3, rosto: { pele: 0xffe3cf, bochechas: true, nariz: 0xff5a7a, olhosGrandes: true, boca: 'sorriso' }, bochechas: true, cabelo: 0x2a1a12, cabeloLongo: true },
-  { id: 'vermelho', nome: 'Herói Vermelho', altura: 1.66, roupa: 'vermelho', estilo: 4, rosto: { pele: SKIN, mascara: { tipo: 'capuz', cor: 0xd81e1e }, olhosGrandes: true } },
-  { id: 'caraverde', nome: 'Cara Verde', altura: 1.8, roupa: 'caraverde', estilo: 5, rosto: { pele: 0x7ed321, boca: 'dentes', olhosGrandes: true, sobrancelha: 0x2f5d10 }, cabecaGrande: 1.12 },
-  { id: 'teia', nome: 'Herói Teia', altura: 1.78, roupa: 'teia', estilo: 6, rosto: { pele: 0xd5212b, mascara: { tipo: 'total', cor: 0xd5212b, teia: true }, olhos: 'lente' } },
-  { id: 'capitao', nome: 'Capitão Escudo', altura: 1.86, forte: 1.25, roupa: 'capitao', estilo: 7, rosto: { pele: SKIN, mascara: { tipo: 'capuz', cor: 0x1f4fbf }, bravo: true } },
-  { id: 'gigante', nome: 'Gigante Verde', altura: 2.35, forte: 1.9, cabecaGrande: 1.45, roupa: 'gigante', estilo: 8, rosto: { pele: 0x4caf2f, boca: 'bravo', bravo: true, sobrancelha: 0x1b3d0c }, cabelo: 0x1b1b1b },
-  { id: 'garras', nome: 'Garras', altura: 1.7, forte: 1.2, roupa: 'garras', estilo: 9, rosto: { pele: SKIN, mascara: { tipo: 'garras', cor: 0xffc400, cor2: 0x111111 }, bravo: true, boca: 'bravo' } },
+  { id: 'barril', nome: 'Moleque do Barril', altura: 1.64, roupa: 'barril', estilo: 2, pele: 0xf1c6a3, olho: 0x6b4423, rosto: { pele: 0xf1c6a3, sardas: true, sobrancelha: 0x5a3b22 }, cabelo: 0x8a4b2a },
+  { id: 'bochecha', nome: 'Bochechudo', altura: 1.7, roupa: 'bochecha', estilo: 3, pele: 0xf3cfb3, olho: 0x3b6e8f, rosto: { pele: 0xf3cfb3, bochechas: true, nariz: 0xff7a8a, boca: 'sorriso' }, bochechas: true, cabelo: 0x2a1a12, estiloCabelo: 'longo' },
+  { id: 'vermelho', nome: 'Herói Vermelho', altura: 1.66, roupa: 'vermelho', estilo: 4, pele: 0xd8a27c, olho: 0x4a2e1a, rosto: { pele: 0xd8a27c, mascara: { tipo: 'capuz', cor: 0xd81e1e } } },
+  { id: 'caraverde', nome: 'Cara Verde', altura: 1.8, roupa: 'caraverde', estilo: 5, pele: 0xe2b48c, olho: 0x2f6b2f, rosto: { pele: 0x7ed321, boca: 'dentes', sobrancelha: 0x2f5d10 }, cabecaGrande: 1.08 },
+  { id: 'teia', nome: 'Herói Teia', altura: 1.78, roupa: 'teia', estilo: 6, pele: 0xd5212b, rosto: { pele: 0xd5212b, mascara: { tipo: 'total', cor: 0xd5212b, teia: true }, olhos: 'lente' } },
+  { id: 'capitao', nome: 'Capitão Escudo', altura: 1.86, forte: 1.2, roupa: 'capitao', estilo: 7, pele: 0xf0c8a4, olho: 0x3d6fb3, rosto: { pele: 0xf0c8a4, mascara: { tipo: 'capuz', cor: 0x1f4fbf }, bravo: true } },
+  { id: 'gigante', nome: 'Gigante Verde', altura: 2.2, forte: 1.65, roupa: 'gigante', estilo: 8, pele: 0x5fae3a, olho: 0x3a5a1a, rosto: { pele: 0x5fae3a, boca: 'bravo', bravo: true, sobrancelha: 0x1b3d0c }, cabelo: 0x1b1b1b, estiloCabelo: 'curto' },
+  { id: 'garras', nome: 'Garras', altura: 1.72, forte: 1.15, roupa: 'garras', estilo: 9, pele: 0xe0b088, olho: 0x4a3020, barba: true, rosto: { pele: 0xe0b088, mascara: { tipo: 'garras', cor: 0xffc400, cor2: 0x111111 }, bravo: true, boca: 'bravo' } },
 ];
 
 // Ajuste das cabeças reais (unidades do modelo original)
@@ -353,9 +354,11 @@ export const lerpPose = (a, b, t) => {
 };
 
 export const POSES = {
-  idle(t) {
-    const b = Math.sin(t * 2) * 0.03;
-    return { lean: 0.02, sh: [b, 0.12, -b, -0.12], el: [-0.2, -0.2], th: [0, 0.03, 0, -0.03], kn: [0.02, 0.02], head: [0, 0] };
+  idle(t, seed = 0) {
+    const b = Math.sin(t * 2.2) * 0.025, w = Math.sin(t * 0.45 + seed) ;
+    const look = Math.sin(t * 0.31 + seed * 2) * 0.35 + Math.sin(t * 0.83 + seed) * 0.12;
+    return { lean: 0.02 + b * 0.4, sway: w * 0.05, spineSway: -w * 0.03, bob: -Math.abs(w) * 0.01, sh: [b, 0.12 + b, -b, -0.12 - b], el: [-0.22, -0.22],
+      th: [0, 0.03 + w * 0.05, 0, -0.03 + w * 0.05], kn: [w > 0 ? 0.02 : 0.12 * -w, w < 0 ? 0.02 : 0.12 * w], head: [Math.sin(t * 0.5 + seed) * 0.05, look] };
   },
   run(ph, a, H) {
     const s = Math.sin(ph), c = Math.cos(ph);
@@ -365,6 +368,15 @@ export const POSES = {
       th: [-s * 0.95 * a, 0, s * 0.95 * a, 0], kn: [Math.max(0, c) * 1.5 * a + 0.1, Math.max(0, -c) * 1.5 * a + 0.1], head: [-0.1 * a, 0],
     };
   },
+  walk(ph, a) {
+    const s = Math.sin(ph), c = Math.cos(ph);
+    return {
+      lean: 0.05 * a, bob: Math.abs(c) * 0.02 * a, twist: s * 0.08 * a, sway: s * 0.03 * a,
+      sh: [s * 0.45 * a, 0.1, -s * 0.45 * a, -0.1], el: [-0.3 - Math.max(0, s) * 0.3, -0.3 - Math.max(0, -s) * 0.3],
+      th: [-s * 0.45 * a, 0.02, s * 0.45 * a, -0.02], kn: [Math.max(0, c) * 0.7 * a + 0.05, Math.max(0, -c) * 0.7 * a + 0.05], head: [0, -s * 0.05],
+    };
+  },
+  land() { return { lean: 0.3, bob: -0.18, sh: [-0.5, 0.35, -0.5, -0.35], el: [-0.9, -0.9], th: [-0.9, 0.12, -0.9, -0.12], kn: [1.5, 1.5], head: [-0.15, 0] }; },
   air(vy, tuck) {
     const up = vy > 0 ? 1 : 0;
     const p = { lean: 0.1, sh: [-0.4 - up * 0.6, 0.7, -0.4 - up * 0.6, -0.7], el: [-0.6, -0.6], th: [-0.7, 0.05, -0.2, -0.05], kn: [1.2, 0.6], head: [0, 0] };
@@ -416,5 +428,25 @@ export const POSES = {
 // corpo articulado com a cabeça real quando é fantasia.
 export function makeBody(def, costume, assets) {
   if (def.kid && (!costume || costume === 'normal') && def.corpo && assets[def.corpo]) return new SkinnedBody(assets[def.corpo], def.corpo, def.altura);
+  if (!def.kid) return humanWithProps(def);
   return new Body(def, costume, assets);
+}
+
+// adulto com corpo humano + acessórios da fantasia
+function humanWithProps(def) {
+  const C = COSTUMES[def.roupa];
+  const b = new HumanBody(def, C, { patternTex, emblemTex });
+  const H = def.altura, J = b.J;
+  Body.prototype.addHeadwear.call(b, J.head, C.chapeu, b.headTop, false);
+  const handOff = (side) => new THREE.Vector3(Math.sin(0.16) * 0.2 * H * side, -0.2 * H, 0);
+  if (C.garras) for (const [side, bone] of [[1, J.elL], [-1, J.elR]]) for (let k = -1; k <= 1; k++) {
+    const cl = new THREE.Mesh(new THREE.BoxGeometry(0.006 * H, 0.1 * H, 0.006 * H), mat({ cor: 0xdfe6ee, metal: 0.9, rough: 0.2 }));
+    cl.position.copy(handOff(side)).add(new THREE.Vector3(0, -0.06 * H, k * 0.012 * H)); bone.add(cl);
+  }
+  if (C.escudo) {
+    const shd = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * H, 0.14 * H, 0.025, 28), [mat(0xd32f2f), new THREE.MeshStandardMaterial({ map: emblemTex('escudo'), metalness: 0.4, roughness: 0.35 }), mat(0xd32f2f)]);
+    shd.rotation.z = Math.PI / 2; shd.position.set(Math.sin(0.16) * 0.08 * H + 0.04 * H, -0.08 * H, 0); J.elL.add(shd);
+  }
+  if (C.ombreiras !== undefined) for (const [side, bone] of [[1, J.shL], [-1, J.shR]]) { const o = new THREE.Mesh(new THREE.SphereGeometry(0.045 * H, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat(C.ombreiras)); o.scale.set(1.2, 0.8, 1.1); o.position.set(0, 0.01 * H, 0); bone.add(o); }
+  return b;
 }

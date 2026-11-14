@@ -178,3 +178,12 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: 0; }
   .logo { font-size: 46px; }
   .dpad { height: 66px; }
 }
+
+/* correr e medidor de combo */
+.ctl.runbtn { position: absolute; left: calc(36px + var(--safe-l)); bottom: 178px; border-radius: 16px; padding: 0 14px; height: 46px; font-size: 14px; background: rgba(0, 150, 136, 0.65); }
+.ctl.runbtn.on2 { background: rgba(255, 109, 0, 0.85); box-shadow: 0 0 12px rgba(255,140,0,0.8); }
+#meter { position: relative; width: 120px; height: 12px; margin-top: 4px; border-radius: 7px; background: rgba(0,0,0,0.45); overflow: hidden; border: 1px solid rgba(255,255,255,0.4); }
+#meter i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #00e5ff, #ff3d7f); transition: width 0.2s; }
+#meter span { position: absolute; inset: 0; font-size: 8.5px; font-weight: 900; text-align: center; line-height: 12px; letter-spacing: 1px; }
+#meter.full i { background: linear-gradient(90deg, #ffc400, #ff3d7f); animation: pulse 0.8s infinite; }
+@media (max-height: 420px) { .ctl.runbtn { bottom: 150px; left: calc(26px + var(--safe-l)); height: 40px; font-size: 12px; } }

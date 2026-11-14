@@ -19,15 +19,26 @@ Jogo 3D para Android da carreta da alegria, com os irmãos **Arthur** e **Afonso
 - **5 cidades**: São Paulo, Rio de Janeiro, Belo Horizonte, Salvador e Curitiba, de dia ou de noite, cada uma com sua música original.
 - **Imagem mais clara**: ajustes de Brilho, Contraste e Cores no menu ⚙️.
 
+## Novidades da versão 0.3
+
+- **Adultos com aparência de gente de verdade**: corpo humano contínuo (uma malha só, com esqueleto), rosto com olhos, íris, sobrancelhas, nariz, lábios e orelhas, cabelo, mãos e sapatos. A fantasia é a roupa pintada no corpo.
+- **Animações refinadas**: transição suave entre movimentos, andar diferente de correr, joelhos dobrando na aterrissagem, inclinação nas curvas, respiração, troca do peso do corpo e cabeça olhando para a câmera.
+- **Gráficos**: sombras de verdade, nuvens, mar com ondas, faixas de pedestre, toldos nas lojinhas, lixeiras e hidrantes.
+- **Cidade viva**: carros circulando nas ruas de trânsito (param e buzinam se você ficar na frente), pedestres andando nas calçadas (param para ver a carreta), pombos que voam quando alguém chega perto, bolas para chutar, chafariz no parque, fogos de artifício nas noites de festa e canhão de confete na saída da carreta.
+- **Botão CORRER**: o joystick anda; o botão liga/desliga a corrida.
+- **Combo de acrobacias**: manobras e parkour enchem o medidor COMBO. Cheio, libera a **DANÇA COMBO** em qualquer lugar: quem está perto dança junto e cada acerto vale o triplo.
+- Os personagens não ficam mais correndo e empurrando a carreta em movimento: eles reaparecem no teto.
+
 ## Controles
 
-- 🕹️ Joystick (esquerda): anda/corre · arraste a tela para girar a câmera
+- 🕹️ Joystick (esquerda): anda · **🏃 CORRER** liga/desliga a corrida · arraste a tela para girar a câmera
+- **💃 DANÇA COMBO**: aparece quando o medidor COMBO enche
 - **PULAR**, e no ar **MORTAL**, **FLIP**, **ESTRELA** (termine antes de cair; várias no mesmo pulo valem mais)
 - **SUBIR / DESCER**: escala a lateral da carreta / pula do teto
 - **DIRIGIR / SAIR**: assume ou larga o volante · ▲ acelera · ▼ ré/freio · 📯 buzina · 💃 FESTA quando parar numa praça
 - 🧒 (canto superior esquerdo): trocar de personagem e de fantasia
 
-No computador (para testar): WASD/setas, espaço, Z = mortal, X = estrela, C = flip, E = subir/descer, F = dirigir, H = buzina, Q = personagens.
+No computador (para testar): WASD/setas, Shift ou R = correr, V = dança combo, espaço, Z = mortal, X = estrela, C = flip, E = subir/descer, F = dirigir, H = buzina, Q = personagens.
 
 ## Instalar
 

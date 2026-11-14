@@ -301,6 +301,14 @@ export class Music {
       case 'good': this.osc('sine', 1175, t, 0.1, 0.12, B); break;
       case 'miss': this.osc('square', 160, t, 0.12, 0.08, B); break;
       case 'click': this.osc('sine', 880, t, 0.05, 0.12, B); break;
+      case 'kick': this.noiseHit(t, 0.06, 0.4, 'lowpass', 900, 1, B); this.osc('sine', 180, t, 0.08, 0.3, B); break;
+      case 'carhorn': for (const f of [392, 494]) { const o = this.osc('square', f, t, 0.35, 0.06, B, 0.02); } break;
+      case 'flap': for (let k = 0; k < 6; k++) this.noiseHit(t + k * 0.05, 0.04, 0.12, 'bandpass', 2500, 2, B); break;
+      case 'boom': {
+        this.noiseHit(t, 0.9, 0.5, 'lowpass', 300, 0.7, B);
+        for (let k = 0; k < 10; k++) this.noiseHit(t + 0.15 + Math.random() * 0.6, 0.05, 0.08, 'highpass', 5000, 1, B);
+        break;
+      }
     }
   }
 

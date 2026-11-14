@@ -71,7 +71,8 @@
     </label>
     <div class="howto">
       <b>Como jogar</b>
-      <p>🕹️ Joystick: anda/corre para onde quiser · arraste a tela para girar a câmera.</p>
+      <p>🕹️ Joystick: anda para onde quiser · <b>🏃 CORRER</b> liga/desliga a corrida · arraste a tela para girar a câmera.</p>
+      <p>Acrobacias e parkour enchem o medidor <b>COMBO</b>. Cheio, aparece <b>💃 DANÇA COMBO</b>: dance no ritmo e cada acerto vale o triplo!</p>
       <p><b>PULAR</b> · no ar: <b>MORTAL</b>, <b>FLIP</b>, <b>ESTRELA</b> (termine antes de cair!). Corra contra muros baixos e carros para escalar (parkour). Rampas fazem voar!</p>
       <p><b>SUBIR</b> perto da carreta escala a lateral · <b>DESCER</b> pula do teto · <b>DIRIGIR</b> assume o volante.</p>
       <p>Na praça a carreta para: toque os botões coloridos no ritmo e todo mundo dança junto!</p>
@@ -96,6 +97,7 @@
   <div class="topleft">
     <div id="score">0</div>
     <div id="mult" class="hidden">x2</div>
+    <div id="meter"><i id="meterFill"></i><span>COMBO</span></div>
     <button id="btnChars" class="who">🧒 <span id="who"></span> ▾</button>
   </div>
   <div class="topcenter">
@@ -111,11 +113,13 @@
 
   <div id="controls">
     <div id="joy"><div id="knob"></div></div>
+    <button class="ctl runbtn" id="btnRun" data-act="run">🚶 ANDAR</button>
     <div class="mid">
       <button class="ctl ctx" id="btnCtx" data-act="ctx">SUBIR</button>
       <button class="ctl ctx2" id="btnDrive" data-act="drive">🚚 DIRIGIR</button>
       <button class="ctl ctx3 hidden" id="btnHorn" data-act="horn">📯 BUZINA</button>
       <button class="ctl ctx4 hidden" id="btnParty" data-act="party">💃 FESTA</button>
+      <button class="ctl ctx4 pulse hidden" id="btnCombo" data-act="combo">💃 DANÇA COMBO</button>
     </div>
     <div class="right" id="trickPad">
       <button class="ctl trick t1" data-act="mortal">MORTAL</button>

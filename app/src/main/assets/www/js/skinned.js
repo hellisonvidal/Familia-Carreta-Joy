@@ -40,6 +40,32 @@ function floatAttr(attr) {
   return new THREE.BufferAttribute(out, k);
 }
 
+export const BONE_NAMES = ['hips', 'spine', 'neck', 'head', 'shL', 'elL', 'shR', 'elR', 'thL', 'knL', 'thR', 'knR'];
+export const BONE_PARENT = { spine: 'hips', neck: 'spine', head: 'neck', shL: 'spine', elL: 'shL', shR: 'spine', elR: 'shR', thL: 'hips', knL: 'thL', thR: 'hips', knR: 'thR' };
+export function makeBones(at) {
+  const bones = {}, list = [];
+  for (const n of BONE_NAMES) {
+    const b = new THREE.Bone(); b.name = n; bones[n] = b; list.push(b);
+    const p = at[n], pp = BONE_PARENT[n] ? at[BONE_PARENT[n]] : [0, 0, 0];
+    b.position.set(p[0] - pp[0], p[1] - pp[1], p[2] - pp[2]);
+    if (BONE_PARENT[n]) bones[BONE_PARENT[n]].add(b);
+  }
+  return { bones, list, index: Object.fromEntries(BONE_NAMES.map((n, i) => [n, i])), rest: Object.fromEntries(BONE_NAMES.map(n => [n, bones[n].position.clone()])) };
+}
+// aplica uma pose (ângulos das articulações) nos ossos
+export function applyPose(J, R, p, armRest, legRest, limitArms) {
+  J.hips.position.set(R.hips.x, R.hips.y + (p.bob || 0), R.hips.z);
+  J.hips.rotation.set(0, p.twist || 0, p.sway || 0);
+  J.spine.rotation.set(p.lean || 0, p.spineTwist || 0, p.spineSway || 0);
+  J.head.rotation.set(p.head ? p.head[0] : 0, p.head ? p.head[1] : 0, p.head ? p.head[2] || 0 : 0);
+  const cx = limitArms ? (v) => Math.max(-1.75, Math.min(1.3, v)) : (v) => v;
+  const cz = limitArms ? (v) => Math.max(-0.25, Math.min(1.35, v)) : (v) => v;
+  J.shL.rotation.set(cx(p.sh[0]), 0, cz(p.sh[1]) - armRest); J.shR.rotation.set(cx(p.sh[2]), 0, -cz(-p.sh[3]) + armRest);
+  J.elL.rotation.set(p.el[0], 0, 0); J.elR.rotation.set(p.el[1], 0, 0);
+  J.thL.rotation.set(p.th[0], 0, p.th[1] - legRest); J.thR.rotation.set(p.th[2], 0, p.th[3] + legRest);
+  J.knL.rotation.set(p.kn[0], 0, 0); J.knR.rotation.set(p.kn[1], 0, 0);
+}
+
 export class SkinnedBody {
   constructor(src, rigKey, altura) {
     const R = RIGS[rigKey];
@@ -154,18 +180,5 @@ export class SkinnedBody {
     this.j = bones;
   }
 
-  apply(p) {
-    const J = this.j, R = this.rest;
-    J.hips.position.set(R.hips.x, R.hips.y + (p.bob || 0), R.hips.z);
-    J.hips.rotation.set(0, p.twist || 0, p.sway || 0);
-    J.spine.rotation.set(p.lean || 0, p.spineTwist || 0, p.spineSway || 0);
-    J.head.rotation.set(p.head ? p.head[0] : 0, p.head ? p.head[1] : 0, p.head ? p.head[2] || 0 : 0);
-    const ar = this.armRest, lr = this.legRest;
-    // o corpo real não levanta o braço acima da cabeça (a pele esticaria demais)
-    const cx = (v) => Math.max(-1.75, Math.min(1.3, v)), cz = (v) => Math.max(-0.25, Math.min(1.35, v));
-    J.shL.rotation.set(cx(p.sh[0]), 0, cz(p.sh[1]) - ar); J.shR.rotation.set(cx(p.sh[2]), 0, -cz(-p.sh[3]) + ar);
-    J.elL.rotation.set(p.el[0], 0, 0); J.elR.rotation.set(p.el[1], 0, 0);
-    J.thL.rotation.set(p.th[0], 0, p.th[1] - lr * 0.6); J.thR.rotation.set(p.th[2], 0, p.th[3] + lr * 0.6);
-    J.knL.rotation.set(p.kn[0], 0, 0); J.knR.rotation.set(p.kn[1], 0, 0);
-  }
+  apply(p) { applyPose(this.j, this.rest, p, this.armRest, this.legRest * 0.6, true); }
 }
