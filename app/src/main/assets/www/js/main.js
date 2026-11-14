@@ -379,6 +379,7 @@ function updateControls() {
   $('btnCombo').classList.toggle('hidden', !(full && !driving && !G.dancing));
   $('btnRun').classList.toggle('hidden', driving);
   $('controls').style.visibility = G.dancing ? 'hidden' : 'visible';
+  document.querySelector('.topcenter').style.visibility = G.dancing ? 'hidden' : 'visible';
   $('timer').textContent = '⏱ ' + fmtTime(G.timeLeft); $('timer').classList.toggle('low', G.timeLeft < 30);
 }
 
@@ -713,7 +714,7 @@ function updateCamera(dt) {
   } else if (G.party) {
     const st = G.party, sw = Math.sin(G.now * 0.3) * 7, y0 = G.city.floorY(st.cx, st.cz);
     const cx = st.cx + st.n[0] * 1.7, cz = st.cz + st.n[1] * 1.7;
-    desired = new THREE.Vector3(cx - st.n[0] * 12 + st.t[0] * sw, y0 + 4.2, cz - st.n[1] * 12 + st.t[1] * sw);
+    desired = new THREE.Vector3(cx - st.n[0] * 9 + st.t[0] * sw, y0 + 7, cz - st.n[1] * 9 + st.t[1] * sw);
     look = new THREE.Vector3(cx, y0 + 1.1, cz); k = 1 - Math.exp(-dt * 2.5);
   } else if (G.dancing || G.phase === 'fim') {
     const a = -Math.PI / 2 + Math.sin(G.now * 0.35) * 0.75;
