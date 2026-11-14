@@ -19,6 +19,34 @@ Jogo 3D para Android da carreta da alegria, com os irmãos **Arthur** e **Afonso
 - **5 cidades**: São Paulo, Rio de Janeiro, Belo Horizonte, Salvador e Curitiba, de dia ou de noite, cada uma com sua música original.
 - **Imagem mais clara**: ajustes de Brilho, Contraste e Cores no menu ⚙️.
 
+## Novidades da versão 0.4
+
+- **Animações capturadas (Mixamo)**: parado, andar, correr, pulo, mortal, flip e tombo vindos do pacote de animações. A velocidade da animação acompanha a velocidade real do personagem (sem "escorregar" o pé). Os meninos recebem os mesmos movimentos por *retarget*.
+- **Personagens refeitos como humanoides** sobre o boneco X Bot (Mixamo), com rosto (olhos, sobrancelhas, nariz, boca, orelhas), cabelo e a fantasia pintada no corpo.
+- **Kiko** jogável (roupa de marinheiro) e **nova roupa do Bochechudo** (jardineira com camisa listrada e gravata-borboleta).
+- **Carros arredondados** e mais modelos: sedã, hatch, SUV, táxi, van, picape, fusca e ônibus.
+- **Carretas com outros designs**: Trio Elétrico Gigante, Ônibus da Alegria (dois andares) e Caminhão-Palco, além das versões recoloridas.
+- **Controle de videogame** (PlayStation/Xbox/outros, Bluetooth ou USB).
+- **Atualizador** em Ajustes: verifica a última versão no GitHub, baixa e instala o APK.
+- **Tela inicial** com Dia/Noite em destaque no rodapé e mais contraste.
+
+### Controle
+
+| Botão | Ação |
+|---|---|
+| Analógico esquerdo / direito | andar / girar a câmera |
+| A ✕ | pular |
+| X ▢ | mortal |
+| Y △ | flip |
+| B ○ | estrela |
+| RB R1 | correr (liga/desliga) |
+| LB L1 | subir/descer da carreta |
+| RT R2 / LT L2 | acelerar / frear (dirigindo) |
+| ▲ / ▼ | dirigir / dança combo |
+| Start / Select | pausa / personagens |
+
+No menu: ◀ ▶ troca a cidade, ▲ ▼ dia/noite, X personagem, Y carreta, A joga.
+
 ## Novidades da versão 0.3
 
 - **Adultos com aparência de gente de verdade**: corpo humano contínuo (uma malha só, com esqueleto), rosto com olhos, íris, sobrancelhas, nariz, lábios e orelhas, cabelo, mãos e sapatos. A fantasia é a roupa pintada no corpo.
