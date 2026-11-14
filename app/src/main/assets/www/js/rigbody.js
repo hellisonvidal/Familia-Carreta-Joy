@@ -31,7 +31,7 @@ export class RigBody {
     root.traverse(o => {
       if (!o.isMesh) return;
       o.frustumCulled = false; o.castShadow = true;
-      const m = o.material; if (m) { m.metalness = 0; m.metalnessMap = null; m.roughness = 0.75; m.envMapIntensity = 0.8; }
+      const m = o.material; if (m) { m.metalness = 0; m.metalnessMap = null; m.roughnessMap = null; m.roughness = 0.95; m.envMapIntensity = 0.35; m.normalScale && m.normalScale.set(0.5, 0.5); m.needsUpdate = true; }
     });
     // volta o menino para a pose de fábrica
     this.own.bones.forEach((b, i) => b.quaternion.copy(this.own.bindLocal[i]));
