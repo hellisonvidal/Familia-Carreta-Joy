@@ -64,6 +64,13 @@
 <div id="config" class="screen modal">
   <div class="panel">
     <h2>Ajustes</h2>
+    <div class="updbox">
+      <b>🔄 Atualizações</b>
+      <div class="row"><span id="verAtual">Versão</span><button id="btnUpd" class="chip">Verificar</button></div>
+      <div id="updStatus"></div>
+      <button id="btnUpdGo" class="big hidden">⬇ Baixar e instalar</button>
+      <div class="updlinks hidden" id="updLinks">Não instalou? <button id="btnUpdWeb">baixar pelo navegador</button></div>
+    </div>
     <label>🎵 Música <input type="range" id="volMusic" min="0" max="1" step="0.05"></label>
     <label>🔊 Efeitos <input type="range" id="volSfx" min="0" max="1" step="0.05"></label>
     <label>☀️ Brilho <input type="range" id="bright" min="0.7" max="1.8" step="0.05"></label>
@@ -77,12 +84,6 @@
     </label>
     <label>📳 Vibrar ao tocar <input type="checkbox" id="vibrar"></label>
     <div id="tempInfo" class="hint"></div>
-    <div class="updbox">
-      <b>🔄 Atualizações</b>
-      <div class="row"><span id="verAtual">Versão</span><button id="btnUpd" class="chip">Verificar</button></div>
-      <div id="updStatus"></div>
-      <button id="btnUpdGo" class="big hidden">⬇ Baixar e instalar</button>
-    </div>
     <div id="padStatus" class="hint">🎮 Conecte um controle PlayStation/Xbox (Bluetooth ou USB) e aperte um botão.</div>
     <div class="howto">
       <b>Como jogar</b>

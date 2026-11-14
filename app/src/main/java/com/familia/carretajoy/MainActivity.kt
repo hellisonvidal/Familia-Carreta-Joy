@@ -111,6 +111,12 @@ class MainActivity : AppCompatActivity() {
             (i?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1) / 10.0
         } catch (e: Exception) { -1.0 }
 
+        /** plano B: abre a página da versão no navegador */
+        @JavascriptInterface
+        fun openUrl(url: String) {
+            runOnUiThread { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { } }
+        }
+
         @JavascriptInterface
         fun checkUpdate() {
             thread {
@@ -133,9 +139,19 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val dir = File(getExternalFilesDir(null) ?: cacheDir, "updates").apply { mkdirs() }
                     val file = File(dir, "CarretaJoy.apk")
-                    val con = URL(url).openConnection() as HttpURLConnection
-                    con.setRequestProperty("User-Agent", "CarretaJoy-App")
-                    con.instanceFollowRedirects = true
+                    // o GitHub redireciona o download para outro servidor: segue manualmente
+                    var con = URL(url).openConnection() as HttpURLConnection
+                    var hops = 0
+                    while (true) {
+                        con.setRequestProperty("User-Agent", "CarretaJoy-App")
+                        con.instanceFollowRedirects = false
+                        con.connectTimeout = 20000; con.readTimeout = 30000
+                        val code = con.responseCode
+                        if (code in 300..399 && hops < 6) { val loc = con.getHeaderField("Location"); con.disconnect(); con = URL(URL(url), loc).openConnection() as HttpURLConnection; hops++; continue }
+                        if (code != 200) throw Exception("servidor respondeu $code")
+                        break
+                    }
+                    if (file.exists()) file.delete()
                     val total = con.contentLength.toLong()
                     con.inputStream.use { input ->
                         file.outputStream().use { out ->
@@ -164,11 +180,15 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
             return
         }
-        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
-        val intent = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, "application/vnd.android.package-archive")
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            js("window.onUpdateError(" + JSONObject.quote("Não consegui abrir o instalador: " + (e.message ?: "")) + ")")
+        }
     }
 
     // ---------------- controle de videogame ----------------

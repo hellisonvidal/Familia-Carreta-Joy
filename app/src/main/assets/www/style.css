@@ -210,3 +210,13 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: 0; }
 #joy.active { opacity: 1; transition: none; }
 #knob { transition: none; }
 .ctl { touch-action: none; -webkit-touch-callout: none; }
+
+/* painéis e listas roláveis no celular (o "touch-action: none" do jogo bloqueava a rolagem) */
+.panel, .panel *, .menu-body, .menu-body * { touch-action: pan-y; }
+.panel input[type=range] { touch-action: none; }
+.panel { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+#config .panel { max-height: 94vh; }
+.updbox { border: 2px solid rgba(255,196,0,0.5); }
+#btnUpdGo { margin-top: 6px; animation: pulse 1s infinite; }
+.updlinks { margin-top: 6px; font-size: 13px; }
+.updlinks button { background: none; color: #ffd54f; text-decoration: underline; font-size: 13px; padding: 0; }

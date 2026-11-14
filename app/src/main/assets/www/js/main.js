@@ -207,7 +207,7 @@ $('btnNoite').onclick = () => { G.night = true; buildMenu(); menuScene(); };
 $('btnPlay').onclick = () => { music.init(); save.city = G.cityIdx; persist(); startCity(G.cityIdx, G.night ?? CITIES[G.cityIdx].noite); };
 // ---------------- atualizador (dentro do app Android) ----------------
 const APP = window.CarretaApp;
-let updUrl = null;
+let updUrl = null, updPage = 'https://github.com/hellisonvidal/Familia-Carreta-Joy/releases/latest';
 function curVersion() { try { return APP ? APP.version() : 'navegador'; } catch (e) { return '?'; } }
 const vnum = (v) => (v || '').replace(/^v/, '').split('.').map(n => parseInt(n) || 0);
 const newer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) > (y[i] || 0)) return true; if ((x[i] || 0) < (y[i] || 0)) return false; } return false; };
@@ -216,17 +216,19 @@ window.onUpdateInfo = (json) => {
     const r = JSON.parse(json);
     if (r.erro) { $('updStatus').textContent = '⚠️ Não consegui verificar: ' + r.erro; return; }
     const tag = r.tag_name, apk = (r.assets || []).find(a => /\.apk$/i.test(a.name));
-    if (newer(tag, curVersion()) && apk) { updUrl = apk.browser_download_url; $('updStatus').innerHTML = `✨ Nova versão <b>${tag}</b> disponível!`; $('btnUpdGo').classList.remove('hidden'); }
+    updPage = r.html_url || updPage;
+    if (newer(tag, curVersion()) && apk) { updUrl = apk.browser_download_url; $('updStatus').innerHTML = `✨ Nova versão <b>${tag}</b> disponível!`; $('btnUpdGo').classList.remove('hidden'); $('updLinks').classList.remove('hidden'); $('btnUpdGo').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     else $('updStatus').textContent = `✅ Você já tem a versão mais nova (${tag || curVersion()}).`;
   } catch (e) { $('updStatus').textContent = '⚠️ Resposta inesperada.'; }
 };
 window.onUpdateProgress = (pct) => { $('updStatus').textContent = pct >= 100 ? '📦 Abrindo o instalador...' : `⬇ Baixando... ${pct}%`; };
-window.onUpdateError = (msg) => { $('updStatus').textContent = '⚠️ ' + msg; };
+window.onUpdateError = (msg) => { $('updStatus').textContent = '⚠️ ' + msg; $('updLinks').classList.remove('hidden'); $('btnUpdGo').classList.remove('hidden'); };
 $('btnUpd').onclick = () => {
   if (!APP) { $('updStatus').textContent = 'O atualizador funciona no app Android. No navegador, baixe em Releases no GitHub.'; return; }
   $('updStatus').textContent = 'Verificando...'; APP.checkUpdate();
 };
-$('btnUpdGo').onclick = () => { if (APP && updUrl) { APP.downloadAndInstall(updUrl); $('btnUpdGo').classList.add('hidden'); } };
+$('btnUpdGo').onclick = () => { if (APP && updUrl) { $('updStatus').textContent = '⬇ Baixando...'; APP.downloadAndInstall(updUrl); $('btnUpdGo').classList.add('hidden'); } };
+$('btnUpdWeb').onclick = () => { if (APP && APP.openUrl) APP.openUrl(updPage); else open(updPage, '_blank'); };
 
 function openConfig() {
   $('verAtual').textContent = 'Versão instalada: ' + curVersion();
