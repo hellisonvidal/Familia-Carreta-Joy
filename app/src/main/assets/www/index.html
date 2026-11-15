@@ -102,10 +102,11 @@
       <b>Como jogar</b>
       <p>🕹️ Joystick: anda para onde quiser · <b>🏃 CORRER</b> (ou <b>Shift</b>) liga/desliga a corrida · arraste a tela para girar a câmera.</p>
       <p>Acrobacias e parkour enchem o medidor <b>COMBO</b>. Cheio, aparece <b>💃 DANÇA COMBO</b>: dance no ritmo e cada acerto vale o triplo!</p>
-      <p><b>PULAR</b> (Espaço) · no ar/chão: <b>MORTAL</b> (Z), <b>ESTRELA</b> (X), <b>FLIP</b> (C), <b>PIRUETA</b> (B). Teclas 1–4 fazem passos de dança; K centraliza a câmera!</p>
+      <p><b>PULAR</b> (Espaço — toque 2x para <b>Pulo Duplo</b> ou pule na parede!) · no ar/chão: <b>MORTAL</b> (Z), <b>ESTRELA</b> (X), <b>FLIP</b> (C), <b>PIRUETA</b> (B), <b>💨 DASH / ESQUIVA</b> (Ctrl ou J), <b>🥾 SLIDE / AGACHAR</b> (T ou M).</p>
+      <p>Teclas 1–4 fazem passos de dança · 5 muda o estilo de dança no teto da carreta · K centraliza a câmera!</p>
       <p><b>SUBIR</b> (E) perto da carreta escala a lateral · <b>DESCER</b> pula do teto · <b>DIRIGIR</b> (F) assume o volante.</p>
       <p>Na praça a carreta para: toque os botões coloridos no ritmo e todo mundo dança junto!</p>
-      <p>🎮 Controle / Joystick: analógico esquerdo anda · direito gira a câmera · A/✕ pula (ou buzina dirigindo) · X/▢ mortal · Y/△ flip · B/○ estrela · RT/R2 pirueta (ou acelera) · RB/R1 correr · LB/L1 subir/descer · LT/L2 freia · L3 correr · R3 centralizar câmera · ▲ dirigir · ▼ dança combo · Start pausa · Select personagens.</p>
+      <p>🎮 Controle / Joystick: analógico esquerdo anda/navega menus · direito gira câmera · A/✕ pula/pulo duplo (ou buzina) · X/▢ mortal · Y/△ flip · B/○ estrela · RT/R2 pirueta (ou acelera) · RB/R1 dash/esquiva · LT/L2 slide/agachar (ou freia) · LB/L1 subir/descer · L3 correr · R3 câmera · ▲ dirigir · ▼ dança combo/estilo · Start pausa · Select personagens.</p>
     </div>
     <button id="btnConfigOk" class="big">OK</button>
   </div>
@@ -157,6 +158,8 @@
       <button class="ctl trick t2" data-act="flip">FLIP</button>
       <button class="ctl trick t3" data-act="estrela">ESTRELA</button>
       <button class="ctl trick t4" data-act="pirueta">PIRUETA</button>
+      <button class="ctl trick t5" id="btnDash" data-act="dash">💨 DASH</button>
+      <button class="ctl trick t6" id="btnSlide" data-act="slide">🥾 SLIDE</button>
       <button class="ctl jump" data-act="jump">PULAR</button>
     </div>
     <div class="right hidden" id="drivePad">

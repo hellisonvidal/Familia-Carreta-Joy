@@ -127,7 +127,7 @@ export class RigBody {
         const ax = new THREE.Vector3(0, 1, 0), proj = ax.clone().multiplyScalar(ax.dot(new THREE.Vector3(rel.x, rel.y, rel.z)));
         const twist = new THREE.Quaternion(proj.x, proj.y, proj.z, rel.w).normalize();
         const swing = rel.clone().multiply(twist.clone().invert());
-        const tAng = 2 * Math.acos(Math.min(1, Math.abs(twist.w))), maxT = 0.55;
+        const tAng = 2 * Math.acos(Math.min(1, Math.abs(twist.w))), maxT = 0.68;
         if (tAng > maxT) twist.slerp(new THREE.Quaternion(), 1 - maxT / tAng);
         const relC = swing.multiply(twist);
         const I = new THREE.Quaternion();
@@ -146,9 +146,9 @@ export class RigBody {
       own.b.Hips.position.copy(this.hipRest); own.b.Hips.position.y += (this.src.bob || 0) * this.hipScale; // pulinho do quadril, na escala do menino
     }
     // suavização entre movimentos (vale para os dois caminhos)
-    const k = this.first ? 1 : 1 - Math.exp(-dt * 16); this.first = false;
+    const k = this.first ? 1 : 1 - Math.exp(-dt * 18); this.first = false;
     own.bones.forEach((b, i) => { this.prev[i].slerp(b.quaternion, k); b.quaternion.copy(this.prev[i]); });
     own.root.updateMatrixWorld(true);
   }
-  clipDur(n) { return this.src.clipDur(n); }
+  clipDur(n) { return this.src.clipDur(this.alias[n] || n); }
 }

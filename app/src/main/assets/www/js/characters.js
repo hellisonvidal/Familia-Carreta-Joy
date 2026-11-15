@@ -407,6 +407,8 @@ export const POSES = {
     };
   },
   sit() { return { lean: -0.1, sh: [-0.5, 0.1, -0.5, -0.1], el: [-0.8, -0.8], th: [-1.5, 0.1, -1.5, -0.1], kn: [1.5, 1.5], head: [0, 0] }; },
+  crouch() { return { lean: 0.35, bob: -0.28, twist: 0.12, sh: [-0.7, 0.35, -0.5, -0.35], el: [-1.1, -1.1], th: [-1.35, 0.16, -1.05, -0.16], kn: [1.9, 1.55], head: [-0.28, 0] }; },
+  slide() { return { lean: -0.78, bob: -0.46, twist: 0.28, sway: -0.1, sh: [0.35, 0.65, -0.85, -0.45], el: [-0.7, -1.1], th: [-1.35, 0.1, -0.35, -0.18], kn: [0.15, 1.85], head: [0.52, -0.15] }; },
   // estilos de dança (cada personagem tem um jeito)
   dance(beat, style, move, mk) {
     const ph = beat * Math.PI, s = Math.sin(ph), s2 = Math.sin(ph * 2), b = Math.abs(Math.sin(ph));
@@ -440,7 +442,7 @@ export function makeBody(def, costume, assets) {
   const rigKey = def.rig || null;
   if ((!costume || costume === 'normal') && rigKey && assets[rigKey] && assets.clips) {
     // corpo real (Meshy) com esqueleto Mixamo: o Arthur usa o andar/correr feitos para ele
-    const opt = def.id === 'arthur' ? { alias: { andar: 'andarK', correr: 'correrK' }, native: ['andarK', 'correrK'] } : def.id === 'afonso' ? { native: ['danca'] } : {};
+    const opt = def.id === 'arthur' ? { alias: { andar: 'andarK', correr: 'correrK' }, native: ['andarK', 'correrK'] } : {};
     return new RigBody(assets[rigKey], assets.clips, def, { ...opt, xbot: assets.xbot });
   }
   if (def.kid && (!costume || costume === 'normal') && def.corpo && assets[def.corpo]) b = new SkinnedBody(assets[def.corpo], def.corpo, def.altura);

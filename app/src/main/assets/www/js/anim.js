@@ -12,7 +12,11 @@ export const CLIP_INFO = {
   pulo: { from: 0.55, to: 1.08 }, mortal: { from: 0.5, to: 1.55 }, flip: { from: 0.29, to: 0.95 },
   mortal2: { from: 0.17, to: 1.35 }, tombo: { from: 0.0, to: 1.6 }, queda: { from: 0.6, to: 2.4 },
   ladoE: { loop: true }, ladoD: { loop: true },
-  danca: { loop: true }, andarK: { loop: true }, correrK: { loop: true },
+  esquivaE: { loop: true }, esquivaD: { loop: true },
+  correrT: { loop: true, speed: 4.5 }, drible: { from: 0.3, to: 1.35 },
+  giroE: { from: 0.1, to: 0.8 }, giroD: { from: 0.1, to: 0.8 },
+  danca: { loop: true }, danca2: { loop: true }, danca3: { loop: true }, danca4: { loop: true },
+  andarK: { loop: true }, correrK: { loop: true },
 };
 const MAP = { hips: 'Hips', spine: 'Spine', chest: 'Spine2', neck: 'Neck', head: 'Head', shL: 'LeftArm', elL: 'LeftForeArm', shR: 'RightArm', elR: 'RightForeArm', thL: 'LeftUpLeg', knL: 'LeftLeg', thR: 'RightUpLeg', knR: 'RightLeg' };
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _v2 = new THREE.Vector3();

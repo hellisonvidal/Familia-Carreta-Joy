@@ -55,8 +55,8 @@ jobs:
             **Instalar:** baixe o arquivo `.apk` abaixo no celular Android, abra e permita "instalar apps de fontes desconhecidas".
             Requer Android 7.0 ou mais novo.
 
-            - 8 personagens em 3D (modelos do Meshy com esqueleto Mixamo)
-            - Física das acrobacias e estrela (rodinha) aprimoradas, mais comando de pirueta
-            - Suporte ampliado a controles PlayStation/Xbox e joysticks USB/Bluetooth
+            - 9 personagens em 3D sem distorções no teto da carreta + 4 estilos de dança do Locomotion Pack (Hip Hop, Swing, Break, Gangnam)
+            - Novos movimentos: Dash/Esquiva lateral, Slide/Agachar, Pulo Duplo, Wall Jump, Corrida de costas e drible/corte rápido
+            - Resposta mais rápida e suporte ampliado a controles PlayStation/Xbox e joysticks USB/Bluetooth (com navegação nos menus pelo analógico)
             - Visual aprimorado das cidades (fachadas 512px, faixas de pedestre, telhados e luz noturna)
             - Dança em conjunto na praça (jogo de ritmo) e 5 estilos musicais: funk, samba, forró, axé e eletrônico

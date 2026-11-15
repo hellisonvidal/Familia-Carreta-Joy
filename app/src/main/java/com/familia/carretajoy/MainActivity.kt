@@ -198,17 +198,30 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------- controle de videogame / joystick ----------------
+    private var lastPadAt = 0L
+    private var lastPadSig = ""
     private fun isPad(source: Int) =
         (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
         (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
         (source and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
 
+    private fun padAxisCentered(ev: MotionEvent, axis: Int): Float {
+        val v = ev.getAxisValue(axis)
+        val range = ev.device?.getMotionRange(axis, ev.source)
+        val flat = range?.flat ?: 0.05f
+        return if (kotlin.math.abs(v) < maxOf(flat, 0.04f)) 0f else v
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
         val padKey = KeyEvent.isGamepadButton(code) ||
+            code in KeyEvent.KEYCODE_BUTTON_1..KeyEvent.KEYCODE_BUTTON_16 ||
             (isPad(event.source) && code in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER))
         if (padKey) {
-            if (event.repeatCount == 0) js("window.onPadKey && window.onPadKey($code, ${event.action == KeyEvent.ACTION_DOWN})")
+            if (event.repeatCount == 0 && (event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP)) {
+                val name = event.device?.name?.let { JSONObject.quote(it) } ?: "null"
+                js("window.onPadKey && window.onPadKey($code, ${event.action == KeyEvent.ACTION_DOWN}, $name)")
+            }
             return true
         }
         return super.dispatchKeyEvent(event)
@@ -217,15 +230,25 @@ class MainActivity : AppCompatActivity() {
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
         if (isPad(ev.source) && ev.action == MotionEvent.ACTION_MOVE) {
             val lt = maxOf(ev.getAxisValue(MotionEvent.AXIS_LTRIGGER), ev.getAxisValue(MotionEvent.AXIS_BRAKE))
-            val rt = maxOf(ev.getAxisValue(MotionEvent.AXIS_RTRIGGER), ev.getAxisValue(MotionEvent.AXIS_GAS))
-            val z = ev.getAxisValue(MotionEvent.AXIS_Z)
-            val rz = ev.getAxisValue(MotionEvent.AXIS_RZ)
-            val rx = if (kotlin.math.abs(z) > 0.02f) z else ev.getAxisValue(MotionEvent.AXIS_RX)
-            val ry = if (kotlin.math.abs(rz) > 0.02f) rz else ev.getAxisValue(MotionEvent.AXIS_RY)
-            js("window.onPadAxes && window.onPadAxes(" +
-                "${ev.getAxisValue(MotionEvent.AXIS_X)},${ev.getAxisValue(MotionEvent.AXIS_Y)}," +
-                "$rx,$ry," +
-                "$lt,$rt,${ev.getAxisValue(MotionEvent.AXIS_HAT_X)},${ev.getAxisValue(MotionEvent.AXIS_HAT_Y)})")
+            val rt = maxOf(ev.getAxisValue(MotionEvent.AXIS_RTRIGGER), ev.getAxisValue(MotionEvent.AXIS_GAS), ev.getAxisValue(MotionEvent.AXIS_THROTTLE))
+            val z = padAxisCentered(ev, MotionEvent.AXIS_Z)
+            val rz = padAxisCentered(ev, MotionEvent.AXIS_RZ)
+            val axRx = padAxisCentered(ev, MotionEvent.AXIS_RX)
+            val axRy = padAxisCentered(ev, MotionEvent.AXIS_RY)
+            val useZ = maxOf(kotlin.math.abs(z), kotlin.math.abs(rz)) >= maxOf(kotlin.math.abs(axRx), kotlin.math.abs(axRy))
+            val rx = if (useZ) z else axRx
+            val ry = if (useZ) rz else axRy
+            val lx = padAxisCentered(ev, MotionEvent.AXIS_X)
+            val ly = padAxisCentered(ev, MotionEvent.AXIS_Y)
+            val hx = ev.getAxisValue(MotionEvent.AXIS_HAT_X)
+            val hy = ev.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            val sig = "${(lx * 50).toInt()},${(ly * 50).toInt()},${(rx * 50).toInt()},${(ry * 50).toInt()},${(lt * 20).toInt()},${(rt * 20).toInt()},${hx.toInt()},${hy.toInt()}"
+            val now = android.os.SystemClock.uptimeMillis()
+            if (sig != lastPadSig || now - lastPadAt > 24L) {
+                lastPadSig = sig; lastPadAt = now
+                val name = ev.device?.name?.let { JSONObject.quote(it) } ?: "null"
+                js("window.onPadAxes && window.onPadAxes($lx,$ly,$rx,$ry,$lt,$rt,$hx,$hy,$name)")
+            }
             return true
         }
         return super.dispatchGenericMotionEvent(ev)

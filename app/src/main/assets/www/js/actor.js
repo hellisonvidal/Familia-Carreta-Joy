@@ -3,6 +3,9 @@ import { makeBody, POSES, lerpPose } from './characters.js';
 const SEED = () => Math.random() * 10;
 import { TRUCK_LEN } from './truck.js';
 
+export const DANCE_NAMES = ['Hip Hop', 'Swing', 'Break', 'Gangnam'];
+const DANCE_CLIPS = ['danca', 'danca2', 'danca3', 'danca4'];
+
 export const TRICKS = {
   mortal:  { nome: 'MORTAL',  dur: 0.58, pts: 100 },
   flip:    { nome: 'FLIP',    dur: 0.68, pts: 150 },
@@ -50,6 +53,10 @@ export class Actor {
     this.stumble = 0; this.invul = 0; this.airTime = 0; this.runPhase = Math.random() * 6; this.dance = null; this.standT = 0;
     this.controlled = false; this.ai = { t: 0 }; this.onTop = null; this.lastPushT = 0;
     this.cur = null; this.landT = 0; this.seed = this.seed ?? SEED(); this.prevYaw = 0; this.turn = 0;
+    this.dashT = 0; this.dashCd = 0; this.dashClip = 'drible'; this.dashAir = false;
+    this.slideT = 0; this.crouch = false; this.doubleJumped = false; this.dive = false;
+    this.wallHit = null; this.wallT = 0; this.cutT = 0; this._restartJumpClip = false;
+    this.danceStyle = Math.floor(this.seed) % 4;
     if (this.fullModel) this.fullModel.visible = false;
     this.body.rig.visible = true; this.root.visible = true;
   }
@@ -74,12 +81,79 @@ export class Actor {
   }
 
   // ---------------- comandos ----------------
-  jump(boost = 1) {
+  jump(boost = 1, G = null) {
+    if (this.mode !== 'normal' || this.stumble > 0) return false;
+    // pulo na parede (wall jump) no ar encostado em prédio
+    if (!this.grounded && this.wallHit && G && G.now - this.wallT < 0.18) {
+      const w = this.wallHit; this.wallHit = null;
+      this.vel.y = this.jumpV * 1.04 * boost;
+      this.vel.x = w.nx * 7.8; this.vel.z = w.nz * 7.8;
+      this.yaw = Math.atan2(w.nx, w.nz);
+      this.doubleJumped = false; this.airTime = 0; this.crouch = false; this._restartJumpClip = true;
+      G.onEvent('walljump', this);
+      return 'wall';
+    }
     // "tempo de coiote": ainda pode pular logo depois de sair da borda
-    const coyote = !this.grounded && this.airTime < 0.12 && this.vel.y <= 0 && this.airTricks.length === 0 && !this.trick;
-    if (this.mode !== 'normal' || (!this.grounded && !coyote) || this.stumble > 0) return false;
-    this.vel.y = this.jumpV * boost; this.grounded = false; this.airTricks = []; this.airTime = 0;
-    return true;
+    const coyote = !this.grounded && this.airTime < 0.14 && this.vel.y <= 0 && this.airTricks.length === 0 && !this.trick;
+    if (this.grounded || coyote) {
+      if (this.slideT > 0) { boost = Math.max(boost, 1.16); this.slideT = 0; }
+      this.crouch = false; this.doubleJumped = false; this.dive = false;
+      this.vel.y = this.jumpV * boost; this.grounded = false; this.airTricks = []; this.airTime = 0;
+      return true;
+    }
+    // pulo duplo no ar
+    if (!this.doubleJumped && !this.trick && this.airTime > 0.08) {
+      this.doubleJumped = true; this.dive = false; this.crouch = false;
+      this.vel.y = Math.max(this.vel.y * 0.25, 0) + this.jumpV * 0.9;
+      this.airTime = 0; this._restartJumpClip = true;
+      return 'double';
+    }
+    return false;
+  }
+  startDash(G, wx = 0, wz = 0) {
+    if (this.mode !== 'normal' || this.stumble > 0 || this.dashCd > 0 || (!this.grounded && this.dashAir)) return null;
+    let dx = wx, dz = wz;
+    if (this.frame === 'truck' && (dx || dz)) {
+      const a = -G.truck.yaw, c = Math.cos(a), s = Math.sin(a);
+      const lx = dx * c + dz * s, lz = -dx * s + dz * c; dx = lx; dz = lz;
+    }
+    const len = Math.hypot(dx, dz);
+    if (len > 0.1) { dx /= len; dz /= len; }
+    else { dx = Math.sin(this.yaw); dz = Math.cos(this.yaw); }
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
+    const fwdDot = dx * fx + dz * fz, rightDot = dx * rx + dz * rz;
+    let clip = 'drible';
+    if (rightDot > 0.55) clip = 'esquivaD';
+    else if (rightDot < -0.55) clip = 'esquivaE';
+    else if (fwdDot < -0.45) clip = 'correrT';
+    else if (len > 0.1) this.yaw = Math.atan2(dx, dz);
+    const spd = this.grounded ? (this.frame === 'truck' ? 7.5 : 13.5) : 10.5;
+    this.vel.x = dx * spd; this.vel.z = dz * spd;
+    if (!this.grounded) { this.vel.y = Math.max(this.vel.y, 3.2); this.dashAir = true; }
+    this.dashT = 0.34; this.dashCd = 0.55; this.dashClip = clip;
+    this.slideT = 0; this.crouch = false; this.invul = Math.max(this.invul, 0.35);
+    return clip;
+  }
+  slideOrDance(G) {
+    if (this.mode !== 'normal' || this.stumble > 0) return null;
+    const hs = Math.hypot(this.vel.x, this.vel.z);
+    if ((this.frame === 'truck' && hs < 1.2) || G.dancing) {
+      this.danceStyle = (this.danceStyle + 1) % DANCE_CLIPS.length;
+      return { type: 'danceStyle', idx: this.danceStyle };
+    }
+    if (!this.grounded) {
+      if (this.vel.y > -12) { this.vel.y = Math.min(this.vel.y, -11.5); this.dive = true; return { type: 'dive' }; }
+      return null;
+    }
+    if (hs > 1.8 && this.slideT <= 0) {
+      const s = Math.max(hs * 1.28, 11.2), a = hs > 0.3 ? Math.atan2(this.vel.x, this.vel.z) : this.yaw;
+      this.vel.x = Math.sin(a) * s; this.vel.z = Math.cos(a) * s; this.yaw = a;
+      this.slideT = 0.52; this.crouch = false;
+      return { type: 'slide' };
+    }
+    this.crouch = !this.crouch;
+    return { type: 'crouch', on: this.crouch };
   }
   startTrick(type) {
     if (this.mode !== 'normal' || this.stumble > 0) return false;
@@ -152,6 +226,8 @@ export class Actor {
     this.invul = Math.max(0, this.invul - dt);
     if (this.jumpBuf > 0) this.jumpBuf -= dt;
     this.stumble = Math.max(0, this.stumble - dt);
+    this.dashT = Math.max(0, this.dashT - dt); this.dashCd = Math.max(0, this.dashCd - dt);
+    this.slideT = Math.max(0, this.slideT - dt); this.cutT = Math.max(0, this.cutT - dt);
     const T = G.truck;
     if (this.mode === 'drive') { this.pos.copy(T.toWorld(_v.set(0, 2, TRUCK_LEN / 2 - 1.5))); return; }
     if (this.mode === 'pose') {
@@ -170,12 +246,25 @@ export class Actor {
       const a = -T.yaw, c = Math.cos(a), s = Math.sin(a);
       const lx = mx * c + mz * s, lz = -mx * s + mz * c; mx = lx; mz = lz;
     }
-    const sp = this.speedMax * (this.boost || 1) * want * (this.frame === 'truck' ? 0.55 : 1);
-    const acc = this.grounded ? 48 : 16;
-    const tvx = mx * sp, tvz = mz * sp;
-    this.vel.x += Math.max(-acc * dt, Math.min(acc * dt, tvx - this.vel.x));
-    this.vel.z += Math.max(-acc * dt, Math.min(acc * dt, tvz - this.vel.z));
-    if (want > 0.1) { let d = Math.atan2(mx, mz) - this.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; this.yaw += d * Math.min(1, dt * 18); }
+    const sp = this.speedMax * (this.boost || 1) * want * (this.frame === 'truck' ? 0.55 : 1) * (this.crouch ? 0.55 : 1);
+    const acc = this.grounded ? 56 : 20;
+    const hs0 = Math.hypot(this.vel.x, this.vel.z);
+    if (this.grounded && !this.dashT && !this.slideT && want > 0.4 && hs0 > 3.6 && this.cutT <= 0) {
+      const dot = (this.vel.x * mx + this.vel.z * mz) / hs0;
+      if (dot < -0.55) this.cutT = 0.36;
+    }
+    if (this.dashT > 0) {
+      const drag = Math.exp(-dt * 2.5);
+      this.vel.x *= drag; this.vel.z *= drag;
+    } else if (this.slideT > 0) {
+      const drag = Math.exp(-dt * 2.2);
+      this.vel.x *= drag; this.vel.z *= drag;
+    } else {
+      const tvx = mx * sp, tvz = mz * sp;
+      this.vel.x += Math.max(-acc * dt, Math.min(acc * dt, tvx - this.vel.x));
+      this.vel.z += Math.max(-acc * dt, Math.min(acc * dt, tvz - this.vel.z));
+      if (want > 0.1) { let d = Math.atan2(mx, mz) - this.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; this.yaw += d * Math.min(1, dt * 22); }
+    }
 
     // estrela no chão: rodinha lateral com aceleração suave no pico e impulso para frente
     if (this.trick && this.trick.ground) {
@@ -213,6 +302,7 @@ export class Actor {
     // colisões com prédios, carros, quiosques...
     const hit = C.collide(this.pos, 0.32, this.pos.y);
     if (G.life) G.life.pushActor(this);
+    if (hit && hit.c.walk && !this.grounded && this.mode === 'normal') { this.wallHit = hit; this.wallT = G.now; }
     if (hit && hit.c.walk && this.mode === 'normal') {
       const ledge = C.topAt(hit.c, this.pos.x - hit.nx * 0.6, this.pos.z - hit.nz * 0.6) - this.pos.y;
       const pushing = (this.vel.x * -hit.nx + this.vel.z * -hit.nz) > 0.5 || G.now - this.lastPushT < 0.15;
@@ -283,13 +373,14 @@ export class Actor {
   }
 
   land(G, top) {
+    this.doubleJumped = false; this.dashAir = false; this.dive = false;
     if (this.trick && !this.trick.ground) {
       if (this.trick.t / this.trick.dur < 0.62) { this.trick = null; this.queue = null; this.crash(G, true); return; }
       this.airTricks.push(this.trick.type); this.trick = null;
     }
     const list = this.airTricks; this.airTricks = [];
     if (this.airTime > 0.25) this.landT = Math.min(0.3, 0.12 + this.airTime * 0.12);
-    if (this.jumpBuf > 0) { this.jumpBuf = 0; this.grounded = true; setTimeout(() => this.jump(), 0); }
+    if (this.jumpBuf > 0) { this.jumpBuf = 0; this.grounded = true; setTimeout(() => this.jump(1, G), 0); }
     G.onEvent('pousou', this, list, top, this.airTime);
   }
   crash(G, fromTrick) {
@@ -366,11 +457,16 @@ export class Actor {
       }
     } else if (this.stumble > 0) {
       const k = 1 - this.stumble; rx = Math.sin(k * Math.PI) * 1.1; pose = POSES.air(-1, 0.5);
+    } else if (this.slideT > 0) {
+      pose = POSES.slide();
     } else if (!this.grounded) pose = POSES.air(this.vel.y, 0);
     else if (hs > 0.5) {
       const L = this.H / 1.75; // passo proporcional à altura
       if (hs < 3.2) { this.runPhase += dt * hs * 3.2 / L; pose = POSES.walk(this.runPhase, Math.min(1, hs / 2.2)); }
       else { this.runPhase += dt * (5 + hs * 1.5) / Math.sqrt(L); pose = POSES.run(this.runPhase, Math.min(1, hs / 6), this.H); }
+    }
+    else if (this.crouch) {
+      pose = POSES.crouch();
     }
     else if (this.frame === 'truck' || (G.dancing && (!G.comboDance || this.controlled || this.comboJoin)) || G.party || this.dance) {
       let mk = 0, mv = null;
@@ -381,16 +477,35 @@ export class Actor {
     } else { pose = POSES.idle(G.now, this.seed); idle = true; }
     // ---- animações capturadas (Mixamo) ----
     let clip = null, ts = 1, restart = false;
-    if (B.drv && this.mode === 'normal') {
+    if (B.drv && this.mode === 'normal' && this.slideT <= 0 && !(this.crouch && hs < 0.5)) {
       const S = this.H / 1.8;
-      if (tr && !tr.ground && (tr.type === 'mortal' || tr.type === 'flip')) { clip = tr.type; ts = this.clipDur(clip) / tr.dur; restart = !tr.started; tr.started = true; }
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), rxv = -Math.cos(this.yaw), rzv = Math.sin(this.yaw);
+      const fwdDot = hs > 0.1 ? this.vel.x * fx + this.vel.z * fz : 0;
+      const rightDot = hs > 0.1 ? this.vel.x * rxv + this.vel.z * rzv : 0;
+      if (tr && !tr.ground && (tr.type === 'mortal' || tr.type === 'flip')) {
+        clip = tr.type === 'mortal' && this.airTricks.length > 0 && B.drv.clips.mortal2 ? 'mortal2' : tr.type;
+        ts = this.clipDur(clip) / tr.dur; restart = !tr.started; tr.started = true;
+      }
       else if (!tr && this.stumble > 0) { clip = 'tombo'; ts = this.clipDur('tombo') / 1.0; restart = !this.stumbleOn; this.stumbleOn = true; }
-      else if (!tr && !this.grounded) { clip = 'pulo'; ts = 1.1; restart = !!this.wasGrounded; }
+      else if (!tr && this.dashT > 0 && B.drv.clips[this.dashClip]) { clip = this.dashClip; ts = 1.25; restart = this.dashT > 0.31; }
+      else if (!tr && !this.grounded && (this.dive || (this.vel.y < -9.5 && this.airTime > 0.72)) && B.drv.clips.queda) { clip = 'queda'; ts = 1.1; }
+      else if (!tr && !this.grounded) { clip = 'pulo'; ts = 1.1; restart = !!this.wasGrounded || this._restartJumpClip; this._restartJumpClip = false; }
+      else if (!tr && this.grounded && this.cutT > 0 && B.drv.clips.drible) { clip = 'drible'; ts = 1.35; restart = this.cutT > 0.33; }
       else if (!tr && this.grounded && hs > 0.5 && !G.dancing) {
-        if (hs < 3.2) { clip = 'andar'; ts = Math.max(0.5, Math.min(2.2, hs / (1.45 * S))); }
+        if (rightDot > 0.65 * hs && B.drv.clips.ladoD) { clip = hs > 3.6 && B.drv.clips.esquivaD ? 'esquivaD' : 'ladoD'; ts = Math.max(0.7, hs / (1.8 * S)); }
+        else if (rightDot < -0.65 * hs && B.drv.clips.ladoE) { clip = hs > 3.6 && B.drv.clips.esquivaE ? 'esquivaE' : 'ladoE'; ts = Math.max(0.7, hs / (1.8 * S)); }
+        else if (fwdDot < -0.6 * hs && B.drv.clips.correrT) { clip = 'correrT'; ts = Math.max(0.7, hs / (4.5 * S)); }
+        else if (hs < 3.2) { clip = 'andar'; ts = Math.max(0.5, Math.min(2.2, hs / (1.45 * S))); }
         else { clip = 'correr'; ts = Math.max(0.6, Math.min(1.7, hs / (5.2 * S))); }
-      } else if (danceCtx && this.grounded && B.drv.clips.danca) { clip = 'danca'; ts = 1; }
-      else if (idle && this.grounded && this.frame === 'world' && !this.landT) clip = 'idle';
+      } else if (danceCtx && this.grounded && B.drv.clips.danca) {
+        const avail = DANCE_CLIPS.filter(n => B.drv.clips[n]);
+        clip = avail[(this.danceStyle || 0) % avail.length] || 'danca';
+        ts = 1;
+      }
+      else if (idle && this.grounded && this.frame === 'world' && !this.landT) {
+        if (Math.abs(this.turn) > 2.2 && B.drv.clips.giroE && B.drv.clips.giroD) { clip = this.turn > 0 ? 'giroE' : 'giroD'; ts = 1.2; }
+        else clip = 'idle';
+      }
     }
     if (this.stumble <= 0) this.stumbleOn = false;
     this.wasGrounded = this.grounded;

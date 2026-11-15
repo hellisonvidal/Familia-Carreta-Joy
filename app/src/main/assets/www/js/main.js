@@ -9,7 +9,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CITIES, DURATIONS } from './cities.js';
 import { City, HALF } from './city.js';
 import { Truck, VARIANTS, TRUCK_LEN } from './truck.js';
-import { Actor, TRICKS } from './actor.js';
+import { Actor, TRICKS, DANCE_NAMES } from './actor.js';
 import { CHARACTERS, COSTUMES, KID_COSTUMES, makeBody, POSES } from './characters.js';
 import { Music, STYLES } from './music.js';
 import { Dance, PADS } from './dance.js';
@@ -429,6 +429,10 @@ function onEvent(type, a, x, y, airTime) {
       break;
     }
     case 'rampa': if (me) { toast('VOOOU! 🚀', 'small'); music.sfx('jump'); rumble(0.35, 0.2, 130); } addScore(30, a); break;
+    case 'dash': if (me) { music.sfx('jump'); const p = addScore(45, a); bump(); fillCombo(p); burst(a.worldPos(G), 0x00e5ff); toast(`💨 ESQUIVA! +${p}`, 'small'); } break;
+    case 'slide': if (me) { music.sfx('climb'); const p = addScore(60, a); bump(); fillCombo(p); burst(a.worldPos(G), 0xff9100); toast(`🥾 SLIDE! +${p}`, 'small'); } break;
+    case 'duploPulo': if (me) { music.sfx('jump'); const p = addScore(50, a); bump(); fillCombo(p); G.stats.tricks++; burst(a.worldPos(G), 0x69f0ae); toast(`✨ PULO DUPLO! +${p}`, 'small'); } break;
+    case 'walljump': if (me) { music.sfx('climb'); const p = addScore(80, a); bump(); fillCombo(p); G.stats.parkour++; burst(a.worldPos(G), 0xffc400); toast(`🧗 WALL JUMP! +${p}`, 'small'); } break;
     case 'tombo': G.combo = 0; G.stats.tombos++; if (me) { toast(x ? 'Caiu da manobra!' : 'Opa! Tombo!', 'bad'); music.sfx('crash'); G.shake = 0.4; rumble(0.8, 0.4, 220); } break;
     case 'nota': addScore(10, a); G.comboT = Math.max(G.comboT, 2.5); G.stats.notes++; if (G.now - lastCoin > 0.06) { music.sfx('coin'); lastCoin = G.now; } break;
     case 'estrelaDourada': addScore(250, a); bump(); G.stats.gold++; music.sfx('star'); toast('⭐ ESTRELA DOURADA! ⭐', 'gold'); break;
@@ -481,6 +485,7 @@ function updateControls() {
   $('meterFill').style.width = `${Math.min(100, 100 * (G.meter || 0) / COMBO_FULL)}%`; $('meter').classList.toggle('full', full);
   $('btnCombo').classList.toggle('hidden', !(full && !driving && !G.dancing));
   $('btnRun').classList.toggle('hidden', driving);
+  const sl = $('btnSlide'); if (sl) sl.textContent = p.frame === 'truck' ? '🪩 DANÇA' : '🥾 SLIDE';
   $('controls').style.visibility = G.dancing ? 'hidden' : 'visible';
   document.querySelector('.topcenter').style.visibility = G.dancing ? 'hidden' : 'visible';
   $('timer').textContent = '⏱ ' + fmtTime(G.timeLeft); $('timer').classList.toggle('low', G.timeLeft < 30);
@@ -529,8 +534,8 @@ function joyMove(e) {
   const R = joyEl.offsetWidth / 2;
   let dx = (e.clientX - joyC.x) / R, dy = (e.clientY - joyC.y) / R, m = Math.hypot(dx, dy);
   if (m > 1) { joyC.x += (dx / m) * (m - 1) * R; joyC.y += (dy / m) * (m - 1) * R; joyPlace(joyC.x, joyC.y); dx /= m; dy /= m; m = 1; }
-  // zona morta pequena + curva de resposta (mais preciso no começo, rápido no fim)
-  const dead = 0.1, k = m < dead ? 0 : Math.min(1, (m - dead) / (1 - dead)), out = m > 0 ? Math.pow(k, 0.85) / m : 0;
+  // zona morta pequena + curva de resposta (precisa no ajuste fino, rápida no fim)
+  const dead = 0.06, k = m < dead ? 0 : Math.min(1, (m - dead) / (1 - dead)), out = m > 0 ? Math.pow(k, 0.92) / m : 0;
   joy.x = dx * out; joy.y = -dy * out;
   knob.style.transform = `translate(${dx * R * 0.62}px, ${dy * R * 0.62}px)`;
 }
@@ -570,7 +575,36 @@ function act(a) {
   if (p.mode === 'drive') return;
   if (p.mode === 'pose') { p.standUp(G); return; }
   switch (a) {
-    case 'jump': if (p.jump()) music.sfx('jump'); else p.jumpBuf = 0.18; p.climbIntent = true; setTimeout(() => p.climbIntent = false, 400); break;
+    case 'jump': {
+      const j = p.jump(1, G);
+      if (j === 'double') G.onEvent('duploPulo', p);
+      else if (j) music.sfx('jump');
+      else p.jumpBuf = 0.18;
+      p.climbIntent = true; setTimeout(() => p.climbIntent = false, 400);
+      break;
+    }
+    case 'dash': {
+      const st = stickInput();
+      const fwdX = Math.sin(camYaw), fwdZ = Math.cos(camYaw), rx = -Math.cos(camYaw), rz = Math.sin(camYaw);
+      const wx = st.m > 0.15 ? fwdX * st.y + rx * st.x : 0;
+      const wz = st.m > 0.15 ? fwdZ * st.y + rz * st.x : 0;
+      if (p.startDash(G, wx, wz)) { G.onEvent('dash', p); rumble(0.18, 0.35, 70); }
+      break;
+    }
+    case 'slide': {
+      const res = p.slideOrDance(G);
+      if (res) {
+        if (res.type === 'slide') { G.onEvent('slide', p); rumble(0.15, 0.3, 80); }
+        else if (res.type === 'dive') music.sfx('jump');
+        else if (res.type === 'crouch') music.sfx('click');
+        else if (res.type === 'danceStyle') { music.sfx('click'); toast(`🪩 Estilo: ${DANCE_NAMES[res.idx]}`, 'small'); }
+      }
+      break;
+    }
+    case 'danceNext':
+      p.danceStyle = ((p.danceStyle || 0) + 1) % DANCE_NAMES.length;
+      music.sfx('click'); toast(`🪩 Dança: ${DANCE_NAMES[p.danceStyle]}`, 'small');
+      break;
     case 'mortal': case 'flip': case 'estrela': case 'pirueta': {
       const wasGround = p.grounded;
       if (a === 'estrela' && p.grounded) {
@@ -609,9 +643,10 @@ document.querySelectorAll('#controls .ctl[data-hold]').forEach(b => {
 $('btnChars').onclick = () => act('chars');
 const KEYS = {
   ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', b: 'pirueta',
+  control: 'dash', j: 'dash', t: 'slide', m: 'slide',
   e: 'ctx', f: 'drive', h: 'horn', g: 'party', enter: 'party',
   q: 'chars', tab: 'chars', r: 'run', shift: 'run', v: 'combo', k: 'camReset',
-  '1': 'dance:esq', '2': 'dance:cima', '3': 'dance:baixo', '4': 'dance:dir',
+  '1': 'dance:esq', '2': 'dance:cima', '3': 'dance:baixo', '4': 'dance:dir', '5': 'danceNext',
 };
 const DKEYS = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 2, ArrowRight: 3 };
 addEventListener('keydown', (e) => {
@@ -623,17 +658,35 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 // ---------------- controle PlayStation / Xbox / Joystick ----------------
-const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, down: new Set(), native: false, name: '', activeIdx: -1 };
-const dz = (v) => Math.abs(v) < 0.16 ? 0 : (v - Math.sign(v) * 0.16) / 0.84;
-function dz2(x, y, dead = 0.16) {
+const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, down: new Set(), native: false, nativeAt: 0, name: '', activeIdx: -1, navDir: '', navT: 0, menuIdx: 0 };
+const dz = (v) => Math.abs(v) < 0.1 ? 0 : (v - Math.sign(v) * 0.1) / 0.9;
+function dz2(x, y, dead = 0.1) {
   const m = Math.hypot(x, y);
   if (m < dead) return [0, 0];
-  const s = Math.min(1, (m - dead) / (1 - dead)) / m;
+  const k = Math.min(1, (m - dead) / (1 - dead));
+  const s = Math.pow(k, 1.35) / m;
   return [x * s, y * s];
 }
-// mapeamento: índice padrão do navegador -> nome; e código de tecla do Android -> nome
+// mapeamento: índice padrão do navegador -> nome; e código de tecla do Android (padrão + HID genérico) -> nome
 const STD = { 0: 'A', 1: 'B', 2: 'X', 3: 'Y', 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT', 8: 'SELECT', 9: 'START', 10: 'L3', 11: 'R3', 12: 'UP', 13: 'DOWN', 14: 'LEFT', 15: 'RIGHT' };
-const AND = { 96: 'A', 97: 'B', 99: 'X', 100: 'Y', 102: 'LB', 103: 'RB', 104: 'LT', 105: 'RT', 106: 'L3', 107: 'R3', 109: 'SELECT', 108: 'START', 19: 'UP', 20: 'DOWN', 21: 'LEFT', 22: 'RIGHT', 23: 'A' };
+const AND = {
+  96: 'A', 97: 'B', 99: 'X', 100: 'Y', 102: 'LB', 103: 'RB', 104: 'LT', 105: 'RT', 106: 'L3', 107: 'R3', 109: 'SELECT', 108: 'START',
+  19: 'UP', 20: 'DOWN', 21: 'LEFT', 22: 'RIGHT', 23: 'A',
+  // botões genéricos (KEYCODE_BUTTON_1..12) para joysticks Bluetooth/USB HID
+  188: 'A', 189: 'B', 190: 'X', 191: 'Y', 192: 'LB', 193: 'RB', 194: 'LT', 195: 'RT', 196: 'SELECT', 197: 'START', 198: 'L3', 199: 'R3',
+};
+function padMenuItems(screenId) {
+  const root = $(screenId); if (!root) return [];
+  return [...root.querySelectorAll('button:not(.hidden)')].filter(b => b.offsetParent !== null && !b.disabled);
+}
+function padFocus(screenId, delta = 0) {
+  document.querySelectorAll('.gp-focus').forEach(el => el.classList.remove('gp-focus'));
+  const items = padMenuItems(screenId); if (!items.length) return null;
+  pad.menuIdx = ((pad.menuIdx + delta) % items.length + items.length) % items.length;
+  const el = items[pad.menuIdx]; el.classList.add('gp-focus');
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  return el;
+}
 function rumble(strong = 0.4, weak = 0.3, ms = 120) {
   if (!save.settings.vibrar || !navigator.getGamepads) return;
   const gp = [...navigator.getGamepads()].find(g => g && g.connected && g.vibrationActuator);
@@ -644,9 +697,15 @@ function rumble(strong = 0.4, weak = 0.3, ms = 120) {
 function padPress(b) {
   music.init();
   const shown = (id) => $(id).classList.contains('show');
-  if (shown('config')) { if (b === 'B' || b === 'START') { persist(); show('config', false); } return; }
+  if (shown('config')) {
+    if (b === 'B' || b === 'START') { document.querySelectorAll('.gp-focus').forEach(el => el.classList.remove('gp-focus')); persist(); show('config', false); }
+    else if (b === 'UP' || b === 'DOWN') { padFocus('config', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'A') { const el = padFocus('config', 0); el && el.click(); }
+    return;
+  }
   if (shown('home')) {
-    if (b === 'A') $('btnHomePlay').click();
+    if (b === 'UP' || b === 'DOWN') { padFocus('home', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'A') { const el = document.querySelector('#home .gp-focus') || $('btnHomePlay'); el.click(); }
     else if (b === 'X' || b === 'START') $('btnHomeConfig').click();
     else if (b === 'Y') $('btnPlay').click();
     return;
@@ -658,16 +717,30 @@ function padPress(b) {
     else if (b === 'UP' || b === 'DOWN') { G.night = !(G.night ?? CITIES[G.cityIdx].noite); buildMenu(); menuScene(); music.sfx('click'); }
     else if (b === 'X') { const i = CHARACTERS.findIndex(d => d.id === save.char); save.char = CHARACTERS[(i + 1) % CHARACTERS.length].id; persist(); buildMenu(); music.sfx('click'); }
     else if (b === 'Y') { const i = VARIANTS.findIndex(v => v.id === save.truck); save.truck = VARIANTS[(i + 1) % VARIANTS.length].id; persist(); buildMenu(); menuScene(true); music.sfx('click'); }
+    else if (b === 'LB' || b === 'RB') { const cur = DURATIONS.indexOf(save.minutes); save.minutes = DURATIONS[((cur < 0 ? 1 : cur) + (b === 'RB' ? 1 : DURATIONS.length - 1)) % DURATIONS.length]; persist(); buildMenu(); music.sfx('click'); }
     else if (b === 'START') openConfig();
     return;
   }
-  if (shown('results')) { if (b === 'A') $('btnNext').click(); else if (b === 'B') $('btnResMenu').click(); else if (b === 'X') $('btnAgain').click(); return; }
+  if (shown('results')) {
+    if (b === 'UP' || b === 'DOWN') { padFocus('results', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'A') { const el = document.querySelector('#results .gp-focus') || $('btnNext'); el.click(); }
+    else if (b === 'B') $('btnResMenu').click(); else if (b === 'X') $('btnAgain').click();
+    return;
+  }
   if (shown('picker')) { if (b === 'B' || b === 'START' || b === 'A') $('btnPickOk').click(); else if (b === 'LEFT' || b === 'RIGHT') { const i = G.actors.indexOf(G.player); switchTo(G.actors[(i + (b === 'RIGHT' ? 1 : G.actors.length - 1)) % G.actors.length]); buildPicker(); } return; }
-  if (shown('pause')) { if (b === 'START' || b === 'A') togglePause(false); else if (b === 'B') $('btnMenu').click(); return; }
+  if (shown('pause')) {
+    if (b === 'UP' || b === 'DOWN') { padFocus('pause', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'START') togglePause(false);
+    else if (b === 'A') { const el = document.querySelector('#pause .gp-focus') || $('btnResume'); el.click(); }
+    else if (b === 'B') $('btnMenu').click();
+    return;
+  }
   if (b === 'START') { togglePause(); return; }
   if (G.dancing) { const m = { X: 0, LEFT: 0, Y: 1, UP: 1, A: 2, DOWN: 2, B: 3, RIGHT: 3 }; if (m[b] !== undefined) dance.press(m[b]); return; }
-  const map = { A: 'jump', B: 'estrela', X: 'mortal', Y: 'flip', RT: 'pirueta', LB: 'ctx', RB: 'run', L3: 'run', R3: 'camReset', SELECT: 'chars', UP: 'drive', DOWN: 'combo', LEFT: 'horn', RIGHT: 'party' };
-  if (G.player && G.player.mode === 'drive' && (b === 'A')) { act('horn'); return; }
+  if (G.player && G.player.mode === 'drive' && b === 'A') { act('horn'); return; }
+  if (G.player && G.player.mode === 'drive' && b === 'LT') return;
+  if (b === 'DOWN' && G.meter < COMBO_FULL && G.player && G.player.frame === 'truck') { act('danceNext'); return; }
+  const map = { A: 'jump', B: 'estrela', X: 'mortal', Y: 'flip', RT: 'pirueta', RB: 'dash', LT: 'slide', LB: 'ctx', L3: 'run', R3: 'camReset', SELECT: 'chars', UP: 'drive', DOWN: 'combo', LEFT: 'horn', RIGHT: 'party' };
   if (map[b]) act(map[b]);
 }
 function padSet(b, down) {
@@ -675,16 +748,30 @@ function padSet(b, down) {
   else if (!down) pad.down.delete(b);
   if (b === 'RT') holds.gas = down; if (b === 'LT') holds.brake = down;
 }
+function padStickMenu(dt) {
+  const inUi = ['config', 'home', 'menu', 'results', 'picker', 'pause'].some(id => $(id).classList.contains('show'));
+  if (!inUi) { pad.navDir = ''; pad.navT = 0; return; }
+  let dir = '';
+  if (Math.abs(pad.lx) > Math.abs(pad.ly)) { if (pad.lx > 0.55) dir = 'RIGHT'; else if (pad.lx < -0.55) dir = 'LEFT'; }
+  else { if (pad.ly < -0.55) dir = 'UP'; else if (pad.ly > 0.55) dir = 'DOWN'; }
+  if (!dir) { pad.navDir = ''; pad.navT = 0; return; }
+  if (dir !== pad.navDir) { pad.navDir = dir; pad.navT = 0.28; padPress(dir); }
+  else { pad.navT -= dt; if (pad.navT <= 0) { pad.navT = 0.16; padPress(dir); } }
+}
 // eventos vindos do app Android (botões e analógicos do controle)
-window.onPadKey = (code, down) => { pad.native = true; const b = AND[code]; if (b) padSet(b, down); };
-window.onPadAxes = (lx, ly, rx, ry, lt, rt, hx, hy) => {
-  pad.native = true;
+window.onPadKey = (code, down, name) => {
+  pad.native = true; pad.nativeAt = performance.now();
+  const b = AND[code]; if (b) padSet(b, down);
+  padHello(name || 'Controle');
+};
+window.onPadAxes = (lx, ly, rx, ry, lt, rt, hx, hy, name) => {
+  pad.native = true; pad.nativeAt = performance.now();
   [pad.lx, pad.ly] = dz2(lx, ly); [pad.rx, pad.ry] = dz2(rx, ry);
   pad.lt = lt; pad.rt = rt;
   holds.gas = rt > 0.25 || pad.down.has('RT'); holds.brake = lt > 0.25 || pad.down.has('LT');
-  padSet('RT', rt > 0.55);
+  padSet('RT', rt > 0.45); padSet('LT', lt > 0.45);
   padSet('LEFT', hx < -0.5); padSet('RIGHT', hx > 0.5); padSet('UP', hy < -0.5); padSet('DOWN', hy > 0.5);
-  padHello('Controle');
+  padHello(name || 'Controle');
 };
 let padSeen = false;
 function padHello(name) { if (padSeen) return; padSeen = true; $('padStatus').textContent = `🎮 ${name} conectado!`; if (G.phase === 'play') toast(`🎮 ${name} conectado!`, 'small'); }
@@ -701,7 +788,8 @@ function pickGamepad(list) {
   return best;
 }
 function pollGamepad(dt) {
-  if (pad.native || !navigator.getGamepads) return;
+  padStickMenu(dt);
+  if ((pad.native && performance.now() - pad.nativeAt < 1500) || !navigator.getGamepads) return;
   const gp = pickGamepad(navigator.getGamepads()); if (!gp) return;
   padHello(gp.id.split('(')[0].trim() || 'Controle');
   const ax = gp.axes || [];
@@ -710,14 +798,12 @@ function pollGamepad(dt) {
   let rx = ax[2] || 0, ry = ax[3] || 0;
   if (gp.mapping !== 'standard' && ax.length >= 6 && Math.abs(rx) < 0.05 && Math.abs(ry) < 0.05) { rx = ax[3] || 0; ry = ax[4] || 0; }
   [pad.rx, pad.ry] = dz2(rx, ry);
-  for (const [i, b] of Object.entries(STD)) { const bt = gp.buttons[i]; if (bt) padSet(b, bt.pressed || bt.value > 0.5); }
+  for (const [i, b] of Object.entries(STD)) { const bt = gp.buttons[i]; if (bt) padSet(b, bt.pressed || bt.value > 0.45); }
   // POV / D-pad em eixos (joysticks DirectInput / genéricos)
   if (gp.mapping !== 'standard') {
     if (ax.length >= 10 && Math.abs(ax[9]) <= 1.1) {
-      // eixo hat switch (-1 = cima, -0.43 = dir, 0.14 = baixo, 0.71 = esq)
       const v = ax[9];
       if (v >= -1.05 && v <= 1.05) {
-        const a = (v + 1) * Math.PI; // 0..2PI aprox
         padSet('UP', v < -0.75 || v > 0.9);
         padSet('RIGHT', v > -0.7 && v < -0.1);
         padSet('DOWN', v > -0.1 && v < 0.45);
@@ -735,7 +821,7 @@ function pollGamepad(dt) {
 addEventListener('gamepadconnected', (e) => padHello(e.gamepad.id.split('(')[0].trim() || 'Controle'));
 addEventListener('gamepaddisconnected', (e) => { if (e.gamepad.index === pad.activeIdx) pad.activeIdx = -1; });
 function padCamera(dt) {
-  if (pad.rx || pad.ry) { camYaw -= pad.rx * dt * 2.6; camPitch = clamp(camPitch + pad.ry * dt * 1.4, 0.08, 1.1); camDragT = G.now; }
+  if (pad.rx || pad.ry) { camYaw -= pad.rx * dt * 3.4; camPitch = clamp(camPitch + pad.ry * dt * 1.9, 0.08, 1.1); camDragT = G.now; }
 }
 
 function stickInput() {
@@ -1087,18 +1173,21 @@ function goMenu() {
 }
 
 // ---------------- loop ----------------
-let last = performance.now(), fpsAcc = 0, fpsN = 0, lowFps = 0;
+let last = performance.now(), padLast = last, fpsAcc = 0, fpsN = 0, lowFps = 0;
 function frame(nowMs) {
   requestAnimationFrame(frame);
+  const padDt = Math.min(0.05, Math.max(0.001, (nowMs - padLast) / 1000));
+  padLast = nowMs;
+  pollGamepad(padDt);
   // limite de quadros por segundo (30 por padrão: o celular esquenta bem menos)
   const cap = G.paused || G.phase === 'menu' ? 20 : perf.fpsCap;
   if (nowMs - last < 1000 / cap - 3) return;
   const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
   if (!G.city) return;
-  if (G.paused) { pollGamepad(dt); if (!G.pausedDrawn) { render(); G.pausedDrawn = true; } return; }
+  if (G.paused) { if (!G.pausedDrawn) { render(); G.pausedDrawn = true; } return; }
   G.pausedDrawn = false;
   G.now += dt;
-  pollGamepad(dt); padCamera(dt);
+  padCamera(dt);
   music.update(dt);
   G.beat = music.playing ? music.beatPos() : G.now * 2;
   if (G.phase === 'intro') { G.phaseT += dt; if (G.phaseT > 1.5) { G.phase = 'play'; toast('VAI! 🎉', 'big gold'); } }
