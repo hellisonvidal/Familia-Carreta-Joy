@@ -382,16 +382,16 @@ export const POSES = {
     if (tuck > 0) return lerpPose(p, { lean: 0.5, sh: [-1.2, 0.3, -1.2, -0.3], el: [-2.0, -2.0], th: [-2.0, 0.1, -2.0, -0.1], kn: [2.4, 2.4], head: [0.3, 0] }, tuck);
     return p;
   },
-  star(k = 0.5) { // estrela (rodinha): impulso lateral, abertura total no topo e pouso equilibrado
-    if (k < 0.2) {
-      const t = k / 0.2;
-      return { lean: 0.22 * t, sh: [-0.9 * t, 2.2 * t, -0.9 * t, -2.2 * t], el: [-0.25 * t, -0.25 * t], th: [-0.3 * t, 0.4 * t, 0.1 * t, -0.4 * t], kn: [0.45 * t, 0.2 * t], head: [-0.2 * t, 0] };
+  star(k = 0.5) { // estrela (rodinha): braços esticados para encostar as mãos no chão
+    if (k < 0.18) {
+      const t = k / 0.18;
+      return { lean: 0.14 * t, sh: [-0.08 * t, 3.0 * t, -0.08 * t, -3.0 * t], el: [-0.05 * t, -0.05 * t], th: [-0.25 * t, 0.42 * t, 0.05 * t, -0.42 * t], kn: [0.35 * t, 0.15 * t], head: [-0.2 * t, 0] };
     }
     if (k > 0.78) {
       const t = (k - 0.78) / 0.22;
-      return { lean: 0.18 * t, bob: -0.08 * Math.sin(t * Math.PI), sh: [-0.7 * t, 2.75 - 1.5 * t, -0.7 * t, -2.75 + 1.5 * t], el: [-0.45 * t, -0.45 * t], th: [-0.35 * t, 0.72 * (1 - t), -0.25 * t, -0.72 * (1 - t)], kn: [0.65 * t, 0.5 * t], head: [-0.15 * (1 - t), 0] };
+      return { lean: 0.12 * t, bob: -0.05 * Math.sin(t * Math.PI), sh: [-0.08 * t, 3.04 - 1.9 * t, -0.08 * t, -3.04 + 1.9 * t], el: [-0.35 * t, -0.35 * t], th: [-0.3 * t, 0.62 * (1 - t), -0.2 * t, -0.62 * (1 - t)], kn: [0.5 * t, 0.4 * t], head: [-0.2 * (1 - t), 0] };
     }
-    return { lean: -0.06, sh: [0, 2.75, 0, -2.75], el: [-0.06, -0.06], th: [0, 0.72, 0, -0.72], kn: [0.05, 0.05], head: [-0.35, 0] };
+    return { lean: -0.03, sh: [-0.04, 3.04, -0.04, -3.04], el: [-0.02, -0.02], th: [0, 0.62, 0, -0.62], kn: [0.03, 0.03], head: [-0.28, 0] };
   },
   climb(t) {
     const s = Math.sin(t * 9);

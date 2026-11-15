@@ -608,11 +608,11 @@ function act(a) {
     case 'mortal': case 'flip': case 'estrela': case 'pirueta': {
       const wasGround = p.grounded;
       if (a === 'estrela' && p.grounded) {
-        if (p.startTrick('estrela')) {
-          const sx = stickInput().x;
-          p.trick.dir = sx > 0.2 ? -1 : sx < -0.2 ? 1 : (Math.random() < 0.5 ? 1 : -1);
-          music.sfx('trick');
-        }
+        const st = stickInput();
+        const fwdX = Math.sin(camYaw), fwdZ = Math.cos(camYaw), rx = -Math.cos(camYaw), rz = Math.sin(camYaw);
+        const wx = st.m > 0.15 ? fwdX * st.y + rx * st.x : 0;
+        const wz = st.m > 0.15 ? fwdZ * st.y + rz * st.x : 0;
+        if (p.startTrick('estrela', wx, wz, G)) music.sfx('trick');
         break;
       }
       if (p.startTrick(a)) music.sfx(wasGround ? 'jump' : 'trick');

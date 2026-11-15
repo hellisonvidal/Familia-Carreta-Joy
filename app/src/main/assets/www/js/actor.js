@@ -9,7 +9,7 @@ const DANCE_CLIPS = ['danca', 'danca2', 'danca3', 'danca4'];
 export const TRICKS = {
   mortal:  { nome: 'MORTAL',  dur: 0.58, pts: 100 },
   flip:    { nome: 'FLIP',    dur: 0.68, pts: 150 },
-  estrela: { nome: 'ESTRELA', dur: 0.64, pts: 90 },
+  estrela: { nome: 'ESTRELA', dur: 0.76, pts: 90 },
   pirueta: { nome: 'PIRUETA', dur: 0.44, pts: 70 },
 };
 const GRAV = 24;
@@ -155,13 +155,27 @@ export class Actor {
     this.crouch = !this.crouch;
     return { type: 'crouch', on: this.crouch };
   }
-  startTrick(type) {
+  startTrick(type, wx = 0, wz = 0, G = null) {
     if (this.mode !== 'normal' || this.stumble > 0) return false;
     if (this.trick) { if (this.trick.t / this.trick.dur > 0.45) { this.queue = type; return true; } return false; }
     if (this.grounded) {
       if (type === 'estrela') {
         const hs = Math.hypot(this.vel.x, this.vel.z);
-        this.trick = { type, t: 0, dur: TRICKS[type].dur, ground: true, dir: 1, baseSpd: Math.max(4.4, hs * 0.95) };
+        let dx = wx, dz = wz;
+        if (this.frame === 'truck' && G && (dx || dz)) {
+          const a = -G.truck.yaw, c = Math.cos(a), s = Math.sin(a);
+          const lx = dx * c + dz * s, lz = -dx * s + dz * c; dx = lx; dz = lz;
+        }
+        let dir = Math.random() < 0.5 ? 1 : -1;
+        let moveAngle = this.yaw + (Math.PI / 2) * dir;
+        if (Math.hypot(dx, dz) > 0.1) {
+          moveAngle = Math.atan2(dx, dz);
+          const diffP = Math.abs(Math.atan2(Math.sin(moveAngle - (this.yaw + Math.PI / 2)), Math.cos(moveAngle - (this.yaw + Math.PI / 2))));
+          const diffN = Math.abs(Math.atan2(Math.sin(moveAngle - (this.yaw - Math.PI / 2)), Math.cos(moveAngle - (this.yaw - Math.PI / 2))));
+          dir = diffP <= diffN ? 1 : -1;
+          this.yaw = moveAngle - (Math.PI / 2) * dir;
+        }
+        this.trick = { type, t: 0, dur: TRICKS[type].dur, ground: true, dir, moveAngle, baseSpd: Math.max(4.6, hs * 0.95) };
         return true;
       }
       this.jump();
@@ -266,15 +280,22 @@ export class Actor {
       if (want > 0.1) { let d = Math.atan2(mx, mz) - this.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; this.yaw += d * Math.min(1, dt * 22); }
     }
 
-    // estrela no chão: rodinha lateral com aceleração suave no pico e impulso para frente
+    // estrela no chão: rodinha na direção do controle com as mãos tocando o chão
     if (this.trick && this.trick.ground) {
       const tr = this.trick, k = clamp01(tr.t / tr.dur);
       const bell = 0.45 + 0.85 * Math.sin(k * Math.PI);
       const spd = (tr.baseSpd || 4.8) * bell;
       const dir = tr.dir || 1;
-      const sideA = this.yaw + Math.PI / 2 * dir;
-      this.vel.x = Math.sin(sideA) * spd + Math.sin(this.yaw) * (want * 2.2);
-      this.vel.z = Math.cos(sideA) * spd + Math.cos(this.yaw) * (want * 2.2);
+      if (want > 0.2) {
+        const wantA = Math.atan2(mx, mz);
+        const curA = tr.moveAngle ?? (this.yaw + Math.PI / 2 * dir);
+        let da = wantA - curA; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+        tr.moveAngle = curA + da * Math.min(1, dt * 8);
+        this.yaw = tr.moveAngle - (Math.PI / 2) * dir;
+      }
+      const moveA = tr.moveAngle ?? (this.yaw + Math.PI / 2 * dir);
+      this.vel.x = Math.sin(moveA) * spd;
+      this.vel.z = Math.cos(moveA) * spd;
     }
 
     this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
@@ -451,9 +472,9 @@ export class Actor {
       else {
         const dir = tr.dir || 1;
         rz = -e * Math.PI * 2 * dir;
-        ry = Math.sin(k * Math.PI) * 0.28 * dir;
+        ry = Math.sin(k * Math.PI) * 0.16 * dir;
         pose = POSES.star(k);
-        if (tr.ground) B.root.position.y = Math.sin(k * Math.PI) * 0.22 * this.H;
+        if (tr.ground) B.root.position.y = Math.sin(k * Math.PI) * 0.065 * this.H;
       }
     } else if (this.stumble > 0) {
       const k = 1 - this.stumble; rx = Math.sin(k * Math.PI) * 1.1; pose = POSES.air(-1, 0.5);
@@ -531,7 +552,8 @@ export class Actor {
       }
     }
     // transição suave entre as poses (rápida nas manobras)
-    const k = 1 - Math.exp(-dt * (tr || !this.grounded ? 22 : 13));
+    const rate = tr && tr.ground ? 40 : (tr || !this.grounded ? 22 : 13);
+    const k = 1 - Math.exp(-dt * rate);
     this.cur = this.cur ? lerpPose(this.cur, pose, k) : pose;
     this.drive(dt, { pose: this.cur });
     B.pivot.rotation.set(rx, ry, rz, 'YXZ');

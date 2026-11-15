@@ -146,7 +146,7 @@ export class RigBody {
       own.b.Hips.position.copy(this.hipRest); own.b.Hips.position.y += (this.src.bob || 0) * this.hipScale; // pulinho do quadril, na escala do menino
     }
     // suavização entre movimentos (vale para os dois caminhos)
-    const k = this.first ? 1 : 1 - Math.exp(-dt * 18); this.first = false;
+    const k = this.first ? 1 : 1 - Math.exp(-dt * (st.clip ? 18 : 34)); this.first = false;
     own.bones.forEach((b, i) => { this.prev[i].slerp(b.quaternion, k); b.quaternion.copy(this.prev[i]); });
     own.root.updateMatrixWorld(true);
   }
