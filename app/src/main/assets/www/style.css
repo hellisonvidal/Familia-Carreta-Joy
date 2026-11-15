@@ -94,7 +94,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: 0; }
   .ctl.dir { width: 74px; height: 74px; }
   .ctl.jump { width: 90px; height: 90px; }
   .ctl.trick { width: 64px; height: 64px; font-size: 11px; }
-  .ctl.t1 { right: 100px; } .ctl.t2 { right: 82px; bottom: 78px; } .ctl.t3 { right: 10px; bottom: 102px; }
+  .ctl.t1 { right: 100px; } .ctl.t2 { right: 82px; bottom: 78px; } .ctl.t3 { right: 10px; bottom: 102px; } .ctl.t4 { right: 158px; bottom: 68px; } .ctl.t4 { right: 158px; bottom: 68px; }
   #controls .right { width: 220px; height: 180px; }
   .logo { font-size: 46px; }
   .dpad { height: 66px; }
@@ -152,6 +152,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: 0; }
 .ctl.t1 { right: 118px; bottom: 4px; background: rgba(255, 61, 127, 0.55); }
 .ctl.t2 { right: 96px; bottom: 92px; background: rgba(41, 121, 255, 0.55); }
 .ctl.t3 { right: 14px; bottom: 120px; background: rgba(255, 196, 0, 0.55); }
+.ctl.t4 { right: 178px; bottom: 82px; background: rgba(156, 39, 176, 0.55); }
 .ctl.ctx, .ctl.ctx2, .ctl.ctx3, .ctl.ctx4 { border-radius: 16px; padding: 0 14px; height: 52px; font-size: 15px; }
 .ctl.ctx { background: rgba(255, 109, 0, 0.7); }
 .ctl.ctx2 { background: rgba(124, 77, 255, 0.7); }
@@ -171,7 +172,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: 0; }
   #joy { width: 126px; height: 126px; }
   .ctl.jump { width: 90px; height: 90px; }
   .ctl.trick { width: 64px; height: 64px; font-size: 11px; }
-  .ctl.t1 { right: 100px; } .ctl.t2 { right: 82px; bottom: 78px; } .ctl.t3 { right: 10px; bottom: 102px; }
+  .ctl.t1 { right: 100px; } .ctl.t2 { right: 82px; bottom: 78px; } .ctl.t3 { right: 10px; bottom: 102px; } .ctl.t4 { right: 158px; bottom: 68px; } .ctl.t4 { right: 158px; bottom: 68px; }
   #controls .right { width: 220px; height: 180px; }
   .ctl.ctx, .ctl.ctx2, .ctl.ctx3, .ctl.ctx4 { height: 46px; font-size: 13px; padding: 0 10px; }
   #minimap { width: 96px; height: 96px; }

@@ -27,6 +27,8 @@ let save = {
   settings: { music: 0.8, sfx: 0.9, quality: 'media', bright: 1.2, contrast: 1.05, satur: 1.1, fps: 30, vibrar: true },
 };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) save = { ...save, ...s, settings: { ...save.settings, ...(s.settings || {}) }, costumes: { ...save.costumes, ...(s.costumes || {}) } }; } catch (e) { }
+if (!CHARACTERS.some(c => c.id === save.char)) save.char = 'arthur';
+for (const k of ['arthur', 'afonso']) if (save.costumes[k] && save.costumes[k] !== 'normal' && !COSTUMES[save.costumes[k]]) save.costumes[k] = 'normal';
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { } };
 
 // ---------------- renderizador ----------------
@@ -109,6 +111,8 @@ async function loadModels() {
   const prog = {};
   const upd = () => { const v = Object.values(prog); const l = v.reduce((a, p) => a + p.l, 0), t = v.reduce((a, p) => a + p.t, 0) || 1; $('loadbar').style.width = `${Math.round(100 * l / t)}%`; };
   files.xbot = 'models/xbot.glb'; files.arthurRig = 'models/ArthurRig.glb'; files.afonsoRig = 'models/AfonsoRig.glb';
+  files.chavesRig = 'models/ChavesRig.glb'; files.fofaoRig = 'models/FofaoRig.glb'; files.mascaraRig = 'models/MascaraRig.glb';
+  files.aranhaRig = 'models/AranhaRig.glb'; files.capitaoRig = 'models/CapitaoRig.glb'; files.hulkRig = 'models/HulkRig.glb';
   delete files.arthurBody; delete files.afonsoBody;
   for (const n of Object.keys(CLIP_INFO)) files['anim_' + n] = `anims/${n}.glb`;
   const raw = {};
@@ -380,7 +384,7 @@ function onEvent(type, a, x, y, airTime) {
       if (list.length) {
         let base = list.reduce((s, t) => s + TRICKS[t].pts, 0); if (list.length > 1) base *= 1 + (list.length - 1) * 0.5;
         const pts = addScore(base, a); bump(); if (me) fillCombo(pts); G.stats.tricks += list.length;
-        if (me) { toast(`${list.map(t => TRICKS[t].nome).join(' + ')}! +${pts}`, list.length > 1 ? 'gold' : ''); music.sfx(list.length > 1 ? 'combo' : 'trick'); }
+        if (me) { toast(`${list.map(t => TRICKS[t].nome).join(' + ')}! +${pts}`, list.length > 1 ? 'gold' : ''); music.sfx(list.length > 1 ? 'combo' : 'trick'); rumble(0.25, 0.5, 110); }
       }
       if (top && ['carro', 'banco', 'quiosque', 'container', 'loja', 'caixa', 'palco', 'tubo', 'degrau'].includes(top.kind) && me && airTime > 0.25) {
         const pts = addScore(top.kind === 'banco' ? 15 : 40, a); bump(); fillCombo(pts); G.stats.parkour++; toast(`PARKOUR! +${pts}`, 'small');
@@ -388,8 +392,8 @@ function onEvent(type, a, x, y, airTime) {
       if (me) music.sfx('land');
       break;
     }
-    case 'rampa': if (me) { toast('VOOOU! 🚀', 'small'); music.sfx('jump'); } addScore(30, a); break;
-    case 'tombo': G.combo = 0; G.stats.tombos++; if (me) { toast(x ? 'Caiu da manobra!' : 'Opa! Tombo!', 'bad'); music.sfx('crash'); G.shake = 0.4; } break;
+    case 'rampa': if (me) { toast('VOOOU! 🚀', 'small'); music.sfx('jump'); rumble(0.35, 0.2, 130); } addScore(30, a); break;
+    case 'tombo': G.combo = 0; G.stats.tombos++; if (me) { toast(x ? 'Caiu da manobra!' : 'Opa! Tombo!', 'bad'); music.sfx('crash'); G.shake = 0.4; rumble(0.8, 0.4, 220); } break;
     case 'nota': addScore(10, a); G.comboT = Math.max(G.comboT, 2.5); G.stats.notes++; if (G.now - lastCoin > 0.06) { music.sfx('coin'); lastCoin = G.now; } break;
     case 'estrelaDourada': addScore(250, a); bump(); G.stats.gold++; music.sfx('star'); toast('⭐ ESTRELA DOURADA! ⭐', 'gold'); break;
   }
@@ -522,13 +526,25 @@ function act(a) {
   if (a === 'drive') { toggleDrive(); return; }
   if (a === 'run') { running = !running; $('btnRun').classList.toggle('on2', running); $('btnRun').innerHTML = running ? '🏃 CORRENDO' : '🚶 ANDAR'; music.sfx('click'); return; }
   if (a === 'combo') { startComboDance(); return; }
+  if (a === 'camReset') {
+    const yaw = p.mode === 'drive' ? G.truck.yaw : (p.frame === 'truck' ? p.yaw + G.truck.yaw : p.yaw);
+    camYaw = yaw + Math.PI; camPitch = 0.32; camDragT = G.now - 10; return;
+  }
+  if (a.startsWith('dance:')) { if (p.mode === 'normal' && p.grounded && !p.trick) { p.danceMove(a.slice(6)); music.sfx('click'); } return; }
   if (p.mode === 'drive') return;
   if (p.mode === 'pose') { p.standUp(G); return; }
   switch (a) {
     case 'jump': if (p.jump()) music.sfx('jump'); else p.jumpBuf = 0.18; p.climbIntent = true; setTimeout(() => p.climbIntent = false, 400); break;
-    case 'mortal': case 'flip': case 'estrela': {
+    case 'mortal': case 'flip': case 'estrela': case 'pirueta': {
       const wasGround = p.grounded;
-      if (a === 'estrela' && p.grounded) { if (p.startTrick('estrela')) { p.trick.dir = joy.x > 0.2 ? -1 : 1; music.sfx('trick'); } break; }
+      if (a === 'estrela' && p.grounded) {
+        if (p.startTrick('estrela')) {
+          const sx = stickInput().x;
+          p.trick.dir = sx > 0.2 ? -1 : sx < -0.2 ? 1 : (Math.random() < 0.5 ? 1 : -1);
+          music.sfx('trick');
+        }
+        break;
+      }
       if (p.startTrick(a)) music.sfx(wasGround ? 'jump' : 'trick');
       break;
     }
@@ -555,7 +571,12 @@ document.querySelectorAll('#controls .ctl[data-hold]').forEach(b => {
   const off = () => { holds[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
 });
 $('btnChars').onclick = () => act('chars');
-const KEYS = { ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', e: 'ctx', f: 'drive', h: 'horn', g: 'party', q: 'chars', r: 'run', v: 'combo' };
+const KEYS = {
+  ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', b: 'pirueta',
+  e: 'ctx', f: 'drive', h: 'horn', g: 'party', enter: 'party',
+  q: 'chars', tab: 'chars', r: 'run', shift: 'run', v: 'combo', k: 'camReset',
+  '1': 'dance:esq', '2': 'dance:cima', '3': 'dance:baixo', '4': 'dance:dir',
+};
 const DKEYS = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 2, ArrowRight: 3 };
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -565,12 +586,25 @@ addEventListener('keydown', (e) => {
   const a = KEYS[e.key.toLowerCase()]; if (a) { act(a); e.preventDefault(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
-// ---------------- controle PlayStation / Xbox ----------------
-const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, down: new Set(), native: false, name: '' };
-const dz = (v) => Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82;
+// ---------------- controle PlayStation / Xbox / Joystick ----------------
+const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, down: new Set(), native: false, name: '', activeIdx: -1 };
+const dz = (v) => Math.abs(v) < 0.16 ? 0 : (v - Math.sign(v) * 0.16) / 0.84;
+function dz2(x, y, dead = 0.16) {
+  const m = Math.hypot(x, y);
+  if (m < dead) return [0, 0];
+  const s = Math.min(1, (m - dead) / (1 - dead)) / m;
+  return [x * s, y * s];
+}
 // mapeamento: índice padrão do navegador -> nome; e código de tecla do Android -> nome
-const STD = { 0: 'A', 1: 'B', 2: 'X', 3: 'Y', 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT', 8: 'SELECT', 9: 'START', 12: 'UP', 13: 'DOWN', 14: 'LEFT', 15: 'RIGHT' };
-const AND = { 96: 'A', 97: 'B', 99: 'X', 100: 'Y', 102: 'LB', 103: 'RB', 104: 'LT', 105: 'RT', 109: 'SELECT', 108: 'START', 19: 'UP', 20: 'DOWN', 21: 'LEFT', 22: 'RIGHT', 23: 'A' };
+const STD = { 0: 'A', 1: 'B', 2: 'X', 3: 'Y', 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT', 8: 'SELECT', 9: 'START', 10: 'L3', 11: 'R3', 12: 'UP', 13: 'DOWN', 14: 'LEFT', 15: 'RIGHT' };
+const AND = { 96: 'A', 97: 'B', 99: 'X', 100: 'Y', 102: 'LB', 103: 'RB', 104: 'LT', 105: 'RT', 106: 'L3', 107: 'R3', 109: 'SELECT', 108: 'START', 19: 'UP', 20: 'DOWN', 21: 'LEFT', 22: 'RIGHT', 23: 'A' };
+function rumble(strong = 0.4, weak = 0.3, ms = 120) {
+  if (!save.settings.vibrar || !navigator.getGamepads) return;
+  const gp = [...navigator.getGamepads()].find(g => g && g.connected && g.vibrationActuator);
+  if (gp && gp.vibrationActuator.playEffect) {
+    try { gp.vibrationActuator.playEffect('dual-rumble', { startDelay: 0, duration: ms, strongMagnitude: strong, weakMagnitude: weak }); } catch (e) { }
+  }
+}
 function padPress(b) {
   music.init();
   const shown = (id) => $(id).classList.contains('show');
@@ -589,7 +623,7 @@ function padPress(b) {
   if (shown('pause')) { if (b === 'START' || b === 'A') togglePause(false); else if (b === 'B') $('btnMenu').click(); return; }
   if (b === 'START') { togglePause(); return; }
   if (G.dancing) { const m = { X: 0, LEFT: 0, Y: 1, UP: 1, A: 2, DOWN: 2, B: 3, RIGHT: 3 }; if (m[b] !== undefined) dance.press(m[b]); return; }
-  const map = { A: 'jump', B: 'estrela', X: 'mortal', Y: 'flip', LB: 'ctx', RB: 'run', SELECT: 'chars', UP: 'drive', DOWN: 'combo', LEFT: 'horn', RIGHT: 'party' };
+  const map = { A: 'jump', B: 'estrela', X: 'mortal', Y: 'flip', RT: 'pirueta', LB: 'ctx', RB: 'run', L3: 'run', R3: 'camReset', SELECT: 'chars', UP: 'drive', DOWN: 'combo', LEFT: 'horn', RIGHT: 'party' };
   if (G.player && G.player.mode === 'drive' && (b === 'A')) { act('horn'); return; }
   if (map[b]) act(map[b]);
 }
@@ -601,23 +635,62 @@ function padSet(b, down) {
 // eventos vindos do app Android (botões e analógicos do controle)
 window.onPadKey = (code, down) => { pad.native = true; const b = AND[code]; if (b) padSet(b, down); };
 window.onPadAxes = (lx, ly, rx, ry, lt, rt, hx, hy) => {
-  pad.native = true; pad.lx = dz(lx); pad.ly = dz(ly); pad.rx = dz(rx); pad.ry = dz(ry); pad.lt = lt; pad.rt = rt;
-  holds.gas = rt > 0.3 || pad.down.has('RT'); holds.brake = lt > 0.3 || pad.down.has('LT');
+  pad.native = true;
+  [pad.lx, pad.ly] = dz2(lx, ly); [pad.rx, pad.ry] = dz2(rx, ry);
+  pad.lt = lt; pad.rt = rt;
+  holds.gas = rt > 0.25 || pad.down.has('RT'); holds.brake = lt > 0.25 || pad.down.has('LT');
+  padSet('RT', rt > 0.55);
   padSet('LEFT', hx < -0.5); padSet('RIGHT', hx > 0.5); padSet('UP', hy < -0.5); padSet('DOWN', hy > 0.5);
   padHello('Controle');
 };
 let padSeen = false;
-function padHello(name) { if (padSeen) return; padSeen = true; $('padStatus').textContent = `🎮 ${name} conectado!`; if (G.phase === 'play') toast('🎮 Controle conectado!', 'small'); }
-// Gamepad API do navegador
+function padHello(name) { if (padSeen) return; padSeen = true; $('padStatus').textContent = `🎮 ${name} conectado!`; if (G.phase === 'play') toast(`🎮 ${name} conectado!`, 'small'); }
+// Gamepad API do navegador (controles padrão + joysticks USB/Bluetooth genéricos)
+function pickGamepad(list) {
+  let best = null;
+  for (const g of list) {
+    if (!g || !g.connected) continue;
+    if (!best) best = g;
+    const active = g.buttons.some(b => b.pressed || b.value > 0.3) || g.axes.some(a => Math.abs(a) > 0.25);
+    if (active) { pad.activeIdx = g.index; return g; }
+    if (g.index === pad.activeIdx) best = g;
+  }
+  return best;
+}
 function pollGamepad(dt) {
   if (pad.native || !navigator.getGamepads) return;
-  const gp = [...navigator.getGamepads()].find(g => g && g.connected); if (!gp) return;
+  const gp = pickGamepad(navigator.getGamepads()); if (!gp) return;
   padHello(gp.id.split('(')[0].trim() || 'Controle');
-  pad.lx = dz(gp.axes[0] || 0); pad.ly = dz(gp.axes[1] || 0); pad.rx = dz(gp.axes[2] || 0); pad.ry = dz(gp.axes[3] || 0);
+  const ax = gp.axes || [];
+  [pad.lx, pad.ly] = dz2(ax[0] || 0, ax[1] || 0);
+  // analógico direito: padrão [2,3] ou joysticks genéricos [2,5] / [3,4]
+  let rx = ax[2] || 0, ry = ax[3] || 0;
+  if (gp.mapping !== 'standard' && ax.length >= 6 && Math.abs(rx) < 0.05 && Math.abs(ry) < 0.05) { rx = ax[3] || 0; ry = ax[4] || 0; }
+  [pad.rx, pad.ry] = dz2(rx, ry);
   for (const [i, b] of Object.entries(STD)) { const bt = gp.buttons[i]; if (bt) padSet(b, bt.pressed || bt.value > 0.5); }
-  holds.gas = (gp.buttons[7] && gp.buttons[7].value > 0.3) || false; holds.brake = (gp.buttons[6] && gp.buttons[6].value > 0.3) || false;
+  // POV / D-pad em eixos (joysticks DirectInput / genéricos)
+  if (gp.mapping !== 'standard') {
+    if (ax.length >= 10 && Math.abs(ax[9]) <= 1.1) {
+      // eixo hat switch (-1 = cima, -0.43 = dir, 0.14 = baixo, 0.71 = esq)
+      const v = ax[9];
+      if (v >= -1.05 && v <= 1.05) {
+        const a = (v + 1) * Math.PI; // 0..2PI aprox
+        padSet('UP', v < -0.75 || v > 0.9);
+        padSet('RIGHT', v > -0.7 && v < -0.1);
+        padSet('DOWN', v > -0.1 && v < 0.45);
+        padSet('LEFT', v > 0.45 && v < 0.9);
+      } else { padSet('UP', false); padSet('RIGHT', false); padSet('DOWN', false); padSet('LEFT', false); }
+    } else if (ax.length >= 8 && (Math.abs(ax[6]) > 0.5 || Math.abs(ax[7]) > 0.5)) {
+      padSet('LEFT', ax[6] < -0.5); padSet('RIGHT', ax[6] > 0.5);
+      padSet('UP', ax[7] < -0.5); padSet('DOWN', ax[7] > 0.5);
+    }
+  }
+  const rtVal = gp.buttons[7] ? gp.buttons[7].value : (gp.mapping !== 'standard' && ax[5] > -0.9 ? (ax[5] + 1) * 0.5 : 0);
+  const ltVal = gp.buttons[6] ? gp.buttons[6].value : (gp.mapping !== 'standard' && ax[4] > -0.9 ? (ax[4] + 1) * 0.5 : 0);
+  holds.gas = rtVal > 0.25 || pad.down.has('RT'); holds.brake = ltVal > 0.25 || pad.down.has('LT');
 }
 addEventListener('gamepadconnected', (e) => padHello(e.gamepad.id.split('(')[0].trim() || 'Controle'));
+addEventListener('gamepaddisconnected', (e) => { if (e.gamepad.index === pad.activeIdx) pad.activeIdx = -1; });
 function padCamera(dt) {
   if (pad.rx || pad.ry) { camYaw -= pad.rx * dt * 2.6; camPitch = clamp(camPitch + pad.ry * dt * 1.4, 0.08, 1.1); camDragT = G.now; }
 }

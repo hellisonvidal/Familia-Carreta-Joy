@@ -191,10 +191,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------- controle de videogame ----------------
+    // ---------------- controle de videogame / joystick ----------------
     private fun isPad(source: Int) =
         (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-        (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+        (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
+        (source and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
@@ -211,9 +212,13 @@ class MainActivity : AppCompatActivity() {
         if (isPad(ev.source) && ev.action == MotionEvent.ACTION_MOVE) {
             val lt = maxOf(ev.getAxisValue(MotionEvent.AXIS_LTRIGGER), ev.getAxisValue(MotionEvent.AXIS_BRAKE))
             val rt = maxOf(ev.getAxisValue(MotionEvent.AXIS_RTRIGGER), ev.getAxisValue(MotionEvent.AXIS_GAS))
+            val z = ev.getAxisValue(MotionEvent.AXIS_Z)
+            val rz = ev.getAxisValue(MotionEvent.AXIS_RZ)
+            val rx = if (kotlin.math.abs(z) > 0.02f) z else ev.getAxisValue(MotionEvent.AXIS_RX)
+            val ry = if (kotlin.math.abs(rz) > 0.02f) rz else ev.getAxisValue(MotionEvent.AXIS_RY)
             js("window.onPadAxes && window.onPadAxes(" +
                 "${ev.getAxisValue(MotionEvent.AXIS_X)},${ev.getAxisValue(MotionEvent.AXIS_Y)}," +
-                "${ev.getAxisValue(MotionEvent.AXIS_Z)},${ev.getAxisValue(MotionEvent.AXIS_RZ)}," +
+                "$rx,$ry," +
                 "$lt,$rt,${ev.getAxisValue(MotionEvent.AXIS_HAT_X)},${ev.getAxisValue(MotionEvent.AXIS_HAT_Y)})")
             return true
         }

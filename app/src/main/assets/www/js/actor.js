@@ -4,10 +4,10 @@ const SEED = () => Math.random() * 10;
 import { TRUCK_LEN } from './truck.js';
 
 export const TRICKS = {
-  mortal:  { nome: 'MORTAL',  dur: 0.62, pts: 100 },
-  flip:    { nome: 'FLIP',    dur: 0.72, pts: 150 },
-  estrela: { nome: 'ESTRELA', dur: 0.6,  pts: 80 },
-  pirueta: { nome: 'PIRUETA', dur: 0.5,  pts: 60 },
+  mortal:  { nome: 'MORTAL',  dur: 0.58, pts: 100 },
+  flip:    { nome: 'FLIP',    dur: 0.68, pts: 150 },
+  estrela: { nome: 'ESTRELA', dur: 0.64, pts: 90 },
+  pirueta: { nome: 'PIRUETA', dur: 0.44, pts: 70 },
 };
 const GRAV = 24;
 const ease = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -83,12 +83,23 @@ export class Actor {
   }
   startTrick(type) {
     if (this.mode !== 'normal' || this.stumble > 0) return false;
-    if (this.trick) { if (this.trick.t / this.trick.dur > 0.6) { this.queue = type; return true; } return false; }
+    if (this.trick) { if (this.trick.t / this.trick.dur > 0.45) { this.queue = type; return true; } return false; }
     if (this.grounded) {
-      if (type === 'estrela') { this.trick = { type, t: 0, dur: 0.65, ground: true }; return true; }
+      if (type === 'estrela') {
+        const hs = Math.hypot(this.vel.x, this.vel.z);
+        this.trick = { type, t: 0, dur: TRICKS[type].dur, ground: true, dir: 1, baseSpd: Math.max(4.4, hs * 0.95) };
+        return true;
+      }
       this.jump();
     }
-    this.trick = { type, t: 0, dur: TRICKS[type].dur, ground: false };
+    if (this.airTricks.length === 0 && this.vel.y > -2.5) {
+      this.vel.y += type === 'flip' ? 2.2 : type === 'mortal' ? 1.7 : 1.1;
+    }
+    if ((type === 'mortal' || type === 'flip') && Math.hypot(this.vel.x, this.vel.z) > 0.8) {
+      this.vel.x += Math.sin(this.yaw) * 1.1;
+      this.vel.z += Math.cos(this.yaw) * 1.1;
+    }
+    this.trick = { type, t: 0, dur: TRICKS[type].dur, ground: false, dir: 1 };
     return true;
   }
   danceMove(type) { this.dance = { type, t: 0, dur: type === 'mortal' ? 0.7 : 0.5 }; }
@@ -166,11 +177,23 @@ export class Actor {
     this.vel.z += Math.max(-acc * dt, Math.min(acc * dt, tvz - this.vel.z));
     if (want > 0.1) { let d = Math.atan2(mx, mz) - this.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; this.yaw += d * Math.min(1, dt * 18); }
 
-    // estrela no chão: rodinha para o lado
-    if (this.trick && this.trick.ground) { const s2 = Math.sin(this.yaw + Math.PI / 2), c2 = Math.cos(this.yaw + Math.PI / 2); this.vel.x = s2 * 4.5 * (this.trick.dir || 1); this.vel.z = c2 * 4.5 * (this.trick.dir || 1); }
+    // estrela no chão: rodinha lateral com aceleração suave no pico e impulso para frente
+    if (this.trick && this.trick.ground) {
+      const tr = this.trick, k = clamp01(tr.t / tr.dur);
+      const bell = 0.45 + 0.85 * Math.sin(k * Math.PI);
+      const spd = (tr.baseSpd || 4.8) * bell;
+      const dir = tr.dir || 1;
+      const sideA = this.yaw + Math.PI / 2 * dir;
+      this.vel.x = Math.sin(sideA) * spd + Math.sin(this.yaw) * (want * 2.2);
+      this.vel.z = Math.cos(sideA) * spd + Math.cos(this.yaw) * (want * 2.2);
+    }
 
     this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
-    if (!this.grounded) { this.vel.y -= GRAV * dt; this.airTime += dt; }
+    if (!this.grounded) {
+      const gScale = (this.trick && Math.abs(this.vel.y) < 4.0) ? 0.72 : (Math.abs(this.vel.y) < 2.2 ? 0.85 : 1.0);
+      this.vel.y -= GRAV * gScale * dt;
+      this.airTime += dt;
+    }
     this.pos.y += this.vel.y * dt;
 
     if (this.frame === 'world') this.physicsWorld(dt, G); else this.physicsTruck(dt, G);
@@ -261,7 +284,7 @@ export class Actor {
 
   land(G, top) {
     if (this.trick && !this.trick.ground) {
-      if (this.trick.t / this.trick.dur < 0.72) { this.trick = null; this.queue = null; this.crash(G, true); return; }
+      if (this.trick.t / this.trick.dur < 0.62) { this.trick = null; this.queue = null; this.crash(G, true); return; }
       this.airTricks.push(this.trick.type); this.trick = null;
     }
     const list = this.airTricks; this.airTricks = [];
@@ -328,13 +351,19 @@ export class Actor {
     if (this.mode === 'stand') { this.cur = lerpPose(POSES.crouchStart(), POSES.idle(0), ease(clamp01(this.standT / 0.7))); this.drive(dt, { pose: this.cur }); B.pivot.rotation.set(0, 0, 0); return; }
     let pose, idle = false, danceCtx = false;
     const tr = this.trick;
+    B.root.position.y = 0;
     if (tr) {
       const k = clamp01(tr.t / tr.dur), e = ease(k);
       if (tr.type === 'mortal') { rx = -e * Math.PI * 2; pose = POSES.air(this.vel.y, Math.sin(k * Math.PI)); }
       else if (tr.type === 'flip') { rx = e * Math.PI * 2; ry = e * Math.PI * 2; pose = POSES.air(this.vel.y, Math.sin(k * Math.PI)); }
-      else if (tr.type === 'pirueta') { ry = e * Math.PI * 2; pose = POSES.air(this.vel.y, 0.3); }
-      else { rz = -e * Math.PI * 2 * (tr.dir || 1); pose = POSES.star(); }
-      if (tr.ground) this.pos.y = this.ground + Math.sin(k * Math.PI) * 0.5;
+      else if (tr.type === 'pirueta') { ry = e * Math.PI * 2; pose = POSES.air(this.vel.y, 0.35); }
+      else {
+        const dir = tr.dir || 1;
+        rz = -e * Math.PI * 2 * dir;
+        ry = Math.sin(k * Math.PI) * 0.28 * dir;
+        pose = POSES.star(k);
+        if (tr.ground) B.root.position.y = Math.sin(k * Math.PI) * 0.22 * this.H;
+      }
     } else if (this.stumble > 0) {
       const k = 1 - this.stumble; rx = Math.sin(k * Math.PI) * 1.1; pose = POSES.air(-1, 0.5);
     } else if (!this.grounded) pose = POSES.air(this.vel.y, 0);
@@ -391,6 +420,5 @@ export class Actor {
     this.cur = this.cur ? lerpPose(this.cur, pose, k) : pose;
     this.drive(dt, { pose: this.cur });
     B.pivot.rotation.set(rx, ry, rz, 'YXZ');
-    if (tr && tr.type === 'estrela') B.pivot.rotation.set(0, 0, rz);
   }
 }

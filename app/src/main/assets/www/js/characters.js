@@ -77,7 +77,6 @@ function faceTex(f) {
       if (f.mascara.tipo === 'total') g.fillRect(0, 0, w, h);
       else if (f.mascara.tipo === 'olhos') g.fillRect(0, h * 0.28, w, h * 0.24);
       else if (f.mascara.tipo === 'capuz') { g.fillRect(0, 0, w, h * 0.42); g.fillRect(0, 0, w * 0.1, h); g.fillRect(w * 0.4, 0, w * 0.6, h); }
-      else if (f.mascara.tipo === 'garras') { g.fillRect(0, 0, w, h * 0.55); g.fillStyle = hex(f.mascara.cor2 || 0x111111); g.beginPath(); g.moveTo(cx - 60, h * 0.5); g.lineTo(cx, h * 0.3); g.lineTo(cx + 60, h * 0.5); g.lineTo(cx + 55, h * 0.38); g.lineTo(cx, h * 0.2); g.lineTo(cx - 55, h * 0.38); g.fill(); }
       if (f.mascara.teia) { g.strokeStyle = '#111'; g.lineWidth = 1.5; for (let a = 0; a < 16; a++) { g.beginPath(); g.moveTo(cx, ey + 10); g.lineTo(cx + Math.cos(a / 16 * 6.28) * 300, ey + 10 + Math.sin(a / 16 * 6.28) * 200); g.stroke(); } for (let r = 20; r < 300; r += 22) { g.beginPath(); g.ellipse(cx, ey + 10, r, r * 0.7, 0, 0, 7); g.stroke(); } }
     }
     // olhos
@@ -133,23 +132,21 @@ export const COSTUMES = {
   teia:     { nome: 'Herói Teia', tronco: { padrao: 'teia', a: 0xd5212b, b: 0x1a1a1a }, manga: 'longa', bracos: { padrao: 'teia', a: 0xd5212b, b: 0x1a1a1a }, maos: 0xd5212b, calca: 0x1f4fbf, sapatos: 0xd5212b, emblema: 'aranha' },
   capitao:  { nome: 'Capitão Escudo', tronco: 0x1f4fbf, manga: 'longa', bracos: 0x1f4fbf, maos: 0xd32f2f, calca: 0x1f4fbf, sapatos: 0xd32f2f, emblema: 'estrela', cinto: 0x7a5a2a, escudo: true, chapeu: 'capacete', listras: true },
   gigante:  { nome: 'Gigante Verde', tronco: 0x4caf2f, manga: 'nenhuma', bracos: 0x4caf2f, maos: 0x4caf2f, calca: 0x6a2c91, shorts: 0x6a2c91, pernasPele: 0x4caf2f, sapatos: 0x4caf2f, rasgado: true },
-  garras:   { nome: 'Garras', tronco: 0xffc400, manga: 'longa', bracos: 0x1a3fa8, maos: 0x1a3fa8, calca: 0x1a3fa8, sapatos: 0x1a3fa8, cinto: 0xd32f2f, garras: true, ombreiras: 0x1a3fa8, chapeu: 'mascara_garras' },
 };
-export const KID_COSTUMES = ['normal', 'barril', 'bochecha', 'kiko', 'vermelho', 'caraverde', 'teia', 'capitao', 'gigante', 'garras'];
+export const KID_COSTUMES = ['normal', 'barril', 'bochecha', 'kiko', 'vermelho', 'caraverde', 'teia', 'capitao', 'gigante'];
 
 // ---------- personagens ----------
 export const CHARACTERS = [
-  { id: 'arthur', nome: 'Arthur', kid: true, altura: 1.32, cabeca: 'arthurHead', corpo: 'arthurBody', roupa: 'arthur', estilo: 0 },
-  { id: 'afonso', nome: 'Afonso', kid: true, altura: 1.18, cabeca: 'afonsoHead', corpo: 'afonsoBody', roupa: 'afonso', estilo: 1, poseInicial: true },
-  { id: 'barril', nome: 'Moleque do Barril', altura: 1.64, roupa: 'barril', estilo: 2, pele: 0xf1c6a3, olho: 0x6b4423, rosto: { pele: 0xf1c6a3, sardas: true, sobrancelha: 0x5a3b22 }, cabelo: 0x8a4b2a },
-  { id: 'bochecha', nome: 'Bochechudo', altura: 1.7, roupa: 'bochecha', estilo: 3, pele: 0xf3cfb3, olho: 0x3b6e8f, rosto: { pele: 0xf3cfb3, bochechas: true, nariz: 0xff7a8a, boca: 'sorriso' }, bochechas: true, cabelo: 0x2a1a12, estiloCabelo: 'longo' },
+  { id: 'arthur', nome: 'Arthur', kid: true, altura: 1.32, cabeca: 'arthurHead', corpo: 'arthurBody', rig: 'arthurRig', roupa: 'arthur', estilo: 0 },
+  { id: 'afonso', nome: 'Afonso', kid: true, altura: 1.18, cabeca: 'afonsoHead', corpo: 'afonsoBody', rig: 'afonsoRig', roupa: 'afonso', estilo: 1, poseInicial: true },
+  { id: 'barril', nome: 'Chaves', altura: 1.64, rig: 'chavesRig', roupa: 'barril', estilo: 2, pele: 0xf1c6a3, olho: 0x6b4423, rosto: { pele: 0xf1c6a3, sardas: true, sobrancelha: 0x5a3b22 }, cabelo: 0x8a4b2a },
+  { id: 'bochecha', nome: 'Fofão', altura: 1.7, rig: 'fofaoRig', roupa: 'bochecha', estilo: 3, pele: 0xf3cfb3, olho: 0x3b6e8f, rosto: { pele: 0xf3cfb3, bochechas: true, nariz: 0xff7a8a, boca: 'sorriso' }, bochechas: true, cabelo: 0x2a1a12, estiloCabelo: 'longo' },
   { id: 'kiko', nome: 'Kiko', altura: 1.52, roupa: 'kiko', estilo: 4, pele: 0xf6d2b8, olho: 0x3b6e8f, cabecaGrande: 1.12, bochechas: true, rosto: { pele: 0xf6d2b8, bochechas: true, boca: 'sorriso', sobrancelha: 0x8a5a2a }, cabelo: 0xa0602a, estiloCabelo: 'curto' },
   { id: 'vermelho', nome: 'Herói Vermelho', altura: 1.66, roupa: 'vermelho', estilo: 4, pele: 0xd8a27c, olho: 0x4a2e1a, rosto: { pele: 0xd8a27c, mascara: { tipo: 'capuz', cor: 0xd81e1e } } },
-  { id: 'caraverde', nome: 'Cara Verde', altura: 1.8, roupa: 'caraverde', estilo: 5, pele: 0xe2b48c, olho: 0x2f6b2f, rosto: { pele: 0x7ed321, boca: 'dentes', sobrancelha: 0x2f5d10 }, cabecaGrande: 1.08 },
-  { id: 'teia', nome: 'Herói Teia', altura: 1.78, roupa: 'teia', estilo: 6, pele: 0xd5212b, rosto: { pele: 0xd5212b, mascara: { tipo: 'total', cor: 0xd5212b, teia: true }, olhos: 'lente' } },
-  { id: 'capitao', nome: 'Capitão Escudo', altura: 1.86, forte: 1.2, roupa: 'capitao', estilo: 7, pele: 0xf0c8a4, olho: 0x3d6fb3, rosto: { pele: 0xf0c8a4, mascara: { tipo: 'capuz', cor: 0x1f4fbf }, bravo: true } },
-  { id: 'gigante', nome: 'Gigante Verde', altura: 2.2, forte: 1.65, roupa: 'gigante', estilo: 8, pele: 0x5fae3a, olho: 0x3a5a1a, rosto: { pele: 0x5fae3a, boca: 'bravo', bravo: true, sobrancelha: 0x1b3d0c }, cabelo: 0x1b1b1b, estiloCabelo: 'curto' },
-  { id: 'garras', nome: 'Garras', altura: 1.72, forte: 1.15, roupa: 'garras', estilo: 9, pele: 0xe0b088, olho: 0x4a3020, barba: true, rosto: { pele: 0xe0b088, mascara: { tipo: 'garras', cor: 0xffc400, cor2: 0x111111 }, bravo: true, boca: 'bravo' } },
+  { id: 'caraverde', nome: 'Máscara', altura: 1.8, rig: 'mascaraRig', roupa: 'caraverde', estilo: 5, pele: 0xe2b48c, olho: 0x2f6b2f, rosto: { pele: 0x7ed321, boca: 'dentes', sobrancelha: 0x2f5d10 }, cabecaGrande: 1.08 },
+  { id: 'teia', nome: 'Homem-Aranha', altura: 1.78, rig: 'aranhaRig', roupa: 'teia', estilo: 6, pele: 0xd5212b, rosto: { pele: 0xd5212b, mascara: { tipo: 'total', cor: 0xd5212b, teia: true }, olhos: 'lente' } },
+  { id: 'capitao', nome: 'Capitão América', altura: 1.86, forte: 1.2, rig: 'capitaoRig', roupa: 'capitao', estilo: 7, pele: 0xf0c8a4, olho: 0x3d6fb3, rosto: { pele: 0xf0c8a4, mascara: { tipo: 'capuz', cor: 0x1f4fbf }, bravo: true } },
+  { id: 'gigante', nome: 'Hulk', altura: 2.2, forte: 1.65, rig: 'hulkRig', roupa: 'gigante', estilo: 8, pele: 0x5fae3a, olho: 0x3a5a1a, rosto: { pele: 0x5fae3a, boca: 'bravo', bravo: true, sobrancelha: 0x1b3d0c }, cabelo: 0x1b1b1b, estiloCabelo: 'curto' },
 ];
 
 // Ajuste das cabeças reais (unidades do modelo original)
@@ -247,7 +244,6 @@ export class Body {
       const palm = new THREE.Mesh(new THREE.SphereGeometry(P.ra * 1.05, 10, 8), mat(C.maos)); palm.scale.set(0.75, 1.3, 1.05); hand.add(palm);
       const th2 = new THREE.Mesh(new THREE.CapsuleGeometry(P.ra * 0.32, P.ra * 0.6, 3, 6), mat(C.maos)); th2.position.set(-s * P.ra * 0.2, P.ra * 0.1, P.ra * 0.75); th2.rotation.x = 0.7; hand.add(th2);
       J['hand' + n] = hand;
-      if (C.garras) for (let k = -1; k <= 1; k++) { const cl = new THREE.Mesh(new THREE.BoxGeometry(0.008 * H, 0.16 * H * 0.6, 0.008 * H), mat({ cor: 0xdfe6ee, metal: 0.9, rough: 0.2 })); cl.position.set(k * P.ra * 0.6, -P.farm - 0.05 * H, P.ra * 0.6); el.add(cl); }
       if (C.escudo && n === 'L') { const shd = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * H * 0.75, 0.2 * H * 0.75, 0.03, 28), [mat(0xd32f2f), new THREE.MeshStandardMaterial({ map: emblemTex('escudo'), metalness: 0.4, roughness: 0.35 }), mat(0xd32f2f)]); shd.rotation.z = Math.PI / 2; shd.position.set(P.ra * 2.2, -P.farm * 0.5, 0); el.add(shd); }
     }
     // pernas
@@ -295,7 +291,7 @@ export class Body {
       if (def.cabeloLongo) { const back = new THREE.Mesh(new THREE.CapsuleGeometry(R * 0.9, R * 0.9, 4, 10), mat(def.cabelo)); back.position.set(0, R * 0.5, -R * 0.45); back.scale.set(1.15, 1, 0.6); head.add(back); }
     }
     const m = def.rosto.mascara;
-    if (m && (m.tipo === 'capuz' || m.tipo === 'garras')) {
+    if (m && m.tipo === 'capuz') {
       const hood = new THREE.Mesh(new THREE.SphereGeometry(R * 1.06, 16, 10, Math.PI * 0.9, Math.PI * 1.2, 0, Math.PI * 0.62), mat(m.cor));
       hood.position.y = R * 1.08; head.add(hood);
     }
@@ -328,11 +324,6 @@ export class Body {
       const helm = new THREE.Mesh(new THREE.SphereGeometry(H * 0.53, 18, 10, Math.PI * 0.82, Math.PI * 1.36, 0, Math.PI * 0.55), mat(0x1f4fbf)); helm.position.y = H * 0.58; head.add(helm);
       const star = new THREE.Mesh(new THREE.CircleGeometry(H * 0.13, 5), mat(0xffffff)); star.position.set(0, H * 0.98, H * 0.27); star.rotation.x = -0.6; head.add(star);
       for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.ConeGeometry(H * 0.06, H * 0.22, 4), mat(0xffffff)); w.position.set(s * H * 0.5, H * 0.8, 0); w.rotation.z = -s * 1.1; head.add(w); }
-    } else if (kind === 'mascara_garras') {
-      if (kid) { // tiara com "orelhas" pontudas (rosto à mostra)
-        for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.ConeGeometry(H * 0.1, H * 0.45, 4), mat(0x111111)); e.position.set(s * H * 0.32, H * 1.1, -H * 0.05); e.rotation.z = -s * 0.5; head.add(e); }
-        const band = new THREE.Mesh(new THREE.TorusGeometry(H * 0.42, H * 0.05, 6, 18), mat(0xffc400)); band.rotation.x = Math.PI / 2 - 0.25; band.position.y = H * 0.82; head.add(band);
-      } else for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.ConeGeometry(H * 0.08, H * 0.4, 4), mat(0x111111)); e.position.set(s * H * 0.3, H * 0.98, -H * 0.02); e.rotation.z = -s * 0.5; head.add(e); }
     }
   }
 
@@ -393,8 +384,16 @@ export const POSES = {
     if (tuck > 0) return lerpPose(p, { lean: 0.5, sh: [-1.2, 0.3, -1.2, -0.3], el: [-2.0, -2.0], th: [-2.0, 0.1, -2.0, -0.1], kn: [2.4, 2.4], head: [0.3, 0] }, tuck);
     return p;
   },
-  star() { // estrela: braços e pernas abertos
-    return { sh: [0, 2.6, 0, -2.6], el: [0, 0], th: [0, 0.6, 0, -0.6], kn: [0, 0], head: [0, 0] };
+  star(k = 0.5) { // estrela (rodinha): impulso lateral, abertura total no topo e pouso equilibrado
+    if (k < 0.2) {
+      const t = k / 0.2;
+      return { lean: 0.22 * t, sh: [-0.9 * t, 2.2 * t, -0.9 * t, -2.2 * t], el: [-0.25 * t, -0.25 * t], th: [-0.3 * t, 0.4 * t, 0.1 * t, -0.4 * t], kn: [0.45 * t, 0.2 * t], head: [-0.2 * t, 0] };
+    }
+    if (k > 0.78) {
+      const t = (k - 0.78) / 0.22;
+      return { lean: 0.18 * t, bob: -0.08 * Math.sin(t * Math.PI), sh: [-0.7 * t, 2.75 - 1.5 * t, -0.7 * t, -2.75 + 1.5 * t], el: [-0.45 * t, -0.45 * t], th: [-0.35 * t, 0.72 * (1 - t), -0.25 * t, -0.72 * (1 - t)], kn: [0.65 * t, 0.5 * t], head: [-0.15 * (1 - t), 0] };
+    }
+    return { lean: -0.06, sh: [0, 2.75, 0, -2.75], el: [-0.06, -0.06], th: [0, 0.72, 0, -0.72], kn: [0.05, 0.05], head: [-0.35, 0] };
   },
   climb(t) {
     const s = Math.sin(t * 9);
@@ -438,10 +437,10 @@ export const POSES = {
 // corpo articulado com a cabeça real quando é fantasia.
 export function makeBody(def, costume, assets) {
   let b;
-  const rigKey = def.id === 'arthur' ? 'arthurRig' : def.id === 'afonso' ? 'afonsoRig' : null;
-  if (def.kid && (!costume || costume === 'normal') && rigKey && assets[rigKey] && assets.clips) {
-    // corpo real com esqueleto: o Arthur usa o andar/correr feitos para ele
-    const opt = def.id === 'arthur' ? { alias: { andar: 'andarK', correr: 'correrK' }, native: ['andarK', 'correrK'] } : { native: ['danca'] };
+  const rigKey = def.rig || null;
+  if ((!costume || costume === 'normal') && rigKey && assets[rigKey] && assets.clips) {
+    // corpo real (Meshy) com esqueleto Mixamo: o Arthur usa o andar/correr feitos para ele
+    const opt = def.id === 'arthur' ? { alias: { andar: 'andarK', correr: 'correrK' }, native: ['andarK', 'correrK'] } : def.id === 'afonso' ? { native: ['danca'] } : {};
     return new RigBody(assets[rigKey], assets.clips, def, { ...opt, xbot: assets.xbot });
   }
   if (def.kid && (!costume || costume === 'normal') && def.corpo && assets[def.corpo]) b = new SkinnedBody(assets[def.corpo], def.corpo, def.altura);
@@ -479,10 +478,6 @@ function humanoid(def, assets) {
     if (def.estiloCabelo === 'longo') { const back = new THREE.Mesh(new THREE.CapsuleGeometry(HR.x * 0.85, HR.y * 0.9, 4, 12), hm); back.scale.set(1.1, 1, 0.55); back.position.set(HC.x, HC.y - HR.y * 0.35, HC.z - HR.z * 0.65); hg.add(back); }
   }
   { const g2 = new THREE.Group(); g2.position.set(HC.x, HC.y - HR.y * 1.05, HC.z); hg.add(g2); Body.prototype.addHeadwear.call(b, g2, C.chapeu, HR.y * 1.9, false); }
-  if (C.garras) for (const g of [b.hand.Left, b.hand.Right]) for (let k = -1; k <= 1; k++) {
-    const cl = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.16, 0.008), mat({ cor: 0xdfe6ee, metal: 0.9, rough: 0.2 }));
-    cl.position.set(0, -0.15, k * 0.02 + 0.03); g.add(cl);
-  }
   if (C.escudo) {
     const shd = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.03, 28), [mat(0xd32f2f), new THREE.MeshStandardMaterial({ map: emblemTex('escudo'), metalness: 0.4, roughness: 0.35 }), mat(0xd32f2f)]);
     shd.rotation.z = Math.PI / 2; shd.position.set(0.08, -0.13, 0); b.fore.Left.add(shd);
@@ -499,10 +494,6 @@ function humanWithProps(def) {
   const H = def.altura, J = b.J;
   Body.prototype.addHeadwear.call(b, J.head, C.chapeu, b.headTop, false);
   const handOff = (side) => new THREE.Vector3(Math.sin(0.16) * 0.2 * H * side, -0.2 * H, 0);
-  if (C.garras) for (const [side, bone] of [[1, J.elL], [-1, J.elR]]) for (let k = -1; k <= 1; k++) {
-    const cl = new THREE.Mesh(new THREE.BoxGeometry(0.006 * H, 0.1 * H, 0.006 * H), mat({ cor: 0xdfe6ee, metal: 0.9, rough: 0.2 }));
-    cl.position.copy(handOff(side)).add(new THREE.Vector3(0, -0.06 * H, k * 0.012 * H)); bone.add(cl);
-  }
   if (C.escudo) {
     const shd = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * H, 0.14 * H, 0.025, 28), [mat(0xd32f2f), new THREE.MeshStandardMaterial({ map: emblemTex('escudo'), metalness: 0.4, roughness: 0.35 }), mat(0xd32f2f)]);
     shd.rotation.z = Math.PI / 2; shd.position.set(Math.sin(0.16) * 0.08 * H + 0.04 * H, -0.08 * H, 0); J.elL.add(shd);

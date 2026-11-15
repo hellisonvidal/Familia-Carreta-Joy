@@ -120,7 +120,6 @@ export class XBotBody {
     const face = m && m.tipo !== 'olhos' && m.tipo !== 'capuz' ? m.cor : skin;
     const grd = g.createRadialGradient(cx, 130, 30, cx, 130, 120); grd.addColorStop(0, hex(face)); grd.addColorStop(0.85, hex(face)); grd.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = grd; g.beginPath(); g.ellipse(cx, 130, 104, 122, 0, 0, 7); g.fill();
-    if (m && m.tipo === 'garras') { g.fillStyle = hex(m.cor); g.fillRect(0, 0, 256, 128); g.fillStyle = hex(m.cor2 ?? 0x111111); g.beginPath(); g.moveTo(40, 120); g.lineTo(cx, 60); g.lineTo(216, 120); g.lineTo(200, 92); g.lineTo(cx, 30); g.lineTo(56, 92); g.fill(); }
     if (m && m.tipo === 'olhos') { g.fillStyle = hex(m.cor); g.fillRect(0, ey - 22, 256, 44); }
     if (m && m.teia) { g.strokeStyle = 'rgba(0,0,0,0.85)'; g.lineWidth = 1.5; for (let a = 0; a < 16; a++) { g.beginPath(); g.moveTo(cx, ey + 10); g.lineTo(cx + Math.cos(a / 16 * 6.28) * 200, ey + 10 + Math.sin(a / 16 * 6.28) * 200); g.stroke(); } for (let r = 14; r < 180; r += 18) { g.beginPath(); g.ellipse(cx, ey + 10, r, r * 0.8, 0, 0, 7); g.stroke(); } }
     // olhos
