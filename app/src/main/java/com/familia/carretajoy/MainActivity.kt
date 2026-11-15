@@ -117,6 +117,12 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { } }
         }
 
+        /** fecha o aplicativo pelo botão Sair do jogo */
+        @JavascriptInterface
+        fun exitApp() {
+            runOnUiThread { finishAffinity() }
+        }
+
         @JavascriptInterface
         fun checkUpdate() {
             thread {

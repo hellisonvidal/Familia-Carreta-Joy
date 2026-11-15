@@ -41,10 +41,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.55;
+scene.environmentIntensity = 0.75;
 const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 5000);
 // luz que acompanha a câmera: ilumina o rosto dos personagens (nada de personagem escuro)
-const camLight = new THREE.DirectionalLight(0xffffff, 0.9);
+const camLight = new THREE.DirectionalLight(0xffffff, 1.05);
 scene.add(camLight, camLight.target);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -111,8 +111,8 @@ async function loadModels() {
   const prog = {};
   const upd = () => { const v = Object.values(prog); const l = v.reduce((a, p) => a + p.l, 0), t = v.reduce((a, p) => a + p.t, 0) || 1; $('loadbar').style.width = `${Math.round(100 * l / t)}%`; };
   files.xbot = 'models/xbot.glb'; files.arthurRig = 'models/ArthurRig.glb'; files.afonsoRig = 'models/AfonsoRig.glb';
-  files.chavesRig = 'models/ChavesRig.glb'; files.fofaoRig = 'models/FofaoRig.glb'; files.mascaraRig = 'models/MascaraRig.glb';
-  files.aranhaRig = 'models/AranhaRig.glb'; files.capitaoRig = 'models/CapitaoRig.glb'; files.hulkRig = 'models/HulkRig.glb';
+  files.chavesRig = 'models/ChavesRig.glb'; files.fofaoRig = 'models/FofaoRig.glb'; files.chapolinRig = 'models/ChapolinRig.glb';
+  files.mascaraRig = 'models/MascaraRig.glb'; files.aranhaRig = 'models/AranhaRig.glb'; files.capitaoRig = 'models/CapitaoRig.glb'; files.hulkRig = 'models/HulkRig.glb';
   delete files.arthurBody; delete files.afonsoBody;
   for (const n of Object.keys(CLIP_INFO)) files['anim_' + n] = `anims/${n}.glb`;
   const raw = {};
@@ -131,15 +131,14 @@ async function loadModels() {
 
 // retrato para os menus
 const thumbs = {};
-function makeThumb(obj, key) {
-  const W = 192, H = 256, rt = new THREE.WebGLRenderTarget(W, H);
-  const sc = new THREE.Scene(); sc.environment = scene.environment;
-  sc.add(new THREE.HemisphereLight(0xffffff, 0x553377, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(1, 2, 3); sc.add(dl);
+const truckThumbs = {};
+function renderOffscreen(obj, W, H, camPos, camLookAt, fov = 28) {
+  const rt = new THREE.WebGLRenderTarget(W, H);
+  const sc = new THREE.Scene(); sc.environment = scene.environment; sc.environmentIntensity = 0.85;
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x553377, 2.3)); const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(1, 2, 3); sc.add(dl);
   sc.add(obj); obj.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
-  const cam = new THREE.PerspectiveCamera(28, W / H, 0.01, 100);
-  const look = new THREE.Vector3(c.x, box.min.y + s.y * 0.58, c.z);
-  cam.position.set(c.x + s.y * 0.15, look.y + s.y * 0.05, c.z + s.y * 2.3); cam.lookAt(look);
+  const cam = new THREE.PerspectiveCamera(fov, W / H, 0.05, 200);
+  cam.position.copy(camPos); cam.lookAt(camLookAt);
   renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(sc, cam);
   const px = new Uint8Array(W * H * 4);
   renderer.readRenderTargetPixels(rt, 0, 0, W, H, px); renderer.setRenderTarget(null);
@@ -147,7 +146,15 @@ function makeThumb(obj, key) {
   const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H);
   for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
   ctx.putImageData(img, 0, 0); rt.dispose(); sc.remove(obj);
-  thumbs[key] = cv.toDataURL(); return thumbs[key];
+  return cv.toDataURL();
+}
+function makeThumb(obj, key) {
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const look = new THREE.Vector3(c.x, box.min.y + s.y * 0.58, c.z);
+  const pos = new THREE.Vector3(c.x + s.y * 0.15, look.y + s.y * 0.05, c.z + s.y * 2.3);
+  thumbs[key] = renderOffscreen(obj, 192, 256, pos, look, 28);
+  return thumbs[key];
 }
 function renderThumbs() {
   for (const def of CHARACTERS) {
@@ -157,6 +164,21 @@ function renderThumbs() {
       if (b.update) { for (let k = 0; k < 3; k++) b.update(0.1, pose); } else b.apply(pose.pose);
       makeThumb(b.root, def.id);
     } catch (e) { console.warn('retrato', def.id, e); }
+  }
+  for (const v of VARIANTS) {
+    try {
+      const t = new Truck(assets.carreta, v);
+      t.setNight(false);
+      t.root.matrixAutoUpdate = true;
+      t.root.updateMatrixWorld(true);
+      const h = t.height || 4.5;
+      truckThumbs[v.id] = renderOffscreen(
+        t.root, 320, 200,
+        new THREE.Vector3(14.5, h * 0.8 + 3.0, 14.0),
+        new THREE.Vector3(0, h * 0.52, 0),
+        34
+      );
+    } catch (e) { console.warn('carreta', v.id, e); }
   }
 }
 
@@ -192,14 +214,17 @@ function buildMenu() {
   const tl = $('trucklist'); tl.innerHTML = '';
   VARIANTS.forEach(v => {
     const b = document.createElement('button'); b.className = 'card' + (save.truck === v.id ? ' sel' : '');
-    b.innerHTML = `<div class="sw" style="background:${v.id === 'arcoiris' ? 'linear-gradient(90deg,#ff3d7f,#ffc400,#00c853,#2979ff)' : v.cor}"></div><b>${v.nome}</b><small>${v.desc}</small>`;
+    const img = truckThumbs[v.id] ? `<img class="truck-img" src="${truckThumbs[v.id]}" alt="${v.nome}">` : `<div class="sw" style="background:${v.id === 'arcoiris' ? 'linear-gradient(90deg,#ff3d7f,#ffc400,#00c853,#2979ff)' : v.cor}"></div>`;
+    b.innerHTML = `${img}<b>${v.nome}</b><small>${v.desc}</small>`;
     b.onclick = () => { save.truck = v.id; persist(); music.init(); music.sfx('click'); buildMenu(); menuScene(true); };
     tl.appendChild(b);
   });
   const tm = $('timelist'); tm.innerHTML = '';
   DURATIONS.forEach(m => { const b = document.createElement('button'); b.className = 'chip' + (save.minutes === m ? ' sel' : ''); b.textContent = `${m} min`; b.onclick = () => { save.minutes = m; persist(); music.init(); music.sfx('click'); buildMenu(); }; tm.appendChild(b); });
   const c = CITIES[G.cityIdx], def = CHARACTERS.find(d => d.id === save.char) || CHARACTERS[0], v = VARIANTS.find(v => v.id === save.truck) || VARIANTS[0];
-  $('summary').innerHTML = `🏙️ <b>${c.nome}</b> ${night ? '🌙' : '☀️'} · 🧒 <b>${def.nome}</b> · 🚚 <b>${v.nome}</b> · ⏱ <b>${save.minutes} min</b>`;
+  const txt = `🏙️ <b>${c.nome}</b> ${night ? '🌙' : '☀️'} · 🧒 <b>${def.nome}</b> · 🚚 <b>${v.nome}</b> · ⏱ <b>${save.minutes} min</b>`;
+  $('summary').innerHTML = txt;
+  if ($('homeSummary')) $('homeSummary').innerHTML = txt;
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('sel', x === t));
@@ -241,8 +266,19 @@ function openConfig() {
   $('volMusic').value = s.music; $('volSfx').value = s.sfx; $('quality').value = s.quality; $('bright').value = s.bright; $('contrast').value = s.contrast; $('satur').value = s.satur;
   show('config', true);
 }
-$('btnConfig').onclick = openConfig;
+$('btnHomePlay').onclick = () => { music.init(); music.sfx('click'); show('home', false); show('menu', true); };
+$('btnHomeConfig').onclick = () => { music.init(); music.sfx('click'); openConfig(); };
+$('btnHomeExit').onclick = () => exitGame();
+$('btnMenuBack').onclick = () => { music.init(); music.sfx('click'); show('menu', false); show('home', true); };
 $('btnPauseCfg').onclick = openConfig;
+$('btnPauseExit').onclick = () => exitGame();
+function exitGame() {
+  persist();
+  if (music.ctx) try { music.ctx.suspend(); } catch (e) { }
+  if (APP && APP.exitApp) { APP.exitApp(); return; }
+  window.close();
+  toast('Pode fechar a aba para sair do jogo.', 'small');
+}
 $('volMusic').oninput = (e) => { save.settings.music = +e.target.value; music.setVolumes(save.settings.music, save.settings.sfx); };
 $('volSfx').oninput = (e) => { save.settings.sfx = +e.target.value; music.setVolumes(save.settings.music, save.settings.sfx); music.init(); music.sfx('coin'); };
 $('bright').oninput = (e) => { save.settings.bright = +e.target.value; applyLook(); };
@@ -339,7 +375,7 @@ function startCity(idx, night) {
   G.total = save.minutes * 60; G.timeLeft = G.total;
   G.phase = 'intro'; G.phaseT = 0; G.paused = false; G.freeze = false; G.dancing = false;
   G.party = null; G.escort = null; G.startedEscort = false; escortRound = 0; G.meter = 0; G.comboDance = false;
-  ['menu', 'pause', 'results', 'picker'].forEach(s => show(s, false));
+  ['home', 'menu', 'pause', 'results', 'picker'].forEach(s => show(s, false));
   $('hud').classList.remove('hidden');
   $('cityname').textContent = `${G.cityDef.nome} · 🎵 ${STYLES[G.cityDef.musica].nome}`;
   drawMinimapBase();
@@ -608,8 +644,16 @@ function rumble(strong = 0.4, weak = 0.3, ms = 120) {
 function padPress(b) {
   music.init();
   const shown = (id) => $(id).classList.contains('show');
+  if (shown('config')) { if (b === 'B' || b === 'START') { persist(); show('config', false); } return; }
+  if (shown('home')) {
+    if (b === 'A') $('btnHomePlay').click();
+    else if (b === 'X' || b === 'START') $('btnHomeConfig').click();
+    else if (b === 'Y') $('btnPlay').click();
+    return;
+  }
   if (shown('menu')) {
     if (b === 'A') $('btnPlay').click();
+    else if (b === 'B') $('btnMenuBack').click();
     else if (b === 'LEFT' || b === 'RIGHT') { G.cityIdx = (G.cityIdx + (b === 'RIGHT' ? 1 : CITIES.length - 1)) % CITIES.length; G.night = null; buildMenu(); menuScene(); music.sfx('click'); }
     else if (b === 'UP' || b === 'DOWN') { G.night = !(G.night ?? CITIES[G.cityIdx].noite); buildMenu(); menuScene(); music.sfx('click'); }
     else if (b === 'X') { const i = CHARACTERS.findIndex(d => d.id === save.char); save.char = CHARACTERS[(i + 1) % CHARACTERS.length].id; persist(); buildMenu(); music.sfx('click'); }
@@ -618,7 +662,6 @@ function padPress(b) {
     return;
   }
   if (shown('results')) { if (b === 'A') $('btnNext').click(); else if (b === 'B') $('btnResMenu').click(); else if (b === 'X') $('btnAgain').click(); return; }
-  if (shown('config')) { if (b === 'B' || b === 'START') { persist(); show('config', false); } return; }
   if (shown('picker')) { if (b === 'B' || b === 'START' || b === 'A') $('btnPickOk').click(); else if (b === 'LEFT' || b === 'RIGHT') { const i = G.actors.indexOf(G.player); switchTo(G.actors[(i + (b === 'RIGHT' ? 1 : G.actors.length - 1)) % G.actors.length]); buildPicker(); } return; }
   if (shown('pause')) { if (b === 'START' || b === 'A') togglePause(false); else if (b === 'B') $('btnMenu').click(); return; }
   if (b === 'START') { togglePause(); return; }
@@ -1026,8 +1069,9 @@ $('btnAgain').onclick = () => startCity(G.cityIdx, G.night);
 $('btnNext').onclick = () => { G.cityIdx = (G.cityIdx + 1) % CITIES.length; G.night = null; startCity(G.cityIdx, CITIES[G.cityIdx].noite); };
 $('btnResMenu').onclick = () => goMenu();
 window.onAndroidBack = () => {
-  if ($('config').classList.contains('show')) { show('config', false); return true; }
+  if ($('config').classList.contains('show')) { persist(); show('config', false); return true; }
   if ($('picker').classList.contains('show')) { show('picker', false); G.paused = false; return true; }
+  if ($('menu').classList.contains('show')) { show('menu', false); show('home', true); return true; }
   if (G.phase === 'menu' || G.phase === 'loading') return false;
   if (G.phase === 'fim') { goMenu(); return true; }
   togglePause(); return true;
@@ -1037,9 +1081,9 @@ window.onAppResume = () => { if (!G.paused && music.ctx) music.ctx.resume(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) window.onAppPause(); });
 function goMenu() {
   dance.cancel(); G.dancing = false;
-  ['results', 'pause', 'picker'].forEach(s => show(s, false));
+  ['results', 'pause', 'picker', 'menu'].forEach(s => show(s, false));
   $('hud').classList.add('hidden');
-  menuScene(true); buildMenu(); show('menu', true);
+  menuScene(true); buildMenu(); show('home', true);
 }
 
 // ---------------- loop ----------------
@@ -1119,7 +1163,7 @@ async function boot() {
   await new Promise(r => setTimeout(r, 30));
   try { renderThumbs(); } catch (e) { console.warn(e); }
   menuScene(true);
-  show('loading', false); buildMenu(); show('menu', true);
+  show('loading', false); buildMenu(); show('home', true);
   const first = () => { music.init(); if (!music.playing) { music.play(CITIES[G.cityIdx].musica); music.muffle(true); } removeEventListener('pointerdown', first); };
   addEventListener('pointerdown', first);
   requestAnimationFrame(frame);

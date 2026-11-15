@@ -19,10 +19,24 @@
   <p id="loadtxt">Carregando a carreta...</p>
 </div>
 
-<!-- menu -->
+<!-- menu inicial (Jogar / Configurações / Sair) -->
+<div id="home" class="screen">
+  <div class="home-wrap">
+    <div class="logo"><span>Carreta</span><b>JOY</b></div>
+    <div id="homeSummary" class="home-summary"></div>
+    <div class="home-actions">
+      <button id="btnHomePlay" class="big">▶ JOGAR</button>
+      <button id="btnHomeConfig" class="mid-btn">⚙️ CONFIGURAÇÕES</button>
+      <button id="btnHomeExit" class="mid-btn exit-btn">🚪 SAIR DO JOGO</button>
+    </div>
+  </div>
+</div>
+
+<!-- menu Jogar -->
 <div id="menu" class="screen">
   <div class="menu-wrap">
     <div class="menu-head">
+      <button id="btnMenuBack" class="chip">← Voltar</button>
       <div class="logo small"><span>Carreta</span><b>JOY</b></div>
       <div class="tabs">
         <button class="tab sel" data-tab="tCidade">🏙️ Cidade</button>
@@ -30,7 +44,6 @@
         <button class="tab" data-tab="tCarreta">🚚 Carreta</button>
         <button class="tab" data-tab="tTempo">⏱ Tempo</button>
       </div>
-      <button id="btnConfig" class="chip">⚙️ Ajustes</button>
     </div>
     <div class="menu-body">
       <div class="tabpage show" id="tCidade">
@@ -55,15 +68,15 @@
         <button id="btnNoite">🌙<span>NOITE</span></button>
       </div>
       <div id="summary"></div>
-      <button id="btnPlay" class="big">▶ JOGAR</button>
+      <button id="btnPlay" class="big">▶ COMEÇAR</button>
     </div>
   </div>
 </div>
 
-<!-- ajustes -->
+<!-- configurações -->
 <div id="config" class="screen modal">
   <div class="panel">
-    <h2>Ajustes</h2>
+    <h2>Configurações</h2>
     <div class="updbox">
       <b>🔄 Atualizações</b>
       <div class="row"><span id="verAtual">Versão</span><button id="btnUpd" class="chip">Verificar</button></div>
@@ -169,9 +182,10 @@
   <div class="panel">
     <h2>Pausado</h2>
     <button id="btnResume" class="big">▶ Continuar</button>
-    <button id="btnPauseCfg" class="mid-btn">⚙️ Ajustes</button>
+    <button id="btnPauseCfg" class="mid-btn">⚙️ Configurações</button>
     <button id="btnRestart" class="mid-btn">↺ Recomeçar cidade</button>
-    <button id="btnMenu" class="mid-btn">🏠 Menu</button>
+    <button id="btnMenu" class="mid-btn">🏠 Menu principal</button>
+    <button id="btnPauseExit" class="mid-btn exit-btn">🚪 Sair do jogo</button>
   </div>
 </div>
 

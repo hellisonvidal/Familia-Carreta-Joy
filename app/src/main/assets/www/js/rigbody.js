@@ -31,7 +31,7 @@ export class RigBody {
     root.traverse(o => {
       if (!o.isMesh) return;
       o.frustumCulled = false; o.castShadow = true;
-      const m = o.material; if (m) { if (m.map) m.map.anisotropy = 8; if (m.normalMap) m.normalMap.anisotropy = 4; m.metalness = 0; m.metalnessMap = null; m.roughnessMap = null; m.roughness = 0.95; m.envMapIntensity = 0.35; m.normalScale && m.normalScale.set(0.5, 0.5); m.needsUpdate = true; }
+      const m = o.material; if (m) { if (m.map) { m.map.anisotropy = 8; m.map.colorSpace = THREE.SRGBColorSpace; } if (m.normalMap) m.normalMap.anisotropy = 4; m.metalness = 0; m.metalnessMap = null; m.roughnessMap = null; m.roughness = 0.65; m.envMapIntensity = 0.72; m.normalScale && m.normalScale.set(0.8, 0.8); m.needsUpdate = true; }
     });
     // volta o menino para a pose de fábrica
     this.own.bones.forEach((b, i) => b.quaternion.copy(this.own.bindLocal[i]));
