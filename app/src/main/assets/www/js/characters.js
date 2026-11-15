@@ -126,14 +126,13 @@ export const COSTUMES = {
   afonso:   { nome: 'Roupa do Afonso', tronco: 0x1736c9, manga: 'longa', bracos: 0xb8bcc2, maos: SKIN, calca: 0x14161c, faixa: 0x1f7a52, sapatos: 0xd8263a, sola: 0xffffff },
   barril:   { nome: 'Moleque do Barril', tronco: { padrao: 'listras', a: 0xe9dcc0, b: 0xb48a5a }, manga: 'curta', bracos: SKIN, maos: SKIN, calca: { padrao: 'remendo', a: 0x8a6a3d, b: 0x6d8a3d }, sapatos: 0x5a3b22, suspensorio: 0x6b4a2a, chapeu: 'bone_xadrez' },
   bochecha: { nome: 'Bochechudo', tronco: { padrao: 'listras', a: 0xffffff, b: 0xe53935 }, manga: 'curta', bracos: SKIN, maos: SKIN, calca: 0x1e3a8a, sapatos: 0x5d4037, jardineira: 0x1e3a8a, laco: 0xffc400 },
-  kiko: { nome: 'Kiko', tronco: 0xffffff, manga: 'curta', bracos: SKIN, maos: SKIN, calca: 0x1a237e, shorts: 0x1a237e, pernasPele: SKIN, meias: 0xffffff, sapatos: 0x111111, golaMarinheiro: 0x1a237e, laco: 0xd32f2f, chapeu: 'marinheiro' },
   vermelho: { nome: 'Herói Vermelho', tronco: 0xd81e1e, manga: 'longa', bracos: 0xd81e1e, maos: 0xd81e1e, calca: 0xd81e1e, shorts: 0xffd400, sapatos: 0xffd400, emblema: 'coracao', chapeu: 'antenas', capuz: 0xd81e1e },
   caraverde:{ nome: 'Cara Verde', tronco: 0xffc400, manga: 'longa', bracos: 0xffc400, maos: 0x7ed321, calca: 0xffc400, sapatos: 0x7a4a2a, gravata: 0xe53935, chapeu: 'chapeu_amarelo' },
   teia:     { nome: 'Herói Teia', tronco: { padrao: 'teia', a: 0xd5212b, b: 0x1a1a1a }, manga: 'longa', bracos: { padrao: 'teia', a: 0xd5212b, b: 0x1a1a1a }, maos: 0xd5212b, calca: 0x1f4fbf, sapatos: 0xd5212b, emblema: 'aranha' },
   capitao:  { nome: 'Capitão Escudo', tronco: 0x1f4fbf, manga: 'longa', bracos: 0x1f4fbf, maos: 0xd32f2f, calca: 0x1f4fbf, sapatos: 0xd32f2f, emblema: 'estrela', cinto: 0x7a5a2a, escudo: true, chapeu: 'capacete', listras: true },
   gigante:  { nome: 'Gigante Verde', tronco: 0x4caf2f, manga: 'nenhuma', bracos: 0x4caf2f, maos: 0x4caf2f, calca: 0x6a2c91, shorts: 0x6a2c91, pernasPele: 0x4caf2f, sapatos: 0x4caf2f, rasgado: true },
 };
-export const KID_COSTUMES = ['normal', 'barril', 'bochecha', 'kiko', 'vermelho', 'caraverde', 'teia', 'capitao', 'gigante'];
+export const KID_COSTUMES = ['normal', 'barril', 'bochecha', 'vermelho', 'caraverde', 'teia', 'capitao', 'gigante'];
 
 // ---------- personagens ----------
 export const CHARACTERS = [
@@ -141,7 +140,6 @@ export const CHARACTERS = [
   { id: 'afonso', nome: 'Afonso', kid: true, altura: 1.18, cabeca: 'afonsoHead', corpo: 'afonsoBody', rig: 'afonsoRig', roupa: 'afonso', estilo: 1, poseInicial: true },
   { id: 'barril', nome: 'Chaves', altura: 1.64, rig: 'chavesRig', roupa: 'barril', estilo: 2, pele: 0xf1c6a3, olho: 0x6b4423, rosto: { pele: 0xf1c6a3, sardas: true, sobrancelha: 0x5a3b22 }, cabelo: 0x8a4b2a },
   { id: 'bochecha', nome: 'Fofão', altura: 1.7, rig: 'fofaoRig', roupa: 'bochecha', estilo: 3, pele: 0xf3cfb3, olho: 0x3b6e8f, rosto: { pele: 0xf3cfb3, bochechas: true, nariz: 0xff7a8a, boca: 'sorriso' }, bochechas: true, cabelo: 0x2a1a12, estiloCabelo: 'longo' },
-  { id: 'kiko', nome: 'Kiko', altura: 1.52, roupa: 'kiko', estilo: 4, pele: 0xf6d2b8, olho: 0x3b6e8f, cabecaGrande: 1.12, bochechas: true, rosto: { pele: 0xf6d2b8, bochechas: true, boca: 'sorriso', sobrancelha: 0x8a5a2a }, cabelo: 0xa0602a, estiloCabelo: 'curto' },
   { id: 'vermelho', nome: 'Chapolin', altura: 1.66, rig: 'chapolinRig', roupa: 'vermelho', estilo: 4, pele: 0xd8a27c, olho: 0x4a2e1a, rosto: { pele: 0xd8a27c, mascara: { tipo: 'capuz', cor: 0xd81e1e } } },
   { id: 'caraverde', nome: 'Máscara', altura: 1.8, rig: 'mascaraRig', roupa: 'caraverde', estilo: 5, pele: 0xe2b48c, olho: 0x2f6b2f, rosto: { pele: 0x7ed321, boca: 'dentes', sobrancelha: 0x2f5d10 }, cabecaGrande: 1.08 },
   { id: 'teia', nome: 'Homem-Aranha', altura: 1.78, rig: 'aranhaRig', roupa: 'teia', estilo: 6, pele: 0xd5212b, rosto: { pele: 0xd5212b, mascara: { tipo: 'total', cor: 0xd5212b, teia: true }, olhos: 'lente' } },
