@@ -3,6 +3,7 @@ name: APK
 on:
   push:
     branches: ['**']
+    paths-ignore: ['unity/**', '.github/workflows/unity.yml']
   workflow_dispatch:
 
 permissions:

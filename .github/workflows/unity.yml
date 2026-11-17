@@ -1,0 +1,92 @@
+name: APK Unity
+
+# Versão Unity (gráficos melhores). Fica separada da versão atual (WebView):
+# publica como "pré-lançamento" unity-vX.Y.Z, sem mexer no atualizador do jogo atual.
+on:
+  push:
+    branches: [main]
+    paths: ['unity/**', '.github/workflows/unity.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Gerar APK (Unity)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+    steps:
+      - name: Conferir licença do Unity
+        if: env.UNITY_LICENSE == '' || env.UNITY_EMAIL == '' || env.UNITY_PASSWORD == ''
+        run: |
+          echo "::error::Faltam os segredos UNITY_LICENSE, UNITY_EMAIL e UNITY_PASSWORD (Settings > Secrets and variables > Actions). Veja unity/LEIA-ME.md"
+          exit 1
+
+      - name: Liberar espaço em disco
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: true
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: unity/Library
+          key: Library-Android-${{ hashFiles('unity/Assets/**', 'unity/Packages/**', 'unity/ProjectSettings/**') }}
+          restore-keys: Library-Android-
+
+      - name: Compilar no Unity
+        uses: game-ci/unity-builder@v4
+        with:
+          projectPath: unity
+          unityVersion: 6000.0.86f1
+          targetPlatform: Android
+          androidExportType: androidPackage
+          buildName: CarretaJoy3D
+          buildMethod: CarretaJoy.EditorTools.Builder.BuildAndroid
+          allowDirtyBuild: true
+
+      - name: Ler versão
+        id: ver
+        run: echo "v=$(grep -oP 'VERSION = "\K[^"]+' unity/Assets/Scripts/Editor/Builder.cs)" >> "$GITHUB_OUTPUT"
+
+      - name: Renomear APK
+        run: |
+          f=$(find build -name '*.apk' | head -1)
+          echo "APK: $f"; ls -la "$f"
+          cp "$f" "CarretaJoy3D-v${{ steps.ver.outputs.v }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carreta-joy-unity-apk
+          path: CarretaJoy3D-*.apk
+          retention-days: 30
+
+      - name: Publicar pré-lançamento
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: unity-v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          name: Carreta Joy 3D (Unity) v${{ steps.ver.outputs.v }}
+          files: CarretaJoy3D-*.apk
+          body: |
+            Versão nova feita em **Unity** (gráficos melhores). Instala separada da versão atual, então dá para comparar as duas.
+
+            - Arthur e Afonso com os modelos em alta qualidade e animações humanoides (sem deformar)
+            - Cidade com prédios, janelas que acendem à noite, árvores, postes e praça com pista de dança
+            - Carreta original com neon, luzes coloridas no ritmo, faróis e música
+            - Sombras, brilho (bloom) e cores de cinema
+            - Subir e descer da carreta, dançar em cima, mortal, flip e pirueta
