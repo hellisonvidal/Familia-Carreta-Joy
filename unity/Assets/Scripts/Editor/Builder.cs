@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.6.0";
-        public const int VERSION_CODE = 6;
+        public const string VERSION = "0.7.0";
+        public const int VERSION_CODE = 7;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]
@@ -31,7 +31,7 @@ namespace CarretaJoy.EditorTools
             Directory.CreateDirectory("Assets/Resources/Materials");
 
             // garante que modelos e animações passaram pelas regras de importação
-            foreach (var dir in new[] { "Assets/Resources/Characters", "Assets/Resources/Animations", "Assets/Resources/Vehicles" })
+            foreach (var dir in new[] { "Assets/Resources/Characters", "Assets/Resources/Animations", "Assets/Resources/Vehicles", "Assets/Resources/People", "Assets/Resources/Traffic" })
                 if (AssetDatabase.IsValidFolder(dir))
                     foreach (var guid in AssetDatabase.FindAssets("", new[] { dir }))
                         AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(guid), ImportAssetOptions.ForceUpdate);
@@ -173,6 +173,10 @@ namespace CarretaJoy.EditorTools
             var vn = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Resources/Vehicles/Carreta_normal.png");
             if (vn != null) { v.SetTexture("_BumpMap", vn); v.EnableKeyword("_NORMALMAP"); }
             v.SetFloat("_Smoothness", 0.45f); v.SetFloat("_Metallic", 0.1f);
+            // carros da cidade (Kenney, CC0): uma textura de cores para todos
+            var tr = Mat("Transito", lit);
+            tr.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Resources/Traffic/colormap.png"));
+            tr.SetColor("_BaseColor", Color.white); tr.SetFloat("_Smoothness", 0.5f); tr.SetFloat("_Metallic", 0.15f);
             var sky = Mat("Ceu", Shader.Find("Skybox/Procedural"));
             sky.SetFloat("_SunSize", 0.04f); sky.SetFloat("_AtmosphereThickness", 0.9f); sky.SetFloat("_Exposure", 1.25f);
             AssetDatabase.SaveAssets();

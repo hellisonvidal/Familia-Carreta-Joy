@@ -142,3 +142,11 @@ jobs:
             - **Atualização por dentro do jogo** (menu inicial / Ajustes): baixa e instala sem navegador
             - Parkour e acrobacias novas (animações livres CC0 da Quaternius): rolar, deslizar, salto ninja, escalar muretas, 2ª dança; Afonso começa agachado
             - Subir e descer da carreta, dançar em cima, mortal, flip e pirueta
+            - **Novo na 0.7:** rodas da carreta girando (as da frente esterçam ao dirigir); carreta devagar para o comboio acompanhar (espera quem ficou para trás; velocidade em Ajustes)
+            - **4 carretas**: a original e 3 novas modeladas para o jogo (Neon, Tropical e Disco), com palco, caixas de som, treliça de luz e bancos
+            - **Combos**: dois botões seguidos viram ESTRELA, REVERSÃO, GIRO NO AR, MORTAL LATERAL, CHUTE VOADOR, BREAK e MOONWALK; sequências valem pontos extras
+            - **5 danças** (Gangnam, Balanço, Charleston, Dança russa, Salsa): dançando, os botões de manobra trocam o estilo
+            - **Gente na cidade**: pessoas passeando, conversando e dançando quando a carreta passa; gente sentada nos bancos da carreta
+            - **Trânsito**: 13 tipos de carro (táxi, polícia, ambulância, caminhões...) andando pelas ruas reais na mão certa
+            - Menus novos com fotos: das carretas e de cada ponto de partida (vista aérea 3D do lugar); botões de ação menores
+            - Créditos: carros Kenney (CC0), pessoas Quaternius (CC0), capturas de movimento CMU (uso livre)

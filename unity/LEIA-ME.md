@@ -33,6 +33,14 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   animações livres CC0 da Quaternius (`Assets/Resources/Animations/Livres`): rolar, deslizar, salto ninja,
   escalar mureta (parkour: PULAR de frente para um obstáculo de 0,5 a 2 m), 2ª dança, Afonso começa agachado.
 
+- **v0.7.0:** rodas da carreta girando (e esterçando ao dirigir); carreta devagar com o comboio (espera quem ficou
+  para trás; velocidade Devagar/Normal/Rápida em Ajustes); 4 carretas (original + Neon, Tropical e Disco, modeladas em
+  `tools/carretas.py`); combos de acrobacias (MORTAL+FLIP = estrela, FLIP+MORTAL = reversão, PIRUETA+PIRUETA = giro no ar,
+  ROLAR+MORTAL = mortal lateral, NINJA+FLIP = chute voador, DESLIZAR+PIRUETA = break, ROLAR+DESLIZAR = moonwalk);
+  5 danças (dançando, MORTAL/FLIP/PIRUETA/NINJA trocam o estilo); pessoas na rua e sentadas na carreta
+  (Quaternius CC0, `tools/pessoas.py`); trânsito com 13 carros (Kenney CC0); menus com fotos das carretas e
+  miniaturas 3D dos pontos de partida (`tools/pg/miniaturas.py`); acrobacias e danças da CMU (`tools/cmuanims.py`).
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 

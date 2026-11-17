@@ -14,6 +14,10 @@ namespace CarretaJoy
         public static float Sensitivity = 1f;
         public static int StartStop = 0;
         public static int StartChar = 0;
+        public static int Truck = 0;          // variação da carreta (Truck.Variants)
+        public static int TruckSpeed = 0;     // 0 devagar (a turma acompanha a pé), 1 normal, 2 rápida
+        public static readonly string[] TruckSpeedNames = { "Devagar", "Normal", "Rápida" };
+        public static float TruckSpeedValue => TruckSpeed == 0 ? 3.2f : TruckSpeed == 1 ? 5.5f : 9f;
 
         public static readonly string[] QualityNames = { "Leve", "Médio", "Alto" };
         public static readonly string[] CamNames = { "TPS", "Normal", "Perto", "Longe", "Aérea" };
@@ -29,6 +33,8 @@ namespace CarretaJoy
             Sensitivity = PlayerPrefs.GetFloat("sens", 1f);
             StartStop = PlayerPrefs.GetInt("startStop", 0);
             StartChar = PlayerPrefs.GetInt("startChar", 0);
+            Truck = PlayerPrefs.GetInt("truck", 0);
+            TruckSpeed = Mathf.Clamp(PlayerPrefs.GetInt("truckSpeed", 0), 0, 2);
         }
 
         public static void Save()
@@ -36,6 +42,7 @@ namespace CarretaJoy
             PlayerPrefs.SetFloat("music", Music); PlayerPrefs.SetInt("quality", Quality); PlayerPrefs.SetInt("fps", Fps);
             PlayerPrefs.SetInt("cam2", CamMode); PlayerPrefs.SetInt("crew", CrewMode); PlayerPrefs.SetFloat("sens", Sensitivity);
             PlayerPrefs.SetInt("startStop", StartStop); PlayerPrefs.SetInt("startChar", StartChar);
+            PlayerPrefs.SetInt("truck", Truck); PlayerPrefs.SetInt("truckSpeed", TruckSpeed);
             PlayerPrefs.Save();
         }
     }

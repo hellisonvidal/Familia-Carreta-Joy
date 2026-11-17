@@ -74,21 +74,25 @@ namespace CarretaJoy
         {
             float W = Screen.width, H = Screen.height;
             u = Mathf.Min(W, H) / 100f;
-            B["pular"].r = new Rect(W - 30 * u, H - 30 * u, 24 * u, 24 * u);
-            B["correr"].r = new Rect(W - 52 * u, H - 22 * u, 17 * u, 17 * u);
-            B["andar"].r = new Rect(W - 71 * u, H - 17 * u, 15 * u, 15 * u);
-            B["manobras"].r = new Rect(W - 49 * u, H - 42 * u, 17 * u, 17 * u);
+            // botões de ação um pouco menores (k), ancorados no canto de baixo à direita
+            float k = 0.78f;
+            Rect A(float x, float y, float sz) => new Rect(W - x * k * u, H - y * k * u, sz * k * u, sz * k * u);
+            B["pular"].r = A(30, 30, 24);
+            B["correr"].r = A(52, 22, 17);
+            B["andar"].r = A(71, 17, 15);
+            B["manobras"].r = A(49, 42, 17);
             // manobras (abrem num leque acima do botão MANOBRAS)
-            B["mortal"].r = new Rect(W - 76 * u, H - 40 * u, 14 * u, 14 * u);
-            B["flip"].r = new Rect(W - 71 * u, H - 57 * u, 14 * u, 14 * u);
-            B["pirueta"].r = new Rect(W - 54 * u, H - 62 * u, 14 * u, 14 * u);
-            B["rolar"].r = new Rect(W - 93 * u, H - 30 * u, 14 * u, 14 * u);
-            B["deslizar"].r = new Rect(W - 92 * u, H - 47 * u, 14 * u, 14 * u);
-            B["ninja"].r = new Rect(W - 87 * u, H - 64 * u, 14 * u, 14 * u);
-            B["buzina"].r = new Rect(W - 30 * u, H - 30 * u, 22 * u, 22 * u);
-            B["subir"].r = new Rect(W / 2 + 2 * u, H - 15 * u, 26 * u, 11 * u);
-            B["dirigir"].r = new Rect(W / 2 + 31 * u, H - 15 * u, 26 * u, 11 * u);
-            B["dancar"].r = new Rect(W / 2 - 28 * u, H - 15 * u, 26 * u, 11 * u);
+            B["mortal"].r = A(76, 40, 14);
+            B["flip"].r = A(71, 57, 14);
+            B["pirueta"].r = A(54, 62, 14);
+            B["rolar"].r = A(93, 30, 14);
+            B["deslizar"].r = A(92, 47, 14);
+            B["ninja"].r = A(87, 64, 14);
+            B["buzina"].r = A(30, 30, 22);
+            float bw = 22 * u, bh = 9 * u;
+            B["subir"].r = new Rect(W / 2 + 1.5f * u, H - bh - 3 * u, bw, bh);
+            B["dirigir"].r = new Rect(W / 2 + bw + 3 * u, H - bh - 3 * u, bw, bh);
+            B["dancar"].r = new Rect(W / 2 - bw - 1.5f * u, H - bh - 3 * u, bw, bh);
             B["trocar"].r = new Rect(3 * u, 13 * u, 34 * u, 9 * u);
             B["camera"].r = new Rect(3 * u, 24 * u, 22 * u, 8 * u);
             B["pausa"].r = new Rect(W - 13 * u, 3 * u, 10 * u, 9 * u);

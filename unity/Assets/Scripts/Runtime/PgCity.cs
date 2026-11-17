@@ -23,6 +23,33 @@ namespace CarretaJoy
         public Rect GroundRect => groundRect;
 
         readonly Dictionary<Vector2Int, GameObject> live = new Dictionary<Vector2Int, GameObject>();
+        // ruas dos pedaços carregados (para o trânsito e as pessoas)
+        readonly Dictionary<Vector2Int, List<PgMap.Road>> liveRoads = new Dictionary<Vector2Int, List<PgMap.Road>>();
+        readonly List<PgMap.Road> near = new List<PgMap.Road>();
+
+        /// <summary>Ruas carregadas cujo pedaço fica a menos de "radius" do ponto (para carros: só as de carro).</summary>
+        public List<PgMap.Road> RoadsNear(Vector3 p, float radius, bool cars = false)
+        {
+            near.Clear();
+            foreach (var kv in liveRoads)
+            {
+                if (DistToChunk(p, kv.Key) > radius) continue;
+                foreach (var r in kv.Value)
+                {
+                    if (r.pts == null || r.pts.Length < 2) continue;
+                    if (cars && !IsCarRoad(r)) continue;
+                    near.Add(r);
+                }
+            }
+            return near;
+        }
+
+        public static bool IsCarRoad(PgMap.Road r)
+        {
+            string t = r.type < RoadTypes.Length ? RoadTypes[r.type] : "residential";
+            if (r.unpaved || t == "footway" || t == "path" || t == "steps" || t == "cycleway" || t == "pedestrian" || t == "track") return false;
+            return r.width >= 5f;
+        }
         readonly HashSet<Vector2Int> queued = new HashSet<Vector2Int>();
         Material ground, asphalt, dirt, sidewalk, water, roofTile, roofTile2, roofFlat, trunkMat, leafMat, araucariaMat;
         readonly Dictionary<int, Material> wallMats = new Dictionary<int, Material>();
@@ -94,7 +121,7 @@ namespace CarretaJoy
                 if (want.Count > 0) BuildChunk(want[0].id);
                 var drop = new List<Vector2Int>();
                 foreach (var kv in live) if (DistToChunk(p, kv.Key) > unloadRadius) drop.Add(kv.Key);
-                foreach (var id in drop) { DestroyChunk(live[id]); live.Remove(id); }
+                foreach (var id in drop) { DestroyChunk(live[id]); live.Remove(id); liveRoads.Remove(id); }
             }
         }
 
@@ -121,6 +148,7 @@ namespace CarretaJoy
             BuildTerrainChunk(id, root.transform);
             var c = map.ReadChunk(id);
             if (c == null) return;
+            liveRoads[id] = c.roads;
             var mb = new MultiMesh();
             foreach (var r in c.roads) AddRoad(mb, r);
             foreach (var w in c.water) AddRibbon(mb, water, w.pts, w.w, 0.06f, false, 6f);

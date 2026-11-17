@@ -18,7 +18,7 @@ namespace CarretaJoy
         List<Vector3> path; float[] cum; float total;
         public float dist;
         public float speed;
-        public float cruise = 11f;
+        public float cruise = 3.5f;   // devagar: a turma a pé acompanha (ajuste no menu)
         List<float> stopList;
         public void SetStops(List<float> s) { stopList = s; if (s != null && s.Count > 0) nextStop = s[0] + 0.01f; }
         float stopTimer, nextStop;
@@ -33,8 +33,28 @@ namespace CarretaJoy
         BoxCollider body;
         bool night;
 
-        public void Build(GameObject prefab, List<Vector3> route)
+        // variações: modelo, nome no menu e as duas cores de pintura
+        public static readonly (string file, string nome, Color c1, Color c2)[] Variants = {
+            ("Carreta", "Carreta Joy (original)", Color.white, Color.white),
+            ("CarretaNeon", "Carreta Neon", new Color(0.92f, 0.12f, 0.55f), new Color(0.38f, 0.1f, 0.75f)),
+            ("CarretaTropical", "Carreta Tropical", new Color(1f, 0.78f, 0.1f), new Color(0.05f, 0.62f, 0.35f)),
+            ("CarretaDisco", "Carreta Disco", new Color(0.1f, 0.35f, 0.95f), new Color(0.94f, 0.95f, 0.98f)),
+        };
+        public int Variant { get; private set; }
+
+        // rodas que giram (e as da frente esterçam ao dirigir)
+        readonly List<Transform> wheels = new List<Transform>();
+        readonly List<Quaternion> wheelBase = new List<Quaternion>();
+        readonly List<Vector3> wheelAxis = new List<Vector3>(), wheelUp = new List<Vector3>();
+        readonly List<bool> wheelFront = new List<bool>();
+        float wheelR = 0.52f, spin, steerVis;
+        Vector3 lastPos; bool hasLast;
+        // bancos com gente sentada (posição local no teto e para onde olha)
+        public readonly List<(Vector3 pos, float yaw)> Seats = new List<(Vector3, float)>();
+
+        public void Build(GameObject prefab, List<Vector3> route, int variant = 0)
         {
+            Variant = Mathf.Clamp(variant, 0, Variants.Length - 1);
             path = route;
             cum = new float[path.Count + 1];
             for (int i = 0; i < path.Count; i++) { cum[i + 1] = cum[i] + Vector3.Distance(path[i], path[(i + 1) % path.Count]); }
@@ -54,27 +74,145 @@ namespace CarretaJoy
             m.transform.localScale *= s;
             b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
             m.transform.position += new Vector3(transform.position.x - b.center.x, transform.position.y - b.min.y, transform.position.z - b.center.z);
-            var tmat = Resources.Load<Material>("Materials/Carreta");
-            foreach (var r in rends) { r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On; if (tmat != null) r.sharedMaterial = tmat; }
             float H = b.size.y, L = Mathf.Max(b.size.x, b.size.z);
             HalfWidth = Mathf.Min(b.size.x, b.size.z) / 2f;
-            RoofY = H - 0.12f;
-            // teto da carreta (sem a cabine): de -0.86 a +0.58 do comprimento do modelo (medido no jogo antigo)
-            roofZ0 = -0.86f / 1.9f * L + 0.5f; roofZ1 = 0.58f / 1.9f * L - 0.3f;
+            headMat = Mats.Glow(new Color(1, 0.97f, 0.85f), 4f);
+            Paint(m, Variants[Variant]);
+
+            // palco: marcado no modelo (TetoA/TetoB) ou, na original, medido no jogo antigo
+            Transform ta = null, tb = null;
+            foreach (var t in m.GetComponentsInChildren<Transform>(true)) { if (t.name == "TetoA") ta = t; else if (t.name == "TetoB") tb = t; }
+            if (ta != null && tb != null)
+            {
+                Vector3 a = transform.InverseTransformPoint(ta.position), c = transform.InverseTransformPoint(tb.position);
+                RoofY = Mathf.Max(a.y, c.y) + 0.02f;
+                roofZ0 = Mathf.Min(a.z, c.z); roofZ1 = Mathf.Max(a.z, c.z);
+                HalfWidth = Mathf.Max(Mathf.Abs(a.x), Mathf.Abs(c.x)) + 0.25f;
+            }
+            else
+            {
+                RoofY = H - 0.12f;
+                // teto da carreta (sem a cabine): de -0.86 a +0.58 do comprimento do modelo (medido no jogo antigo)
+                roofZ0 = -0.86f / 1.9f * L + 0.5f; roofZ1 = 0.58f / 1.9f * L - 0.3f;
+            }
 
             body = gameObject.AddComponent<BoxCollider>();
-            body.center = new Vector3(0, H / 2f, 0); body.size = new Vector3(HalfWidth * 2, H, L);
+            body.center = new Vector3(0, RoofY / 2f, 0); body.size = new Vector3(HalfWidth * 2, RoofY, L);
             var rb = gameObject.AddComponent<Rigidbody>(); rb.isKinematic = true; rb.interpolation = RigidbodyInterpolation.None;
 
+            FindWheels(m.transform);
             Decorate(L, H);
+            Benches();
             // camada "Ignore Raycast": a câmera não bate na carreta (os meninos continuam colidindo)
             foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = 2;
             Place(0);
         }
 
+        /// <summary>Troca os materiais pelo nome das peças ("M_Pintura", "Roda_3"...).</summary>
+        void Paint(GameObject m, (string file, string nome, Color c1, Color c2) v)
+        {
+            var tmat = Resources.Load<Material>("Materials/Carreta");
+            var rubber = Mats.Lit(new Color(0.07f, 0.07f, 0.08f), 0.15f);
+            foreach (var r in m.GetComponentsInChildren<Renderer>())
+            {
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                string n = r.gameObject.name;
+                Material mat = null;
+                if (n.StartsWith("Roda")) mat = rubber;
+                else if (n.StartsWith("M_"))
+                {
+                    string k = n.Substring(2); int cut = k.IndexOfAny(new[] { '_', '.', ' ' }); if (cut > 0) k = k.Substring(0, cut);
+                    switch (k)
+                    {
+                        case "Pintura": mat = Mats.Lit(v.c1, 0.6f, 0.15f); break;
+                        case "Pintura2": mat = Mats.Lit(v.c2, 0.6f, 0.15f); break;
+                        case "Cromo": mat = Mats.Lit(new Color(0.86f, 0.87f, 0.9f), 0.88f, 1f); break;
+                        case "Preto": mat = Mats.Lit(new Color(0.05f, 0.05f, 0.055f), 0.3f); break;
+                        case "Vidro": mat = Mats.Lit(new Color(0.07f, 0.1f, 0.14f), 0.95f, 0.3f); break;
+                        case "Piso": mat = Mats.Lit(new Color(0.13f, 0.13f, 0.15f), 0.2f); break;
+                        case "Caixa": mat = Mats.Lit(new Color(0.04f, 0.04f, 0.05f), 0.25f); break;
+                        case "Madeira": mat = Mats.Lit(new Color(0.42f, 0.28f, 0.15f), 0.15f); break;
+                        case "Folha": mat = Mats.Lit(new Color(0.12f, 0.55f, 0.2f), 0.2f); break;
+                        case "Toldo": mat = Mats.Lit(new Color(0.97f, 0.97f, 0.93f), 0.3f); break;
+                        case "Farol": mat = headMat; break;
+                        case "Lanterna": mat = Mats.Glow(new Color(1f, 0.35f, 0.05f), 2.5f); break;
+                        case "Neon": case "Tela":
+                            mat = Mats.Glow(Color.cyan, 3f); neon.Add(mat); neonColor.Add(Color.cyan);
+                            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; break;
+                    }
+                }
+                r.sharedMaterial = mat != null ? mat : tmat;
+            }
+        }
+
+        void FindWheels(Transform root)
+        {
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name.StartsWith("Roda_")) wheels.Add(t);
+            if (wheels.Count == 0) return;
+            float maxZ = float.MinValue;
+            foreach (var w in wheels) maxZ = Mathf.Max(maxZ, transform.InverseTransformPoint(w.position).z);
+            var rr = wheels[0].GetComponent<Renderer>();
+            if (rr != null) wheelR = Mathf.Max(0.2f, rr.bounds.extents.y);
+            foreach (var w in wheels)
+            {
+                wheelBase.Add(w.localRotation);
+                wheelAxis.Add((Quaternion.Inverse(w.rotation) * transform.right).normalized);
+                wheelUp.Add((Quaternion.Inverse(w.rotation) * transform.up).normalized);
+                wheelFront.Add(transform.InverseTransformPoint(w.position).z > maxZ - 0.6f);
+            }
+        }
+
+        /// <summary>Gira as rodas pelo quanto a carreta andou (e vira as da frente no volante).</summary>
+        void SpinWheels(float steer)
+        {
+            if (wheels.Count == 0) return;
+            var p = transform.position;
+            if (hasLast)
+            {
+                var d = p - lastPos;
+                float fwd = Vector3.Dot(d, transform.forward);
+                if (Mathf.Abs(fwd) < 20f) spin = Mathf.Repeat(spin + fwd / wheelR * Mathf.Rad2Deg, 360f);
+            }
+            lastPos = p; hasLast = true;
+            steerVis = Mathf.MoveTowards(steerVis, steer * 28f, 120f * Time.deltaTime);
+            for (int i = 0; i < wheels.Count; i++)
+            {
+                if (wheels[i] == null) continue;
+                var q = wheelBase[i];
+                if (wheelFront[i]) q *= Quaternion.AngleAxis(steerVis, wheelUp[i]);
+                wheels[i].localRotation = q * Quaternion.AngleAxis(spin, wheelAxis[i]);
+            }
+        }
+
+        /// <summary>Bancos nas pontas do palco: a gente da cidade vai sentada olhando a festa.</summary>
+        void Benches()
+        {
+            var wood = Mats.Lit(new Color(0.45f, 0.3f, 0.17f), 0.2f);
+            float[] xs = { -HalfWidth + 0.55f, 0f, HalfWidth - 0.55f };
+            for (int row = 0; row < 2; row++)
+            {
+                float z = row == 0 ? roofZ1 - 0.45f : roofZ0 + 0.45f;
+                float yaw = row == 0 ? 180f : 0f;   // olham para o meio do palco
+                foreach (var x in xs)
+                {
+                    var bench = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    Destroy(bench.GetComponent<Collider>());
+                    bench.name = "Banco";
+                    bench.transform.SetParent(transform, false);
+                    bench.transform.localPosition = new Vector3(x, RoofY + 0.21f, z + (row == 0 ? 0.12f : -0.12f));
+                    bench.transform.localScale = new Vector3(0.62f, 0.42f, 0.45f);
+                    bench.GetComponent<MeshRenderer>().sharedMaterial = wood;
+                    Seats.Add((new Vector3(x, RoofY, z), yaw));
+                }
+            }
+        }
+
         void Decorate(float L, float H)
         {
-            // barras de neon nas bordas do teto
+            // barras de neon nas bordas do teto (as variações já vêm com neon no modelo)
+            if (Variant == 0)
+            {
             Color[] cols = { new Color(1, 0.1f, 0.6f), new Color(0.1f, 0.8f, 1), new Color(1, 0.85f, 0.1f), new Color(0.4f, 1, 0.2f), new Color(0.7f, 0.2f, 1) };
             int k = 0;
             for (float z = roofZ0; z < roofZ1 - 0.5f; z += 2.2f)
@@ -90,6 +228,7 @@ namespace CarretaJoy
                     bar.transform.localScale = new Vector3(0.12f, 0.12f, 2.0f);
                     var mr = bar.GetComponent<MeshRenderer>(); mr.sharedMaterial = mat; mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
+            }
             // luzes coloridas de verdade (iluminam a rua e os meninos)
             for (int i = 0; i < 4; i++)
             {
@@ -101,7 +240,6 @@ namespace CarretaJoy
                 lights.Add(l);
             }
             // faróis
-            headMat = Mats.Glow(new Color(1, 0.97f, 0.85f), 4f);
             for (int side = -1; side <= 1; side += 2)
             {
                 var hl = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -158,11 +296,13 @@ namespace CarretaJoy
         public System.Func<float, float, float> GroundHeight;
         float yaw;
         public float ManualSpeed => speed;
-        public Vector3 RoofSlot(int k) => ClampToRoof(new Vector3(k % 2 == 0 ? 0.55f : -0.55f, 0, Mathf.Lerp(roofZ0 + 0.6f, roofZ1 - 0.6f, (k / 2) / 4f)));
+        public Vector3 RoofSlot(int k) => ClampToRoof(new Vector3(k % 2 == 0 ? 0.55f : -0.55f, 0, Mathf.Lerp(roofZ0 + 1.4f, roofZ1 - 1.4f, (k / 2) / 4f)));
 
         /// <summary>Volante: steer -1..1, acelerador -1 (ré/freio) .. 1.</summary>
+        float lastSteer;
         public void Drive(float steer, float throttle, float dt)
         {
+            lastSteer = steer;
             if (!Manual) { Manual = true; yaw = transform.eulerAngles.y; }
             float maxF = 16f, maxR = 5f;
             if (throttle > 0.05f) speed += throttle * (speed < 0 ? 9f : 3.5f) * dt;
@@ -253,15 +393,18 @@ namespace CarretaJoy
 
         public void Tick(float dt, Vector3 player, bool playerOnTruck, float beat)
         {
-            if (Returning) { TickReturn(dt); Lights(beat); return; }
-            if (Manual) { Lights(beat); return; }
+            if (Returning) { TickReturn(dt); Lights(beat); SpinWheels(lastSteer); return; }
+            if (Manual) { Lights(beat); SpinWheels(lastSteer); return; }
             // para nos pontos de festa
             if (stopTimer > 0) { stopTimer -= dt; speed = Mathf.MoveTowards(speed, 0, 8f * dt); }
             else
             {
                 float want = cruise;
                 float dp = DistanceTo(player);
-                if (!playerOnTruck && dp < 10f) want = 2.2f;               // perto: vai devagar para dar para subir
+                if (!playerOnTruck && dp < 10f) want = Mathf.Min(want, 2.2f);   // perto: vai devagar para dar para subir
+                // comboio: espera quem ficou um pouco para trás (longe demais = foi passear, a carreta segue)
+                if (!playerOnTruck && dp > 35f && dp < 120f) want = 0;
+                else if (!playerOnTruck && dp > 22f && dp < 120f) want = Mathf.Min(want, 1.2f);
                 if (BlockedAhead(player)) want = 0;                          // não atropela ninguém
                 float ahead = Mathf.Repeat(nextStop - dist, total);
                 if (ahead < 25f) want = Mathf.Min(want, 1.5f + ahead * 0.4f);
@@ -276,6 +419,7 @@ namespace CarretaJoy
             dist += speed * dt;
             Place(dt);
             Lights(beat);
+            SpinWheels(0);
         }
 
         void Lights(float beat)

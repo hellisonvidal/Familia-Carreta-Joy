@@ -10,6 +10,11 @@ namespace CarretaJoy
         public AnimationClip idle, walk, run, dance, jump, mortal, flip, pirueta;
         // livres (Quaternius, CC0): parkour e acrobacias
         public AnimationClip air, roll, slideIn, slideLoop, slideOut, climb, ninjaIn, ninjaLoop, ninjaOut, crouch, dance2;
+        // capturas da CMU (uso livre): acrobacias dos combos e danças extras
+        public AnimationClip estrela, mortalLateral, reversao, chute, giro, breakdance, moonwalk;
+        public AnimationClip[] dances;   // estilos de dança, na ordem do botão DANÇAR
+
+        public KidClips Clone() => (KidClips)MemberwiseClone();
 
         public static AnimationClip Load(string path, string contains = null)
         {
@@ -285,24 +290,68 @@ namespace CarretaJoy
                                      new Step { clip = clips.ninjaLoop, physics = true, untilLand = true, jumpV = 8.5f, push = Mathf.Max(sp, 2.5f) },
                                      new Step { clip = clips.ninjaOut, len = clips.ninjaOut ? clips.ninjaOut.length * 0.6f : 0.4f, physics = true });
                     pts = 200; break;
+                case "estrela": case "mortal_lateral": case "reversao": case "chute": case "giro": case "break": case "moonwalk":
+                {
+                    // acrobacias dos combos (capturas da CMU)
+                    AnimationClip c = name == "estrela" ? clips.estrela : name == "mortal_lateral" ? clips.mortalLateral : name == "reversao" ? clips.reversao
+                                    : name == "chute" ? clips.chute : name == "giro" ? clips.giro : name == "break" ? clips.breakdance : clips.moonwalk;
+                    if (c == null || !Grounded) return;
+                    float spd = name == "break" || name == "moonwalk" ? 1.0f : 1.15f;
+                    BeginSteps(name, new Step { clip = c, speed = spd });
+                    pts = name == "break" ? 250 : name == "moonwalk" ? 220 : name == "giro" ? 260 : 200; break;
+                }
                 default:
+                {
                     AnimationClip c = name == "mortal" ? clips.mortal : name == "flip" ? clips.flip : clips.pirueta;
                     if (c == null) return;
                     BeginSteps(name, new Step { clip = c, speed = 1.1f });
                     pts = name == "mortal" ? 150 : name == "flip" ? 120 : 180; break;
+                }
             }
             if (Trick == null) return;
-            if (score) Game.I?.AddScore(pts, name.ToUpper() + "!");
+            if (score) Game.I?.AddScore(pts, TrickTitle(name) + "!");
+        }
+
+        public static readonly string[] DanceNames = { "Gangnam", "Balanço", "Charleston", "Dança russa", "Salsa" };
+        public int DanceStyle => danceN;
+        AnimationClip DanceClip(int i) => clips.dances != null && clips.dances.Length > 0 ? clips.dances[Mathf.Clamp(i, 0, clips.dances.Length - 1)] : i == 1 && clips.dance2 ? clips.dance2 : clips.dance;
+        int DanceCount => clips.dances != null && clips.dances.Length > 0 ? clips.dances.Length : 2;
+
+        /// <summary>DANÇAR: começa a dançar; apertando de novo troca o estilo; depois do último, para.</summary>
+        public static string TrickTitle(string n)
+        {
+            switch (n)
+            {
+                case "mortal_lateral": return "MORTAL LATERAL";
+                case "reversao": return "REVERSÃO";
+                case "chute": return "CHUTE VOADOR";
+                case "giro": return "GIRO NO AR";
+                case "break": return "BREAK";
+                case "moonwalk": return "MOONWALK";
+                default: return n.ToUpper();
+            }
         }
 
         public void ToggleDance()
         {
             if (Busy || Trick != null) return;
             StandUp();
-            // parado -> dança 1 -> dança 2 -> parado
-            if (!Dancing) { Dancing = true; danceN = 0; anim.SetDance(clips.dance); anim.RestartDance(); }
-            else if (danceN == 0 && clips.dance2 != null) { danceN = 1; anim.SetDance(clips.dance2); anim.RestartDance(); }
+            if (!Dancing) SetDanceStyle(0);
+            else if (danceN + 1 < DanceCount) SetDanceStyle(danceN + 1);
             else Dancing = false;
+        }
+
+        public void StopDance() { Dancing = false; }
+
+        /// <summary>Dança um estilo direto (combos: DANÇAR + botão de manobra).</summary>
+        public void SetDanceStyle(int i)
+        {
+            if (Busy || Trick != null) return;
+            StandUp();
+            var c = DanceClip(i);
+            if (c == null) return;
+            Dancing = true; danceN = Mathf.Clamp(i, 0, DanceCount - 1);
+            anim.SetDance(c); anim.RestartDance();
         }
 
         public void OnRootMotion(Vector3 delta)

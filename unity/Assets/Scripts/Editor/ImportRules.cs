@@ -10,9 +10,9 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public class ImportRules : AssetPostprocessor
     {
-        static bool IsChar(string p) => p.Contains("/Resources/Characters/");
+        static bool IsChar(string p) => p.Contains("/Resources/Characters/") || p.Contains("/Resources/People/");
         static bool IsAnim(string p) => p.Contains("/Resources/Animations/");
-        static bool IsVehicle(string p) => p.Contains("/Resources/Vehicles/");
+        static bool IsVehicle(string p) => p.Contains("/Resources/Vehicles/") || p.Contains("/Resources/Traffic/");
 
         static readonly string[] Loops = { "Idle", "Walk", "Run", "Danca_Gangnam", "Arthur_AndarCorrer" };
 
@@ -59,7 +59,7 @@ namespace CarretaJoy.EditorTools
             var mi = (ModelImporter)assetImporter;
             string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
             bool loop = Loops.Contains(file) || file.EndsWith("_Loop");
-            bool livre = assetPath.Contains("/Animations/Livres/");   // Quaternius (CC0): corpo virado pela orientação do esqueleto
+            bool livre = assetPath.Contains("/Animations/Livres/") || assetPath.Contains("/Animations/CMU/");   // Quaternius (CC0) e CMU: corpo virado pela orientação do esqueleto
             var clips = mi.defaultClipAnimations;
             foreach (var c in clips)
             {
@@ -96,6 +96,13 @@ namespace CarretaJoy.EditorTools
                 var a = tm.GetPlatformTextureSettings("Android");
                 a.overridden = true; a.maxTextureSize = 4096; a.format = TextureImporterFormat.ASTC_6x6;
                 tm.SetPlatformTextureSettings(a);
+                return;
+            }
+            if (assetPath.Contains("/Resources/Traffic/"))
+            {
+                // paleta de cores dos carros: pixels nítidos, sem compressão que borre as cores
+                var tt = (TextureImporter)assetImporter;
+                tt.filterMode = FilterMode.Point; tt.mipmapEnabled = false; tt.textureCompression = TextureImporterCompression.Uncompressed;
                 return;
             }
             if (!(IsChar(assetPath) || IsVehicle(assetPath))) return;

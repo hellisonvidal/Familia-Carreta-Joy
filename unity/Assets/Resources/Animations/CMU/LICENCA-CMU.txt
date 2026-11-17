@@ -1,0 +1,4 @@
+Danças e acrobacias: banco de captura de movimento da Carnegie Mellon University (mocap.cs.cmu.edu),
+versão BVH de Bruce Hahne (cgspeed). Uso livre: "CMU places no restrictions on the use of the original dataset".
+Estrela 90_02, MortalLateral 90_08, Reversao 90_11, ChuteVoador 90_05, GiroNoAr 85_01, Break 90_28,
+Moonwalk 90_32, Charleston 93_03, Russa 90_30, Salsa 60_01. Convertidos com tools/cmuanims.py.

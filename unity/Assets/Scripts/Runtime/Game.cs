@@ -17,6 +17,7 @@ namespace CarretaJoy
         Camera cam; CameraRig rig; Light sun; Volume volume; Bloom bloom; ColorAdjustments color;
         Material sky;
         PgCity city; Truck truck; Music music; TouchUI ui; MenuUI menu;
+        People people; Traffic traffic;
         public Updater updater;
         AudioSource horn;
         // turma: id do modelo, nome, altura (m)
@@ -68,11 +69,7 @@ namespace CarretaJoy
             city.Build();
             Kid.GroundHeight = city.Height;
 
-            var tgo = new GameObject("Carreta");
-            truck = tgo.AddComponent<Truck>();
-            truck.Build(Resources.Load<GameObject>("Vehicles/Carreta"), city.Ring);
-            truck.SetStops(city.StopDistances);
-            truck.GroundHeight = city.Height;
+            truck = MakeTruck(Settings.Truck);
 
             music = new GameObject("Musica").AddComponent<Music>();
             horn = gameObject.AddComponent<AudioSource>();
@@ -100,15 +97,22 @@ namespace CarretaJoy
                 ninjaOut = KidClips.Load("Animations/Livres/Ninja_Fim"),
                 crouch = KidClips.Load("Animations/Livres/Agachado_Loop"),
                 dance2 = KidClips.Load("Animations/Livres/Danca2_Loop"),
+                // capturas da CMU (uso livre): acrobacias dos combos e danças
+                estrela = KidClips.Load("Animations/CMU/Estrela"),
+                mortalLateral = KidClips.Load("Animations/CMU/MortalLateral"),
+                reversao = KidClips.Load("Animations/CMU/Reversao"),
+                chute = KidClips.Load("Animations/CMU/ChuteVoador"),
+                giro = KidClips.Load("Animations/CMU/GiroNoAr"),
+                breakdance = KidClips.Load("Animations/CMU/Break"),
+                moonwalk = KidClips.Load("Animations/CMU/Moonwalk"),
             };
-            var arthurClips = new KidClips
-            {
-                idle = common.idle, dance = common.dance, jump = common.jump, mortal = common.mortal, flip = common.flip, pirueta = common.pirueta,
-                air = common.air, roll = common.roll, slideIn = common.slideIn, slideLoop = common.slideLoop, slideOut = common.slideOut, climb = common.climb,
-                ninjaIn = common.ninjaIn, ninjaLoop = common.ninjaLoop, ninjaOut = common.ninjaOut, crouch = common.crouch, dance2 = common.dance2,
-                walk = KidClips.Load("Animations/Arthur_AndarCorrer", "Walking") ?? common.walk,
-                run = KidClips.Load("Animations/Arthur_AndarCorrer", "Running") ?? common.run,
-            };
+            var danceList = new List<AnimationClip>();
+            foreach (var dc in new[] { common.dance, common.dance2, KidClips.Load("Animations/CMU/Charleston_Loop"), KidClips.Load("Animations/CMU/Russa_Loop"), KidClips.Load("Animations/CMU/Salsa_Loop") })
+                if (dc != null) danceList.Add(dc);
+            common.dances = danceList.ToArray();
+            var arthurClips = common.Clone();
+            arthurClips.walk = KidClips.Load("Animations/Arthur_AndarCorrer", "Walking") ?? common.walk;
+            arthurClips.run = KidClips.Load("Animations/Arthur_AndarCorrer", "Running") ?? common.run;
             for (int i = 0; i < ROSTER.Length; i++)
             {
                 var r = ROSTER[i];
@@ -119,6 +123,13 @@ namespace CarretaJoy
                 SetupKidMaterials(k, r.id);
                 crew.Add(k);
             }
+
+            // gente na rua e na carreta, e carros pelas ruas
+            people = new GameObject("Pessoas").AddComponent<People>();
+            people.Init(city, truck, common.dances);
+            traffic = new GameObject("Transito").AddComponent<Traffic>();
+            traffic.Init(city, truck);
+            traffic.Blocked = (p, r) => { foreach (var c in crew) if (!c.OnTruck && (c.transform.position - p).sqrMagnitude < r * r) return true; return false; };
 
             ui = gameObject.AddComponent<TouchUI>();
             menu = gameObject.AddComponent<MenuUI>(); menu.game = this;
@@ -132,6 +143,36 @@ namespace CarretaJoy
             ApplySettings();
             menu.Open(MenuUI.Page.Main);
         }
+
+        Truck MakeTruck(int variant)
+        {
+            variant = Mathf.Clamp(variant, 0, Truck.Variants.Length - 1);
+            var prefab = Resources.Load<GameObject>("Vehicles/" + Truck.Variants[variant].file);
+            if (prefab == null) { variant = 0; prefab = Resources.Load<GameObject>("Vehicles/Carreta"); }
+            var t = new GameObject("Carreta").AddComponent<Truck>();
+            t.Build(prefab, city.Ring, variant);
+            t.SetStops(city.StopDistances);
+            t.GroundHeight = city.Height;
+            t.cruise = Settings.TruckSpeedValue;
+            return t;
+        }
+
+        /// <summary>Trocou a carreta no menu: monta a nova no lugar da antiga.</summary>
+        void RebuildTruck()
+        {
+            if (Driving) ToggleDrive(false);
+            foreach (var k in crew) k.ResetState();
+            var old = truck;
+            truck = MakeTruck(Settings.Truck);
+            foreach (var k in crew) k.truck = truck;
+            people.SetTruck(truck); traffic.SetTruck(truck);
+            truck.SetNight(night);
+            if (old != null) Destroy(old.gameObject);
+        }
+
+        public string TruckName(int i) => Truck.Variants[Mathf.Clamp(i, 0, Truck.Variants.Length - 1)].nome;
+        public int TruckCount => Truck.Variants.Length;
+        public string TruckFile(int i) => Truck.Variants[Mathf.Clamp(i, 0, Truck.Variants.Length - 1)].file;
 
         void SetupKidMaterials(Kid k, string name)
         {
@@ -169,6 +210,7 @@ namespace CarretaJoy
         /// <summary>Carreta no ponto de partida escolhido; a turma espalhada em volta, na calçada.</summary>
         void PlaceAtStart()
         {
+            if (truck.Variant != Mathf.Clamp(Settings.Truck, 0, Truck.Variants.Length - 1)) RebuildTruck();
             int s = Mathf.Clamp(Settings.StartStop, 0, Mathf.Max(0, city.StopDistancesByStop.Count - 1));
             float d = city.StopDistancesByStop.Count > 0 ? city.StopDistancesByStop[s] : 0;
             truck.StartAt(d);
@@ -203,6 +245,7 @@ namespace CarretaJoy
             city.unloadRadius = city.loadRadius + 200f;
             bloom.active = Settings.Quality > 0;
             rig.mode = Settings.CamMode;
+            if (truck != null) truck.cruise = Settings.TruckSpeedValue;
         }
 
         // ---------------- ambiente ----------------
@@ -343,6 +386,8 @@ namespace CarretaJoy
             {
                 truck.Tick(dt, truck.transform.position + truck.transform.forward * 1000f, true, music.Beat);
                 city.EnsureLoaded(truck.transform.position, false);
+                people.Tick(truck.transform.position, dt, truck.Stopped);
+                traffic.Tick(truck.transform.position, dt);
                 player.Tick(Vector3.zero, dt);
                 TickCrew(dt);
                 Lights();
@@ -371,6 +416,8 @@ namespace CarretaJoy
             city.EnsureLoaded(focus, false);
             truck.Tick(dt, player.transform.position, player.OnTruck || player.Busy || Driving, music.Beat);
             if (truck.Stopped && player.OnTruck && player.Dancing) { festaAcc += dt; if (festaAcc > 1f) { festaAcc = 0; AddScore(10, null); } }
+            people.Tick(focus, dt, truck.Stopped);
+            traffic.Tick(focus, dt);
 
             // som: mais alto perto da carreta
             float d = Vector3.Distance(cam.transform.position, truck.transform.position);
@@ -387,17 +434,13 @@ namespace CarretaJoy
             ui.B["correr"].toggled = player.Running; ui.B["andar"].toggled = !player.Running;
             if (ui.Pressed("manobras")) { tricksOpen = !tricksOpen; ui.B["manobras"].toggled = tricksOpen; }
             if (ui.Pressed("pular")) player.Jump();
-            if (ui.Pressed("mortal")) { player.DoTrick("mortal"); CrewCopy("mortal"); }
-            if (ui.Pressed("flip")) { player.DoTrick("flip"); CrewCopy("flip"); }
-            if (ui.Pressed("pirueta")) { player.DoTrick("pirueta"); CrewCopy("pirueta"); }
-            if (ui.Pressed("rolar")) { player.DoTrick("rolar"); CrewCopy("rolar"); }
-            if (ui.Pressed("deslizar")) { player.DoTrick("deslizar"); CrewCopy("deslizar"); }
-            if (ui.Pressed("ninja")) { player.DoTrick("ninja"); CrewCopy("ninja"); }
+            foreach (var b in TrickBtns) if (ui.Pressed(b)) OnTrickButton(b);
+            TickCombos();
             if (ui.Pressed("dancar"))
             {
                 player.ToggleDance();
-                if (Settings.CrewFollows) foreach (var c in crew) if (c != player && c.Dancing != player.Dancing) c.ToggleDance();
-                if (player.Dancing) AddScore(30, player.OnTruck ? "FESTA NA CARRETA!" : "DANÇA!");
+                SyncCrewDance();
+                if (player.Dancing) AddScore(30, (player.OnTruck ? "FESTA NA CARRETA! " : "DANÇA: ") + Kid.DanceNames[Mathf.Clamp(player.DanceStyle, 0, Kid.DanceNames.Length - 1)].ToUpper());
             }
             if (ui.Pressed("subir")) { if (!player.ClimbOrDescend() && !player.OnTruck) ui.ShowToast("Chegue perto da carreta!"); }
 
@@ -412,6 +455,90 @@ namespace CarretaJoy
             ui.B["dirigir"].label = "DIRIGIR";
             ui.Info = player.OnTruck ? (truck.Stopped ? "Parada de festa! Dancem!" : "Em cima da carreta!")
                                      : nearTruck ? "Toque SUBIR ou DIRIGIR" : "Explore Ponta Grossa!";
+        }
+
+        // ---------------- combos ----------------
+        static readonly string[] TrickBtns = { "mortal", "flip", "pirueta", "rolar", "deslizar", "ninja" };
+        /// <summary>Dois botões seguidos (menos de 1 s entre eles) viram uma acrobacia especial.</summary>
+        public static readonly (string a, string b, string move)[] Combos = {
+            ("mortal", "flip", "estrela"), ("flip", "mortal", "reversao"), ("pirueta", "pirueta", "giro"),
+            ("rolar", "mortal", "mortal_lateral"), ("ninja", "flip", "chute"), ("deslizar", "pirueta", "break"), ("rolar", "deslizar", "moonwalk") };
+        /// <summary>Dançando, os botões de manobra trocam o estilo (ou puxam um passo especial).</summary>
+        public static readonly (string btn, int style, string move)[] DanceCombos = {
+            ("ninja", 1, null), ("mortal", 2, null), ("flip", 3, null), ("pirueta", 4, null), ("rolar", -1, "break"), ("deslizar", -1, "moonwalk") };
+        public static readonly string[] BtnNames = { "mortal", "MORTAL", "flip", "FLIP", "pirueta", "PIRUETA", "rolar", "ROLAR", "deslizar", "DESLIZAR", "ninja", "NINJA" };
+        public static string BtnName(string id) { for (int i = 0; i < BtnNames.Length; i += 2) if (BtnNames[i] == id) return BtnNames[i + 1]; return id.ToUpper(); }
+
+        string lastBtn; float lastBtnT = -10f;
+        string pending; float pendingT; bool pendingCombo;
+        int chain; float lastTrickEnd = -10f; bool wasTrick;
+
+        void OnTrickButton(string b)
+        {
+            float now = Time.time;
+            if (player.Dancing && player.Trick == null && !player.Busy)
+            {
+                foreach (var dc in DanceCombos)
+                {
+                    if (dc.btn != b) continue;
+                    if (dc.move != null) { StartMove(dc.move, true); return; }
+                    player.SetDanceStyle(dc.style);
+                    SyncCrewDance();
+                    AddScore(80, "COMBO DE DANÇA: " + Kid.DanceNames[Mathf.Clamp(dc.style, 0, Kid.DanceNames.Length - 1)].ToUpper());
+                    return;
+                }
+            }
+            string move = b; bool combo = false;
+            if (lastBtn != null && now - lastBtnT < 1.0f)
+                foreach (var c in Combos) if (c.a == lastBtn && c.b == b) { move = c.move; combo = true; break; }
+            lastBtn = combo ? null : b; lastBtnT = now;
+            StartMove(move, combo);
+        }
+
+        void StartMove(string move, bool combo)
+        {
+            if (player.Trick != null || player.Busy)
+            {
+                // ainda na manobra anterior: guarda para emendar logo em seguida
+                if (pending == null || combo) { pending = move; pendingT = Time.time; pendingCombo = combo; }
+                return;
+            }
+            DoMove(move, combo);
+        }
+
+        void DoMove(string move, bool combo)
+        {
+            bool linked = Time.time - lastTrickEnd < 1.2f;
+            player.DoTrick(move);
+            if (player.Trick == null) return;
+            chain = linked ? chain + 1 : 1;
+            if (combo) AddScore(150 + 50 * chain, "COMBO: " + Kid.TrickTitle(move) + "!");
+            else if (chain >= 2) AddScore(40 * chain, "SEQUÊNCIA x" + chain + "!");
+            if (chain == 5) AddScore(500, "SUPER COMBO x5!");
+            CrewCopy(move);
+        }
+
+        void TickCombos()
+        {
+            bool tr = player.Trick != null;
+            if (wasTrick && !tr) lastTrickEnd = Time.time;
+            wasTrick = tr;
+            if (pending != null)
+            {
+                if (Time.time - pendingT > 1.6f) pending = null;
+                else if (!tr && !player.Busy) { var m = pending; pending = null; DoMove(m, pendingCombo); }
+            }
+        }
+
+        void SyncCrewDance()
+        {
+            if (!Settings.CrewFollows) return;
+            foreach (var c in crew)
+            {
+                if (c == player) continue;
+                if (player.Dancing) c.SetDanceStyle(player.DanceStyle);
+                else c.StopDance();
+            }
         }
 
         void TickDriving(float dt)
@@ -451,6 +578,7 @@ namespace CarretaJoy
             ui.MapHeading = Mathf.Atan2(fw.x, fw.z) * Mathf.Rad2Deg;
             ui.Dots.Clear();
             var t = truck.transform.position;
+            traffic.Dots(ui.Dots);
             ui.Dots.Add((new Vector2(t.x, t.z), new Color(1f, 0.2f, 0.8f), 3.2f));
             for (int i = 0; i < crew.Count; i++)
                 if (crew[i] != player)
