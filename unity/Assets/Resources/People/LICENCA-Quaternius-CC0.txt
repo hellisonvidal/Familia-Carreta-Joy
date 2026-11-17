@@ -1,0 +1,3 @@
+Pessoas: "Universal Base Characters" (versão Standard, gratuita) de Quaternius (quaternius.com), licença Creative Commons Zero (CC0).
+Fonte: quaternius.itch.io/universal-base-characters
+Corpo + cabelos com esqueleto Humanoid (tools/pessoas_ubc.py); roupas pintadas nas texturas (tools/roupas_ubc.py).

@@ -6,7 +6,7 @@ using UnityEngine.Playables;
 namespace CarretaJoy
 {
     /// <summary>
-    /// Gente da cidade (personagem humano da Kenney, CC0, com roupas e tons de pele sorteados):
+    /// Gente da cidade ("Universal Base Characters" da Quaternius, CC0, com roupas pintadas, tons de pele e cabelos sorteados):
     /// passeia pelas calçadas e conversa; quando a carreta passa, uns acenam, outros gritam e chamam,
     /// outros dançam e alguns nem ligam. Vai gente sentada na arquibancada da parte de trás da carreta.
     /// Só existe perto do jogador (aparece e some fora da vista).
@@ -24,8 +24,11 @@ namespace CarretaJoy
         }
 
         PgCity city; Truck truck;
-        GameObject prefab;
-        readonly List<Material> skins = new List<Material>();
+        readonly List<GameObject> prefabs = new List<GameObject>();
+        readonly List<Material> clothesM = new List<Material>(), clothesF = new List<Material>(), hairMats = new List<Material>();
+        Material eyeMat, browMat;
+        static readonly Color[] HairCols = { new Color(0.12f, 0.08f, 0.06f), new Color(0.3f, 0.18f, 0.1f), new Color(0.55f, 0.36f, 0.2f),
+                                             new Color(0.95f, 0.8f, 0.5f), new Color(0.65f, 0.25f, 0.12f), new Color(0.75f, 0.75f, 0.78f), new Color(0.06f, 0.06f, 0.07f) };
         AnimationClip walk, idle, talk, sit, wave, call;
         AnimationClip[] dances;
         AudioClip[] shouts; AudioClip claps, crowd;
@@ -38,14 +41,20 @@ namespace CarretaJoy
         public void Init(PgCity c, Truck t, AnimationClip[] danceClips)
         {
             city = c; truck = t; dances = danceClips;
-            prefab = Resources.Load<GameObject>("People/Pessoa");
+            foreach (var go in Resources.LoadAll<GameObject>("People")) if (go.name.StartsWith("Pessoa_")) prefabs.Add(go);
             var baseMat = Resources.Load<Material>("Materials/Lit");
-            foreach (var tex in Resources.LoadAll<Texture2D>("People/Peles"))
+            Material Tex(Texture2D t, Color c, float smooth)
             {
                 var m = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                m.SetTexture("_BaseMap", tex); m.SetColor("_BaseColor", Color.white); m.SetFloat("_Smoothness", 0.15f);
-                skins.Add(m);
+                if (t) m.SetTexture("_BaseMap", t); m.SetColor("_BaseColor", c); m.SetFloat("_Smoothness", smooth);
+                return m;
             }
+            foreach (var tex in Resources.LoadAll<Texture2D>("People/Roupas"))
+                (tex.name.Contains("_F_") ? clothesF : clothesM).Add(Tex(tex, Color.white, 0.2f));
+            var h1 = Resources.Load<Texture2D>("People/Cabelo_1"); var h2 = Resources.Load<Texture2D>("People/Cabelo_2");
+            foreach (var hc in HairCols) { hairMats.Add(Tex(h1, hc * 1.6f, 0.35f)); hairMats.Add(Tex(h2, hc * 1.6f, 0.35f)); }
+            eyeMat = Tex(Resources.Load<Texture2D>("People/Olho"), Color.white, 0.8f);
+            browMat = Tex(h1, new Color(0.15f, 0.1f, 0.07f), 0.2f);
             walk = KidClips.Load("Animations/Livres/Passeio_Loop") ?? KidClips.Load("Animations/Walk");
             idle = KidClips.Load("Animations/Idle");
             talk = KidClips.Load("Animations/Livres/Conversa_Loop") ?? idle;
@@ -69,7 +78,7 @@ namespace CarretaJoy
 
         void SeatRiders()
         {
-            if (truck == null || prefab == null) return;
+            if (truck == null || prefabs.Count == 0) return;
             int n = Mathf.Min(truck.Seats.Count, Settings.Quality == 0 ? 4 : 6);
             for (int i = 0; i < n; i++)
             {
@@ -86,11 +95,15 @@ namespace CarretaJoy
 
         Person Spawn(float height)
         {
-            if (prefab == null) return null;
+            if (prefabs.Count == 0) return null;
+            var prefab = prefabs[rnd.Next(prefabs.Count)];
+            bool female = prefab.name.Contains("_F_");
             var root = new GameObject("Pessoa");
             var m = Instantiate(prefab, root.transform);
             m.transform.localPosition = Vector3.zero;
-            var mat = skins.Count > 0 ? skins[rnd.Next(skins.Count)] : null;
+            var clothes = female ? clothesF : clothesM;
+            var body = clothes.Count > 0 ? clothes[rnd.Next(clothes.Count)] : null;
+            var hair = hairMats.Count > 0 ? hairMats[rnd.Next(hairMats.Count)] : null;
             // altura pela caixa das partes no mundo (o modelo vem girado do Blender)
             Bounds bb = new Bounds(root.transform.position, Vector3.zero); bool any = false;
             foreach (var smr in m.GetComponentsInChildren<SkinnedMeshRenderer>())
@@ -99,6 +112,8 @@ namespace CarretaJoy
                 smr.updateWhenOffscreen = false;
                 smr.quality = SkinQuality.Bone2;
                 smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                string pn = smr.gameObject.name;
+                var mat = pn.StartsWith("Corpo") ? body : pn.StartsWith("Cabelo") ? hair : pn.StartsWith("Olhos") ? eyeMat : pn.StartsWith("Sobr") ? browMat : body;
                 if (mat != null) smr.sharedMaterial = mat;
                 if (!any) { bb = smr.bounds; any = true; } else bb.Encapsulate(smr.bounds);
             }
