@@ -63,10 +63,13 @@ namespace CarretaJoy.EditorTools
             asset.shadowDistance = 60f;
             asset.shadowCascadeCount = 2;
             asset.mainLightShadowmapResolution = 2048;
-            asset.additionalLightsRenderingMode = LightRenderingMode.PerPixel;
             asset.maxAdditionalLightsCount = 8;
-            asset.supportsAdditionalLightShadows = false;
-            asset.supportsSoftShadows = true;
+            // no URP 17.3 estes não têm "set" público: muda direto no asset serializado
+            var so = new SerializedObject(asset);
+            SetProp(so, "m_AdditionalLightsRenderingMode", (int)LightRenderingMode.PerPixel);
+            SetProp(so, "m_AdditionalLightShadowsSupported", false);
+            SetProp(so, "m_SoftShadowsSupported", true);
+            so.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(asset);
 
             GraphicsSettings.defaultRenderPipeline = asset;
@@ -81,10 +84,18 @@ namespace CarretaJoy.EditorTools
             // configurações globais do URP (cria se faltar)
             try
             {
-                var m = typeof(UniversalRenderPipelineGlobalSettings).GetMethod("Ensure", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+                var gs = typeof(UniversalRenderPipelineAsset).Assembly.GetType("UnityEngine.Rendering.Universal.UniversalRenderPipelineGlobalSettings");
+                var m = gs?.GetMethod("Ensure", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
                 m?.Invoke(null, new object[] { true });
             }
             catch (Exception e) { Debug.LogWarning("URP global settings: " + e.Message); }
+        }
+
+        static void SetProp(SerializedObject so, string name, object v)
+        {
+            var p = so.FindProperty(name);
+            if (p == null) { Debug.LogWarning("URP: campo não encontrado " + name); return; }
+            if (v is bool b) p.boolValue = b; else p.intValue = (int)v;
         }
 
         // ---------------- materiais ----------------
