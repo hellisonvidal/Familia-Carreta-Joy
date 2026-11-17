@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.CarretaJoy" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/fundo</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28" xmlns:tools="http://schemas.android.com/tools">shortEdges</item>
+    </style>
+    <color name="fundo">#1A0B2E</color>
+</resources>

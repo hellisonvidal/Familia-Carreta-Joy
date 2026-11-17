@@ -1,0 +1,62 @@
+name: APK
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Gerar APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK
+        run: ./gradlew assembleDebug
+
+      - name: Ler versão
+        id: ver
+        run: echo "v=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> "$GITHUB_OUTPUT"
+
+      - name: Renomear APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk "CarretaJoy-v${{ steps.ver.outputs.v }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carreta-joy-apk
+          path: CarretaJoy-*.apk
+          retention-days: 30
+
+      # Push no main publica a versão (tag v + versionName) com o APK anexado
+      - name: Publicar versão
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          name: Carreta Joy v${{ steps.ver.outputs.v }}
+          files: CarretaJoy-*.apk
+          body: |
+            Jogo 3D da carreta com Arthur e Afonso. Piloto com 5 cidades: São Paulo, Rio de Janeiro, Belo Horizonte, Salvador e Curitiba.
+
+            **Instalar:** baixe o arquivo `.apk` abaixo no celular Android, abra e permita "instalar apps de fontes desconhecidas".
+            Requer Android 7.0 ou mais novo.
+
+            - 9 personagens em 3D sem distorções no teto da carreta + 4 estilos de dança do Locomotion Pack (Hip Hop, Swing, Break, Gangnam)
+            - Novos movimentos: Dash/Esquiva lateral, Slide/Agachar, Pulo Duplo, Wall Jump, Corrida de costas e drible/corte rápido
+            - Resposta mais rápida e suporte ampliado a controles PlayStation/Xbox e joysticks USB/Bluetooth (com navegação nos menus pelo analógico)
+            - Visual aprimorado das cidades (fachadas 512px, faixas de pedestre, telhados e luz noturna)
+            - Dança em conjunto na praça (jogo de ritmo) e 5 estilos musicais: funk, samba, forró, axé e eletrônico

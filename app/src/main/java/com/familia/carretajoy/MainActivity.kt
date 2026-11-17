@@ -1,0 +1,295 @@
+package com.familia.carretajoy
+
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.graphics.Color
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebViewAssetLoader
+import org.json.JSONObject
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
+
+/**
+ * O jogo é feito em three.js (WebGL) e fica dentro do APK em assets/www.
+ * O WebViewAssetLoader serve esses arquivos por https://appassets.androidplatform.net,
+ * o que permite usar módulos JavaScript e carregar os modelos 3D sem internet.
+ *
+ * Também: repassa os botões/analógicos do controle (PlayStation/Xbox) para o jogo e
+ * oferece o atualizador (verifica a última versão no GitHub, baixa e instala o APK).
+ */
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var webView: WebView
+    private var pendingApk: File? = null
+
+    companion object {
+        const val RELEASES = "https://api.github.com/repos/hellisonvidal/Familia-Carreta-Joy/releases/latest"
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        val assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+
+        webView = WebView(this).apply {
+            setBackgroundColor(Color.BLACK)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            isFocusable = true
+            isFocusableInTouchMode = true
+            webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView,
+                    request: WebResourceRequest
+                ): WebResourceResponse? = assetLoader.shouldInterceptRequest(request.url)
+            }
+            addJavascriptInterface(Bridge(), "CarretaApp")
+        }
+        setContentView(webView)
+        hideSystemBars()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                webView.evaluateJavascript("window.onAndroidBack ? window.onAndroidBack() : false") { handled ->
+                    if (handled != "true") finish()
+                }
+            }
+        })
+
+        if (savedInstanceState == null) {
+            webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
+        } else {
+            webView.restoreState(savedInstanceState)
+        }
+    }
+
+    private fun js(code: String) = runOnUiThread { webView.evaluateJavascript(code, null) }
+
+    // ---------------- ponte com o JavaScript ----------------
+    inner class Bridge {
+        @JavascriptInterface
+        fun version(): String = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+        } catch (e: Exception) { "?" }
+
+        /** temperatura da bateria em °C (para o modo economia automático) */
+        @JavascriptInterface
+        fun temperature(): Double = try {
+            val i = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+            (i?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1) / 10.0
+        } catch (e: Exception) { -1.0 }
+
+        /** plano B: abre a página da versão no navegador */
+        @JavascriptInterface
+        fun openUrl(url: String) {
+            runOnUiThread { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { } }
+        }
+
+        /** fecha o aplicativo pelo botão Sair do jogo */
+        @JavascriptInterface
+        fun exitApp() {
+            runOnUiThread { finishAffinity() }
+        }
+
+        @JavascriptInterface
+        fun checkUpdate() {
+            thread {
+                try {
+                    val con = URL(RELEASES).openConnection() as HttpURLConnection
+                    con.setRequestProperty("Accept", "application/vnd.github+json")
+                    con.setRequestProperty("User-Agent", "CarretaJoy-App")
+                    con.connectTimeout = 15000; con.readTimeout = 15000
+                    val body = con.inputStream.bufferedReader().readText()
+                    js("window.onUpdateInfo(" + JSONObject.quote(body) + ")")
+                } catch (e: Exception) {
+                    js("window.onUpdateInfo(" + JSONObject.quote(JSONObject().put("erro", e.message ?: "sem internet").toString()) + ")")
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun downloadAndInstall(url: String) {
+            thread {
+                try {
+                    val dir = File(getExternalFilesDir(null) ?: cacheDir, "updates").apply { mkdirs() }
+                    val file = File(dir, "CarretaJoy.apk")
+                    // o GitHub redireciona o download para outro servidor: segue manualmente
+                    var con = URL(url).openConnection() as HttpURLConnection
+                    var hops = 0
+                    while (true) {
+                        con.setRequestProperty("User-Agent", "CarretaJoy-App")
+                        con.instanceFollowRedirects = false
+                        con.connectTimeout = 20000; con.readTimeout = 30000
+                        val code = con.responseCode
+                        if (code in 300..399 && hops < 6) { val loc = con.getHeaderField("Location"); con.disconnect(); con = URL(URL(url), loc).openConnection() as HttpURLConnection; hops++; continue }
+                        if (code != 200) throw Exception("servidor respondeu $code")
+                        break
+                    }
+                    if (file.exists()) file.delete()
+                    val total = con.contentLength.toLong()
+                    con.inputStream.use { input ->
+                        file.outputStream().use { out ->
+                            val buf = ByteArray(64 * 1024); var done = 0L; var last = -1
+                            while (true) {
+                                val n = input.read(buf); if (n < 0) break
+                                out.write(buf, 0, n); done += n
+                                if (total > 0) { val pct = (done * 100 / total).toInt(); if (pct != last) { last = pct; js("window.onUpdateProgress($pct)") } }
+                            }
+                        }
+                    }
+                    js("window.onUpdateProgress(100)")
+                    runOnUiThread { install(file) }
+                } catch (e: Exception) {
+                    js("window.onUpdateError(" + JSONObject.quote("Falha ao baixar: " + (e.message ?: "")) + ")")
+                }
+            }
+        }
+    }
+
+    private fun install(file: File) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+            // o Android pede permissão para instalar apps deste aplicativo
+            pendingApk = file
+            js("window.onUpdateError('Permita \"Instalar apps desconhecidos\" para a Carreta Joy e volte para o jogo.')")
+            startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            return
+        }
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            js("window.onUpdateError(" + JSONObject.quote("Não consegui abrir o instalador: " + (e.message ?: "")) + ")")
+        }
+    }
+
+    // ---------------- controle de videogame / joystick ----------------
+    private var lastPadAt = 0L
+    private var lastPadSig = ""
+    private fun isPad(source: Int) =
+        (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+        (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK ||
+        (source and InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD
+
+    private fun padAxisCentered(ev: MotionEvent, axis: Int): Float {
+        val v = ev.getAxisValue(axis)
+        val range = ev.device?.getMotionRange(axis, ev.source)
+        val flat = range?.flat ?: 0.05f
+        return if (kotlin.math.abs(v) < maxOf(flat, 0.04f)) 0f else v
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        val padKey = KeyEvent.isGamepadButton(code) ||
+            code in KeyEvent.KEYCODE_BUTTON_1..KeyEvent.KEYCODE_BUTTON_16 ||
+            (isPad(event.source) && code in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_CENTER))
+        if (padKey) {
+            if (event.repeatCount == 0 && (event.action == KeyEvent.ACTION_DOWN || event.action == KeyEvent.ACTION_UP)) {
+                val name = event.device?.name?.let { JSONObject.quote(it) } ?: "null"
+                js("window.onPadKey && window.onPadKey($code, ${event.action == KeyEvent.ACTION_DOWN}, $name)")
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        if (isPad(ev.source) && ev.action == MotionEvent.ACTION_MOVE) {
+            val lt = maxOf(ev.getAxisValue(MotionEvent.AXIS_LTRIGGER), ev.getAxisValue(MotionEvent.AXIS_BRAKE))
+            val rt = maxOf(ev.getAxisValue(MotionEvent.AXIS_RTRIGGER), ev.getAxisValue(MotionEvent.AXIS_GAS), ev.getAxisValue(MotionEvent.AXIS_THROTTLE))
+            val z = padAxisCentered(ev, MotionEvent.AXIS_Z)
+            val rz = padAxisCentered(ev, MotionEvent.AXIS_RZ)
+            val axRx = padAxisCentered(ev, MotionEvent.AXIS_RX)
+            val axRy = padAxisCentered(ev, MotionEvent.AXIS_RY)
+            val useZ = maxOf(kotlin.math.abs(z), kotlin.math.abs(rz)) >= maxOf(kotlin.math.abs(axRx), kotlin.math.abs(axRy))
+            val rx = if (useZ) z else axRx
+            val ry = if (useZ) rz else axRy
+            val lx = padAxisCentered(ev, MotionEvent.AXIS_X)
+            val ly = padAxisCentered(ev, MotionEvent.AXIS_Y)
+            val hx = ev.getAxisValue(MotionEvent.AXIS_HAT_X)
+            val hy = ev.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            val sig = "${(lx * 50).toInt()},${(ly * 50).toInt()},${(rx * 50).toInt()},${(ry * 50).toInt()},${(lt * 20).toInt()},${(rt * 20).toInt()},${hx.toInt()},${hy.toInt()}"
+            val now = android.os.SystemClock.uptimeMillis()
+            if (sig != lastPadSig || now - lastPadAt > 24L) {
+                lastPadSig = sig; lastPadAt = now
+                val name = ev.device?.name?.let { JSONObject.quote(it) } ?: "null"
+                js("window.onPadAxes && window.onPadAxes($lx,$ly,$rx,$ry,$lt,$rt,$hx,$hy,$name)")
+            }
+            return true
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    // ---------------- ciclo de vida ----------------
+    private fun hideSystemBars() {
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    override fun onPause() {
+        webView.evaluateJavascript("window.onAppPause && window.onAppPause()", null)
+        webView.onPause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.onResume()
+        webView.evaluateJavascript("window.onAppResume && window.onAppResume()", null)
+        // voltou da tela de permissão: tenta instalar de novo
+        pendingApk?.let { f ->
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()) { pendingApk = null; install(f) }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
+    }
+
+    override fun onDestroy() {
+        webView.destroy()
+        super.onDestroy()
+    }
+}

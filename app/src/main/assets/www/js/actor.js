@@ -1,0 +1,561 @@
+import * as THREE from 'three';
+import { makeBody, POSES, lerpPose } from './characters.js';
+const SEED = () => Math.random() * 10;
+import { TRUCK_LEN } from './truck.js';
+
+export const DANCE_NAMES = ['Hip Hop', 'Swing', 'Break', 'Gangnam'];
+const DANCE_CLIPS = ['danca', 'danca2', 'danca3', 'danca4'];
+
+export const TRICKS = {
+  mortal:  { nome: 'MORTAL',  dur: 0.58, pts: 100 },
+  flip:    { nome: 'FLIP',    dur: 0.68, pts: 150 },
+  estrela: { nome: 'ESTRELA', dur: 0.76, pts: 90 },
+  pirueta: { nome: 'PIRUETA', dur: 0.44, pts: 70 },
+};
+const GRAV = 24;
+const ease = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const clamp01 = (t) => Math.max(0, Math.min(1, t));
+const UP = new THREE.Vector3(0, 1, 0);
+const _v = new THREE.Vector3(), _q = new THREE.Quaternion();
+
+let shadowTex = null;
+function blob() {
+  if (shadowTex) return shadowTex;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); shadowTex = new THREE.CanvasTexture(c); return shadowTex;
+}
+
+export class Actor {
+  constructor(def, assets, costume) {
+    this.def = def; this.name = def.nome; this.kid = !!def.kid;
+    this.assets = assets;
+    this.root = new THREE.Group();
+    this.body = makeBody(def, costume, assets); this.root.add(this.body.root);
+    this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: blob(), transparent: true, depthWrite: false }));
+    this.shadow.renderOrder = 1;
+    this.speedMax = def.forte > 1.5 ? 6.2 : this.kid ? 6.6 : 7.2;
+    this.jumpV = def.forte > 1.5 ? 10.5 : this.kid ? 9.4 : 9.8;
+    this.H = def.altura;
+    if (def.poseInicial && assets.afonsoFull) {
+      // modelo original agachado (pose característica)
+      const m = assets.afonsoFull.clone(true);
+      const box = new THREE.Box3().setFromObject(m), s = 0.53;
+      m.scale.setScalar(s); m.position.y = -box.min.y * s;
+      this.fullModel = m; this.root.add(m); m.visible = false;
+    }
+    this.reset();
+  }
+
+  reset() {
+    this.frame = 'world'; this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3(); this.yaw = 0;
+    this.grounded = true; this.ground = 0; this.mode = 'normal'; this.trick = null; this.queue = null; this.airTricks = [];
+    this.stumble = 0; this.invul = 0; this.airTime = 0; this.runPhase = Math.random() * 6; this.dance = null; this.standT = 0;
+    this.controlled = false; this.ai = { t: 0 }; this.onTop = null; this.lastPushT = 0;
+    this.cur = null; this.landT = 0; this.seed = this.seed ?? SEED(); this.prevYaw = 0; this.turn = 0;
+    this.dashT = 0; this.dashCd = 0; this.dashClip = 'drible'; this.dashAir = false;
+    this.slideT = 0; this.crouch = false; this.doubleJumped = false; this.dive = false;
+    this.wallHit = null; this.wallT = 0; this.cutT = 0; this._restartJumpClip = false;
+    this.danceStyle = Math.floor(this.seed) % 4;
+    if (this.fullModel) this.fullModel.visible = false;
+    this.body.rig.visible = true; this.root.visible = true;
+  }
+
+  // toca um clipe (animação capturada) ou uma pose do jogo no corpo
+  drive(dt, st) {
+    const B = this.body;
+    if (B.update) B.update(dt, st.clip ? st : { pose: st.pose });
+    else if (st.pose) B.apply(st.pose);
+  }
+  clipDur(n) { return this.body.drv ? this.body.drv.clipDur(n) : 1; }
+  setCostume(key) {
+    this.root.remove(this.body.root);
+    this.body = makeBody(this.def, key, this.assets); this.root.add(this.body.root);
+    if (this.mode === 'pose') this.body.rig.visible = false;
+  }
+
+  // posição no mundo (para câmera, distância etc.)
+  worldPos(G, out = new THREE.Vector3()) {
+    if (this.frame === 'truck') return G.truck.toWorld(this.pos, out);
+    return out.copy(this.pos);
+  }
+
+  // ---------------- comandos ----------------
+  jump(boost = 1, G = null) {
+    if (this.mode !== 'normal' || this.stumble > 0) return false;
+    // pulo na parede (wall jump) no ar encostado em prédio
+    if (!this.grounded && this.wallHit && G && G.now - this.wallT < 0.18) {
+      const w = this.wallHit; this.wallHit = null;
+      this.vel.y = this.jumpV * 1.04 * boost;
+      this.vel.x = w.nx * 7.8; this.vel.z = w.nz * 7.8;
+      this.yaw = Math.atan2(w.nx, w.nz);
+      this.doubleJumped = false; this.airTime = 0; this.crouch = false; this._restartJumpClip = true;
+      G.onEvent('walljump', this);
+      return 'wall';
+    }
+    // "tempo de coiote": ainda pode pular logo depois de sair da borda
+    const coyote = !this.grounded && this.airTime < 0.14 && this.vel.y <= 0 && this.airTricks.length === 0 && !this.trick;
+    if (this.grounded || coyote) {
+      if (this.slideT > 0) { boost = Math.max(boost, 1.16); this.slideT = 0; }
+      this.crouch = false; this.doubleJumped = false; this.dive = false;
+      this.vel.y = this.jumpV * boost; this.grounded = false; this.airTricks = []; this.airTime = 0;
+      return true;
+    }
+    // pulo duplo no ar
+    if (!this.doubleJumped && !this.trick && this.airTime > 0.08) {
+      this.doubleJumped = true; this.dive = false; this.crouch = false;
+      this.vel.y = Math.max(this.vel.y * 0.25, 0) + this.jumpV * 0.9;
+      this.airTime = 0; this._restartJumpClip = true;
+      return 'double';
+    }
+    return false;
+  }
+  startDash(G, wx = 0, wz = 0) {
+    if (this.mode !== 'normal' || this.stumble > 0 || this.dashCd > 0 || (!this.grounded && this.dashAir)) return null;
+    let dx = wx, dz = wz;
+    if (this.frame === 'truck' && (dx || dz)) {
+      const a = -G.truck.yaw, c = Math.cos(a), s = Math.sin(a);
+      const lx = dx * c + dz * s, lz = -dx * s + dz * c; dx = lx; dz = lz;
+    }
+    const len = Math.hypot(dx, dz);
+    if (len > 0.1) { dx /= len; dz /= len; }
+    else { dx = Math.sin(this.yaw); dz = Math.cos(this.yaw); }
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
+    const fwdDot = dx * fx + dz * fz, rightDot = dx * rx + dz * rz;
+    let clip = 'drible';
+    if (rightDot > 0.55) clip = 'esquivaD';
+    else if (rightDot < -0.55) clip = 'esquivaE';
+    else if (fwdDot < -0.45) clip = 'correrT';
+    else if (len > 0.1) this.yaw = Math.atan2(dx, dz);
+    const spd = this.grounded ? (this.frame === 'truck' ? 7.5 : 13.5) : 10.5;
+    this.vel.x = dx * spd; this.vel.z = dz * spd;
+    if (!this.grounded) { this.vel.y = Math.max(this.vel.y, 3.2); this.dashAir = true; }
+    this.dashT = 0.34; this.dashCd = 0.55; this.dashClip = clip;
+    this.slideT = 0; this.crouch = false; this.invul = Math.max(this.invul, 0.35);
+    return clip;
+  }
+  slideOrDance(G) {
+    if (this.mode !== 'normal' || this.stumble > 0) return null;
+    const hs = Math.hypot(this.vel.x, this.vel.z);
+    if ((this.frame === 'truck' && hs < 1.2) || G.dancing) {
+      this.danceStyle = (this.danceStyle + 1) % DANCE_CLIPS.length;
+      return { type: 'danceStyle', idx: this.danceStyle };
+    }
+    if (!this.grounded) {
+      if (this.vel.y > -12) { this.vel.y = Math.min(this.vel.y, -11.5); this.dive = true; return { type: 'dive' }; }
+      return null;
+    }
+    if (hs > 1.8 && this.slideT <= 0) {
+      const s = Math.max(hs * 1.28, 11.2), a = hs > 0.3 ? Math.atan2(this.vel.x, this.vel.z) : this.yaw;
+      this.vel.x = Math.sin(a) * s; this.vel.z = Math.cos(a) * s; this.yaw = a;
+      this.slideT = 0.52; this.crouch = false;
+      return { type: 'slide' };
+    }
+    this.crouch = !this.crouch;
+    return { type: 'crouch', on: this.crouch };
+  }
+  startTrick(type, wx = 0, wz = 0, G = null) {
+    if (this.mode !== 'normal' || this.stumble > 0) return false;
+    if (this.trick) { if (this.trick.t / this.trick.dur > 0.45) { this.queue = type; return true; } return false; }
+    if (this.grounded) {
+      if (type === 'estrela') {
+        const hs = Math.hypot(this.vel.x, this.vel.z);
+        let dx = wx, dz = wz;
+        if (this.frame === 'truck' && G && (dx || dz)) {
+          const a = -G.truck.yaw, c = Math.cos(a), s = Math.sin(a);
+          const lx = dx * c + dz * s, lz = -dx * s + dz * c; dx = lx; dz = lz;
+        }
+        let dir = Math.random() < 0.5 ? 1 : -1;
+        let moveAngle = this.yaw + (Math.PI / 2) * dir;
+        if (Math.hypot(dx, dz) > 0.1) {
+          moveAngle = Math.atan2(dx, dz);
+          const diffP = Math.abs(Math.atan2(Math.sin(moveAngle - (this.yaw + Math.PI / 2)), Math.cos(moveAngle - (this.yaw + Math.PI / 2))));
+          const diffN = Math.abs(Math.atan2(Math.sin(moveAngle - (this.yaw - Math.PI / 2)), Math.cos(moveAngle - (this.yaw - Math.PI / 2))));
+          dir = diffP <= diffN ? 1 : -1;
+          this.yaw = moveAngle - (Math.PI / 2) * dir;
+        }
+        this.trick = { type, t: 0, dur: TRICKS[type].dur, ground: true, dir, moveAngle, baseSpd: Math.max(4.6, hs * 0.95) };
+        return true;
+      }
+      this.jump();
+    }
+    if (this.airTricks.length === 0 && this.vel.y > -2.5) {
+      this.vel.y += type === 'flip' ? 2.2 : type === 'mortal' ? 1.7 : 1.1;
+    }
+    if ((type === 'mortal' || type === 'flip') && Math.hypot(this.vel.x, this.vel.z) > 0.8) {
+      this.vel.x += Math.sin(this.yaw) * 1.1;
+      this.vel.z += Math.cos(this.yaw) * 1.1;
+    }
+    this.trick = { type, t: 0, dur: TRICKS[type].dur, ground: false, dir: 1 };
+    return true;
+  }
+  danceMove(type) { this.dance = { type, t: 0, dur: type === 'mortal' ? 0.7 : 0.5 }; }
+
+  // Afonso: começa agachado e levanta quando se mexe
+  startPose() { if (!this.fullModel) return; this.mode = 'pose'; this.fullModel.visible = true; this.body.rig.visible = false; }
+  standUp(G) {
+    if (this.mode !== 'pose') return;
+    this.fullModel.visible = false; this.body.rig.visible = true; this.mode = 'stand'; this.standT = 0;
+    G.onEvent('levantou', this);
+  }
+
+  // subir na carreta pela lateral
+  canClimbTruck(G) {
+    if (this.frame !== 'world' || this.mode !== 'normal' || !this.grounded) return false;
+    const l = G.truck.toLocal(this.pos, _v);
+    return Math.abs(l.x) < G.truck.halfW + 2.2 && l.z > G.truck.roofZ[0] - 1 && l.z < G.truck.roofZ[1] + 1 && l.y < 2;
+  }
+  beginClimbTruck(G, spot) {
+    if (!this.canClimbTruck(G) && !this.forceClimb) return false;
+    this.forceClimb = false;
+    const T = G.truck, l = T.toLocal(this.pos, new THREE.Vector3());
+    const side = l.x >= 0 ? 1 : -1;
+    const z = Math.max(T.roofZ[0] + 0.6, Math.min(T.roofZ[1] - 0.6, l.z));
+    this.cFrom = l.clone(); this.cSide = new THREE.Vector3(side * (T.halfW + 0.35), Math.max(0, l.y), z);
+    this.cTop = new THREE.Vector3(side * (T.halfW + 0.35), T.roofY, z);
+    this.cTo = spot ? spot.clone() : new THREE.Vector3(side * (T.halfW - 0.5), T.roofY, z);
+    this.cSideSign = side;
+    this.frame = 'truck'; this.pos.copy(l); this.mode = 'truckclimb'; this.ct = 0; this.trick = null; this.vel.set(0, 0, 0);
+    return true;
+  }
+  beginDescend(G) {
+    if (this.frame !== 'truck' || this.mode !== 'normal') return false;
+    const T = G.truck, side = this.pos.x >= 0 ? 1 : -1;
+    this.dFrom = this.pos.clone(); this.dTo = new THREE.Vector3(side * (T.halfW + 2.2), 0, this.pos.z + 1.5); this.dSide = side;
+    this.mode = 'descend'; this.ct = 0; this.trick = null;
+    return true;
+  }
+  enterDrive(G) { this.mode = 'drive'; this.root.visible = false; this.shadow.visible = false; this.trick = null; }
+  exitDrive(G) {
+    const T = G.truck;
+    const p = T.toWorld(new THREE.Vector3(T.halfW + 1.3, 0, TRUCK_LEN / 2 - 3), new THREE.Vector3());
+    this.frame = 'world'; this.pos.copy(p); this.pos.y = G.city.groundAt(p.x, p.z, p.y + 2).h;
+    this.vel.set(0, 0, 0); this.mode = 'normal'; this.root.visible = true; this.grounded = true; this.yaw = T.yaw;
+  }
+
+  // ---------------- atualização ----------------
+  // inp = { mx, mz (direção desejada no mundo, 0..1), want (0..1) }
+  update(dt, G, inp) {
+    this.invul = Math.max(0, this.invul - dt);
+    if (this.jumpBuf > 0) this.jumpBuf -= dt;
+    this.stumble = Math.max(0, this.stumble - dt);
+    this.dashT = Math.max(0, this.dashT - dt); this.dashCd = Math.max(0, this.dashCd - dt);
+    this.slideT = Math.max(0, this.slideT - dt); this.cutT = Math.max(0, this.cutT - dt);
+    const T = G.truck;
+    if (this.mode === 'drive') { this.pos.copy(T.toWorld(_v.set(0, 2, TRUCK_LEN / 2 - 1.5))); return; }
+    if (this.mode === 'pose') {
+      if (inp && inp.want > 0.2) this.standUp(G);
+      this.place(G); this.animate(dt, G, 0); return;
+    }
+    if (this.mode === 'truckclimb') return this.updateClimbTruck(dt, G);
+    if (this.mode === 'descend') return this.updateDescend(dt, G);
+    if (this.mode === 'ledge') return this.updateLedge(dt, G);
+    if (this.mode === 'stand') { this.standT += dt; if (this.standT > 0.75) this.mode = 'normal'; }
+
+    // direção desejada (no referencial atual)
+    let mx = inp ? inp.mx : 0, mz = inp ? inp.mz : 0, want = inp ? inp.want : 0;
+    if (this.mode === 'stand' || this.stumble > 0.4 || G.freeze) want = 0;
+    if (this.frame === 'truck') { // converte direção do mundo para o referencial da carreta
+      const a = -T.yaw, c = Math.cos(a), s = Math.sin(a);
+      const lx = mx * c + mz * s, lz = -mx * s + mz * c; mx = lx; mz = lz;
+    }
+    const sp = this.speedMax * (this.boost || 1) * want * (this.frame === 'truck' ? 0.55 : 1) * (this.crouch ? 0.55 : 1);
+    const acc = this.grounded ? 56 : 20;
+    const hs0 = Math.hypot(this.vel.x, this.vel.z);
+    if (this.grounded && !this.dashT && !this.slideT && want > 0.4 && hs0 > 3.6 && this.cutT <= 0) {
+      const dot = (this.vel.x * mx + this.vel.z * mz) / hs0;
+      if (dot < -0.55) this.cutT = 0.36;
+    }
+    if (this.dashT > 0) {
+      const drag = Math.exp(-dt * 2.5);
+      this.vel.x *= drag; this.vel.z *= drag;
+    } else if (this.slideT > 0) {
+      const drag = Math.exp(-dt * 2.2);
+      this.vel.x *= drag; this.vel.z *= drag;
+    } else {
+      const tvx = mx * sp, tvz = mz * sp;
+      this.vel.x += Math.max(-acc * dt, Math.min(acc * dt, tvx - this.vel.x));
+      this.vel.z += Math.max(-acc * dt, Math.min(acc * dt, tvz - this.vel.z));
+      if (want > 0.1) { let d = Math.atan2(mx, mz) - this.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; this.yaw += d * Math.min(1, dt * 22); }
+    }
+
+    // estrela no chão: rodinha na direção do controle com as mãos tocando o chão
+    if (this.trick && this.trick.ground) {
+      const tr = this.trick, k = clamp01(tr.t / tr.dur);
+      const bell = 0.45 + 0.85 * Math.sin(k * Math.PI);
+      const spd = (tr.baseSpd || 4.8) * bell;
+      const dir = tr.dir || 1;
+      if (want > 0.2) {
+        const wantA = Math.atan2(mx, mz);
+        const curA = tr.moveAngle ?? (this.yaw + Math.PI / 2 * dir);
+        let da = wantA - curA; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+        tr.moveAngle = curA + da * Math.min(1, dt * 8);
+        this.yaw = tr.moveAngle - (Math.PI / 2) * dir;
+      }
+      const moveA = tr.moveAngle ?? (this.yaw + Math.PI / 2 * dir);
+      this.vel.x = Math.sin(moveA) * spd;
+      this.vel.z = Math.cos(moveA) * spd;
+    }
+
+    this.pos.x += this.vel.x * dt; this.pos.z += this.vel.z * dt;
+    if (!this.grounded) {
+      const gScale = (this.trick && Math.abs(this.vel.y) < 4.0) ? 0.72 : (Math.abs(this.vel.y) < 2.2 ? 0.85 : 1.0);
+      this.vel.y -= GRAV * gScale * dt;
+      this.airTime += dt;
+    }
+    this.pos.y += this.vel.y * dt;
+
+    if (this.frame === 'world') this.physicsWorld(dt, G); else this.physicsTruck(dt, G);
+    this.updateTricks(dt, G);
+    this.place(G);
+    const hs = Math.hypot(this.vel.x, this.vel.z);
+    this.animate(dt, G, hs);
+    // notas
+    if (this.frame === 'world' || true) {
+      const wp = this.worldPos(G, _v);
+      G.city.collect(wp, wp.y + this.H * 0.5, (n) => G.onEvent(n.gold ? 'estrelaDourada' : 'nota', this, n));
+    }
+  }
+
+  physicsWorld(dt, G) {
+    const C = G.city, T = G.truck;
+    // colisões com prédios, carros, quiosques...
+    const hit = C.collide(this.pos, 0.32, this.pos.y);
+    if (G.life) G.life.pushActor(this);
+    if (hit && hit.c.walk && !this.grounded && this.mode === 'normal') { this.wallHit = hit; this.wallT = G.now; }
+    if (hit && hit.c.walk && this.mode === 'normal') {
+      const ledge = C.topAt(hit.c, this.pos.x - hit.nx * 0.6, this.pos.z - hit.nz * 0.6) - this.pos.y;
+      const pushing = (this.vel.x * -hit.nx + this.vel.z * -hit.nz) > 0.5 || G.now - this.lastPushT < 0.15;
+      this.lastPushT = G.now;
+      if (pushing && ledge > 0 && (ledge < 1.15 || (!this.grounded && ledge < 2.6) || (this.grounded && ledge < 2.6 && this.climbIntent))) {
+        this.mode = 'ledge'; this.ct = 0; this.lFrom = this.pos.clone();
+        this.lTo = new THREE.Vector3(this.pos.x - hit.nx * 0.7, this.pos.y + ledge, this.pos.z - hit.nz * 0.7);
+        this.lDur = 0.2 + ledge * 0.15; this.trick = null; this.vel.set(0, 0, 0);
+        G.onEvent('escalou', this, ledge); return;
+      }
+    }
+    // carreta: lateral é parede, teto é chão
+    const l = T.toLocal(this.pos, _v);
+    const inX = Math.abs(l.x) < T.halfW + 0.3, inZ = l.z > -TRUCK_LEN / 2 && l.z < TRUCK_LEN / 2;
+    if (inX && inZ) {
+      const onRoofZ = l.z > T.roofZ[0] && l.z < T.roofZ[1];
+      if (onRoofZ && l.y >= T.roofY - 0.7 && this.vel.y <= 0.5) { // pousou no teto
+        this.frame = 'truck'; this.pos.copy(l); this.pos.y = T.roofY; this.grounded = true; this.vel.set(0, 0, 0);
+        this.land(G, null); return;
+      } else if (l.y < T.roofY - 0.7) { // empurra pra fora pela lateral
+        const pushX = (T.halfW + 0.31) * Math.sign(l.x || 1) - l.x;
+        const pushZ = l.z > 0 ? TRUCK_LEN / 2 - l.z : -TRUCK_LEN / 2 - l.z;
+        if (Math.abs(pushX) < Math.abs(pushZ)) l.x += pushX; else l.z += pushZ;
+        T.toWorld(l, this.pos); this.pos.y = this.pos.y; // altura é refeita abaixo
+      }
+    }
+    // chão
+    const g = C.groundAt(this.pos.x, this.pos.z, this.pos.y);
+    this.ground = g.h; this.onTop = g.top;
+    if (this.grounded) {
+      if (this.pos.y > g.h + 0.35) { this.grounded = false; this.vel.y = 0; this.airTricks = []; this.airTime = 0; }
+      else { this.pos.y = g.h; this.vel.y = 0; }
+      // rampa lança pra cima
+      if (g.top && g.top.ramp) this.onRamp = g.top;
+      else if (this.onRamp) { const r = this.onRamp; this.onRamp = null; if (Math.hypot(this.vel.x, this.vel.z) > 2) { this.vel.y = 12.5; this.grounded = false; this.airTricks = []; this.airTime = 0; G.onEvent('rampa', this); } }
+    } else if (this.pos.y <= g.h && this.vel.y <= 0) {
+      this.pos.y = g.h; this.grounded = true; this.vel.y = 0; this.land(G, g.top);
+    }
+    if (this.pos.y < g.h - 3) this.pos.y = g.h; // nunca cair pelo chão
+  }
+
+  physicsTruck(dt, G) {
+    const T = G.truck;
+    const inside = Math.abs(this.pos.x) < T.halfW - 0.05 && this.pos.z > T.roofZ[0] && this.pos.z < T.roofZ[1];
+    if (inside) {
+      if (this.grounded) { this.pos.y = T.roofY; this.vel.y = 0; }
+      else if (this.pos.y <= T.roofY && this.vel.y <= 0) { this.pos.y = T.roofY; this.grounded = true; this.vel.y = 0; this.land(G, null); }
+    } else {
+      // saiu do teto: passa a cair no mundo (herda a velocidade da carreta)
+      const w = T.toWorld(this.pos, new THREE.Vector3());
+      const a = T.yaw, c = Math.cos(a), s = Math.sin(a);
+      const vx = this.vel.x * c + this.vel.z * s, vz = -this.vel.x * s + this.vel.z * c;
+      this.frame = 'world'; this.pos.copy(w); this.vel.x = vx + T.vel.x; this.vel.z = vz + T.vel.z; this.yaw += T.yaw;
+      if (this.grounded) { this.grounded = false; this.vel.y = 1.5; this.airTricks = []; this.airTime = 0; }
+    }
+  }
+
+  updateTricks(dt, G) {
+    if (!this.trick) return;
+    const tr = this.trick; tr.t += dt;
+    if (tr.t >= tr.dur) {
+      if (tr.ground) G.onEvent('manobra', this, tr.type);
+      else this.airTricks.push(tr.type);
+      this.trick = null;
+      if (this.queue && !this.grounded) { const q = this.queue; this.trick = { type: q, t: 0, dur: TRICKS[q].dur, ground: false }; }
+      this.queue = null;
+    }
+  }
+
+  land(G, top) {
+    this.doubleJumped = false; this.dashAir = false; this.dive = false;
+    if (this.trick && !this.trick.ground) {
+      if (this.trick.t / this.trick.dur < 0.62) { this.trick = null; this.queue = null; this.crash(G, true); return; }
+      this.airTricks.push(this.trick.type); this.trick = null;
+    }
+    const list = this.airTricks; this.airTricks = [];
+    if (this.airTime > 0.25) this.landT = Math.min(0.3, 0.12 + this.airTime * 0.12);
+    if (this.jumpBuf > 0) { this.jumpBuf = 0; this.grounded = true; setTimeout(() => this.jump(1, G), 0); }
+    G.onEvent('pousou', this, list, top, this.airTime);
+  }
+  crash(G, fromTrick) {
+    if (this.invul > 0) return;
+    this.stumble = 1.0; this.invul = 1.5; this.trick = null; this.queue = null; this.vel.x *= 0.2; this.vel.z *= 0.2;
+    G.onEvent('tombo', this, fromTrick);
+  }
+
+  updateLedge(dt, G) {
+    this.ct += dt; const k = clamp01(this.ct / this.lDur);
+    this.pos.lerpVectors(this.lFrom, this.lTo, k); this.pos.y = this.lFrom.y + (this.lTo.y - this.lFrom.y) * Math.min(1, k * 1.4) + Math.sin(k * Math.PI) * 0.3;
+    if (k >= 1) { this.mode = 'normal'; this.grounded = true; this.vel.set(0, 0, 0); this.pos.copy(this.lTo); }
+    this.place(G); this.cur = POSES.climb(this.ct); this.drive(1 / 60, { pose: this.cur }); this.body.pivot.rotation.set(0, 0, 0);
+  }
+  updateClimbTruck(dt, G) {
+    this.ct += dt; const t = this.ct, p = this.pos, T1 = 0.25, T2 = 1.0, T3 = 1.3;
+    let face = this.cSideSign > 0 ? -Math.PI / 2 : Math.PI / 2;
+    if (t < T1) p.lerpVectors(this.cFrom, this.cSide, ease(t / T1));
+    else if (t < T2) { const k = (t - T1) / (T2 - T1); p.lerpVectors(this.cSide, this.cTop, k); }
+    else if (t < T3) { const k = (t - T2) / (T3 - T2); p.lerpVectors(this.cTop, this.cTo, ease(k)); p.y += Math.sin(k * Math.PI) * 0.5; }
+    else { this.mode = 'normal'; p.copy(this.cTo); this.grounded = true; this.vel.set(0, 0, 0); G.onEvent('subiu', this); }
+    this.yaw = face; this.place(G);
+    this.cur = t > T1 && t < T2 ? POSES.climb(t) : POSES.idle(t, this.seed); this.drive(dt, { pose: this.cur }); this.body.pivot.rotation.set(0, 0, 0);
+  }
+  updateDescend(dt, G) {
+    this.ct += dt; const D = 0.9, k = clamp01(this.ct / D), p = this.pos;
+    p.lerpVectors(this.dFrom, this.dTo, k); p.y = this.dFrom.y * (1 - k * k) + Math.sin(k * Math.PI) * 1.6;
+    this.yaw = this.dSide > 0 ? Math.PI / 2 : -Math.PI / 2;
+    this.place(G);
+    if (this.body.drv) { this.drive(dt, { clip: 'mortal', ts: this.clipDur('mortal') / D, restart: this.ct <= dt }); this.body.pivot.rotation.set(0, 0, 0); }
+    else { this.cur = POSES.air(1, 1); this.body.apply(this.cur); this.body.pivot.rotation.set(-ease(k) * Math.PI * 2, 0, 0); }
+    if (k >= 1) {
+      const w = G.truck.toWorld(this.dTo, new THREE.Vector3());
+      this.frame = 'world'; this.pos.copy(w); this.pos.y = G.city.groundAt(w.x, w.z, w.y + 1.5).h; this.yaw += G.truck.yaw;
+      this.vel.set(G.truck.vel.x, 0, G.truck.vel.z); this.mode = 'normal'; this.grounded = true;
+      this.body.pivot.rotation.set(0, 0, 0); G.onEvent('desceu', this);
+    }
+  }
+
+  place(G) {
+    if (this.frame === 'truck') {
+      G.truck.toWorld(this.pos, this.root.position);
+      _q.setFromRotationMatrix(G.truck.root.matrixWorld);
+      this.root.quaternion.copy(_q).multiply(new THREE.Quaternion().setFromAxisAngle(UP, this.yaw));
+      this.shadow.visible = false;
+    } else {
+      this.root.position.copy(this.pos);
+      this.root.quaternion.setFromAxisAngle(UP, this.yaw);
+      this.shadow.visible = this.mode !== 'drive';
+      this.shadow.position.set(this.pos.x, this.ground + 0.07, this.pos.z);
+      this.shadow.scale.setScalar(Math.max(0.35, (this.def.forte || 1) * 0.9 - (this.pos.y - this.ground) * 0.1));
+    }
+  }
+
+  animate(dt, G, hs) {
+    const B = this.body;
+    let rx = 0, ry = 0, rz = 0;
+    if (this.mode === 'pose') { this.cur = POSES.crouchStart(); this.drive(dt, { pose: this.cur }); B.pivot.rotation.set(0, 0, 0); return; }
+    if (this.mode === 'stand') { this.cur = lerpPose(POSES.crouchStart(), POSES.idle(0), ease(clamp01(this.standT / 0.7))); this.drive(dt, { pose: this.cur }); B.pivot.rotation.set(0, 0, 0); return; }
+    let pose, idle = false, danceCtx = false;
+    const tr = this.trick;
+    B.root.position.y = 0;
+    if (tr) {
+      const k = clamp01(tr.t / tr.dur), e = ease(k);
+      if (tr.type === 'mortal') { rx = -e * Math.PI * 2; pose = POSES.air(this.vel.y, Math.sin(k * Math.PI)); }
+      else if (tr.type === 'flip') { rx = e * Math.PI * 2; ry = e * Math.PI * 2; pose = POSES.air(this.vel.y, Math.sin(k * Math.PI)); }
+      else if (tr.type === 'pirueta') { ry = e * Math.PI * 2; pose = POSES.air(this.vel.y, 0.35); }
+      else {
+        const dir = tr.dir || 1;
+        rz = -e * Math.PI * 2 * dir;
+        ry = Math.sin(k * Math.PI) * 0.16 * dir;
+        pose = POSES.star(k);
+        if (tr.ground) B.root.position.y = Math.sin(k * Math.PI) * 0.065 * this.H;
+      }
+    } else if (this.stumble > 0) {
+      const k = 1 - this.stumble; rx = Math.sin(k * Math.PI) * 1.1; pose = POSES.air(-1, 0.5);
+    } else if (this.slideT > 0) {
+      pose = POSES.slide();
+    } else if (!this.grounded) pose = POSES.air(this.vel.y, 0);
+    else if (hs > 0.5) {
+      const L = this.H / 1.75; // passo proporcional à altura
+      if (hs < 3.2) { this.runPhase += dt * hs * 3.2 / L; pose = POSES.walk(this.runPhase, Math.min(1, hs / 2.2)); }
+      else { this.runPhase += dt * (5 + hs * 1.5) / Math.sqrt(L); pose = POSES.run(this.runPhase, Math.min(1, hs / 6), this.H); }
+    }
+    else if (this.crouch) {
+      pose = POSES.crouch();
+    }
+    else if (this.frame === 'truck' || (G.dancing && (!G.comboDance || this.controlled || this.comboJoin)) || G.party || this.dance) {
+      let mk = 0, mv = null;
+      if (this.dance) { this.dance.t += dt; mk = clamp01(this.dance.t / this.dance.dur); mv = this.dance.type; if (this.dance.type === 'mortal') rx = -ease(mk) * Math.PI * 2; if (mv === 'cima') ry = ease(mk) * Math.PI * 2; if (this.dance.t > this.dance.dur) this.dance = null; }
+      pose = POSES.dance(G.beat, this.def.estilo, mv === 'mortal' ? 'cima' : mv, mk);
+      if (!mv) danceCtx = true;
+      if (mv === 'cima' || mv === 'mortal') pose.bob = (pose.bob || 0) + Math.sin(mk * Math.PI) * 0.9;
+    } else { pose = POSES.idle(G.now, this.seed); idle = true; }
+    // ---- animações capturadas (Mixamo) ----
+    let clip = null, ts = 1, restart = false;
+    if (B.drv && this.mode === 'normal' && this.slideT <= 0 && !(this.crouch && hs < 0.5)) {
+      const S = this.H / 1.8;
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), rxv = -Math.cos(this.yaw), rzv = Math.sin(this.yaw);
+      const fwdDot = hs > 0.1 ? this.vel.x * fx + this.vel.z * fz : 0;
+      const rightDot = hs > 0.1 ? this.vel.x * rxv + this.vel.z * rzv : 0;
+      if (tr && !tr.ground && (tr.type === 'mortal' || tr.type === 'flip')) {
+        clip = tr.type === 'mortal' && this.airTricks.length > 0 && B.drv.clips.mortal2 ? 'mortal2' : tr.type;
+        ts = this.clipDur(clip) / tr.dur; restart = !tr.started; tr.started = true;
+      }
+      else if (!tr && this.stumble > 0) { clip = 'tombo'; ts = this.clipDur('tombo') / 1.0; restart = !this.stumbleOn; this.stumbleOn = true; }
+      else if (!tr && this.dashT > 0 && B.drv.clips[this.dashClip]) { clip = this.dashClip; ts = 1.25; restart = this.dashT > 0.31; }
+      else if (!tr && !this.grounded && (this.dive || (this.vel.y < -9.5 && this.airTime > 0.72)) && B.drv.clips.queda) { clip = 'queda'; ts = 1.1; }
+      else if (!tr && !this.grounded) { clip = 'pulo'; ts = 1.1; restart = !!this.wasGrounded || this._restartJumpClip; this._restartJumpClip = false; }
+      else if (!tr && this.grounded && this.cutT > 0 && B.drv.clips.drible) { clip = 'drible'; ts = 1.35; restart = this.cutT > 0.33; }
+      else if (!tr && this.grounded && hs > 0.5 && !G.dancing) {
+        if (rightDot > 0.65 * hs && B.drv.clips.ladoD) { clip = hs > 3.6 && B.drv.clips.esquivaD ? 'esquivaD' : 'ladoD'; ts = Math.max(0.7, hs / (1.8 * S)); }
+        else if (rightDot < -0.65 * hs && B.drv.clips.ladoE) { clip = hs > 3.6 && B.drv.clips.esquivaE ? 'esquivaE' : 'ladoE'; ts = Math.max(0.7, hs / (1.8 * S)); }
+        else if (fwdDot < -0.6 * hs && B.drv.clips.correrT) { clip = 'correrT'; ts = Math.max(0.7, hs / (4.5 * S)); }
+        else if (hs < 3.2) { clip = 'andar'; ts = Math.max(0.5, Math.min(2.2, hs / (1.45 * S))); }
+        else { clip = 'correr'; ts = Math.max(0.6, Math.min(1.7, hs / (5.2 * S))); }
+      } else if (danceCtx && this.grounded && B.drv.clips.danca) {
+        const avail = DANCE_CLIPS.filter(n => B.drv.clips[n]);
+        clip = avail[(this.danceStyle || 0) % avail.length] || 'danca';
+        ts = 1;
+      }
+      else if (idle && this.grounded && this.frame === 'world' && !this.landT) {
+        if (Math.abs(this.turn) > 2.2 && B.drv.clips.giroE && B.drv.clips.giroD) { clip = this.turn > 0 ? 'giroE' : 'giroD'; ts = 1.2; }
+        else clip = 'idle';
+      }
+    }
+    if (this.stumble <= 0) this.stumbleOn = false;
+    this.wasGrounded = this.grounded;
+    if (clip) {
+      this.drive(dt, { clip, ts, restart });
+      B.pivot.rotation.set(0, 0, 0);
+      return;
+    }
+    // aterrissagem: dobra os joelhos
+    if (this.landT > 0 && this.grounded && !tr) { this.landT -= dt; pose = lerpPose(pose, POSES.land(), Math.min(1, this.landT / 0.12)); }
+    // inclina nas curvas
+    let dy = this.yaw - this.prevYaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI; this.prevYaw = this.yaw;
+    this.turn += ((dt > 0 ? dy / dt : 0) - this.turn) * Math.min(1, dt * 6);
+    if (hs > 2 && this.grounded) pose.sway = (pose.sway || 0) - Math.max(-0.25, Math.min(0.25, this.turn * 0.05 * hs / 6));
+    // olha para a câmera quando está parado perto dela
+    if (hs < 0.5 && !tr && G.camPos && this.mode === 'normal') {
+      const wp = this.worldPos(G, new THREE.Vector3());
+      const d = G.camPos.distanceTo(wp);
+      if (d < 9) {
+        const yawW = this.frame === 'truck' ? this.yaw + G.truck.yaw : this.yaw;
+        let a = Math.atan2(G.camPos.x - wp.x, G.camPos.z - wp.z) - yawW; while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI;
+        if (Math.abs(a) < 1.8) { pose.head = [(pose.head ? pose.head[0] : 0) - 0.05, Math.max(-0.8, Math.min(0.8, a)) * 0.8, pose.head ? pose.head[2] || 0 : 0]; }
+      }
+    }
+    // transição suave entre as poses (rápida nas manobras)
+    const rate = tr && tr.ground ? 40 : (tr || !this.grounded ? 22 : 13);
+    const k = 1 - Math.exp(-dt * rate);
+    this.cur = this.cur ? lerpPose(this.cur, pose, k) : pose;
+    this.drive(dt, { pose: this.cur });
+    B.pivot.rotation.set(rx, ry, rz, 'YXZ');
+  }
+}

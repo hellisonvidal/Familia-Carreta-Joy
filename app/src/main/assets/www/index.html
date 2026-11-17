@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Carreta Joy</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- carregando -->
+<div id="loading" class="screen show">
+  <div class="logo"><span>Carreta</span><b>JOY</b></div>
+  <div class="bar"><i id="loadbar"></i></div>
+  <p id="loadtxt">Carregando a carreta...</p>
+</div>
+
+<!-- menu inicial (Jogar / Configurações / Sair) -->
+<div id="home" class="screen">
+  <div class="home-wrap">
+    <div class="logo"><span>Carreta</span><b>JOY</b></div>
+    <div id="homeSummary" class="home-summary"></div>
+    <div class="home-actions">
+      <button id="btnHomePlay" class="big">▶ JOGAR</button>
+      <button id="btnHomeConfig" class="mid-btn">⚙️ CONFIGURAÇÕES</button>
+      <button id="btnHomeExit" class="mid-btn exit-btn">🚪 SAIR DO JOGO</button>
+    </div>
+  </div>
+</div>
+
+<!-- menu Jogar -->
+<div id="menu" class="screen">
+  <div class="menu-wrap">
+    <div class="menu-head">
+      <button id="btnMenuBack" class="chip">← Voltar</button>
+      <div class="logo small"><span>Carreta</span><b>JOY</b></div>
+      <div class="tabs">
+        <button class="tab sel" data-tab="tCidade">🏙️ Cidade</button>
+        <button class="tab" data-tab="tPers">🧒 Personagem</button>
+        <button class="tab" data-tab="tCarreta">🚚 Carreta</button>
+        <button class="tab" data-tab="tTempo">⏱ Tempo</button>
+      </div>
+    </div>
+    <div class="menu-body">
+      <div class="tabpage show" id="tCidade">
+        <div id="citylist" class="grid"></div>
+      </div>
+      <div class="tabpage" id="tPers">
+        <div id="charlist" class="grid chars"></div>
+        <div id="costumeBox">
+          <div class="row"><b>Fantasia do Arthur:</b><div id="costA" class="chips"></div></div>
+          <div class="row"><b>Fantasia do Afonso:</b><div id="costB" class="chips"></div></div>
+        </div>
+      </div>
+      <div class="tabpage" id="tCarreta"><div id="trucklist" class="grid"></div></div>
+      <div class="tabpage" id="tTempo">
+        <p class="hint">Quanto tempo dura a volta da carreta pela cidade? Se você estiver com um personagem, no fim todo mundo volta para a praça inicial. Se estiver dirigindo, o jogo termina onde a carreta estiver.</p>
+        <div id="timelist" class="chips big"></div>
+      </div>
+    </div>
+    <div class="menu-foot">
+      <div class="dn" role="group" aria-label="Dia ou noite">
+        <button id="btnDia">☀️<span>DIA</span></button>
+        <button id="btnNoite">🌙<span>NOITE</span></button>
+      </div>
+      <div id="summary"></div>
+      <button id="btnPlay" class="big">▶ COMEÇAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- configurações -->
+<div id="config" class="screen modal">
+  <div class="panel">
+    <h2>Configurações</h2>
+    <div class="updbox">
+      <b>🔄 Atualizações</b>
+      <div class="row"><span id="verAtual">Versão</span><button id="btnUpd" class="chip">Verificar</button></div>
+      <div id="updStatus"></div>
+      <button id="btnUpdGo" class="big hidden">⬇ Baixar e instalar</button>
+      <div class="updlinks hidden" id="updLinks">Não instalou? <button id="btnUpdWeb">baixar pelo navegador</button></div>
+    </div>
+    <label>🎵 Música <input type="range" id="volMusic" min="0" max="1" step="0.05"></label>
+    <label>🔊 Efeitos <input type="range" id="volSfx" min="0" max="1" step="0.05"></label>
+    <label>☀️ Brilho <input type="range" id="bright" min="0.7" max="1.8" step="0.05"></label>
+    <label>◐ Contraste <input type="range" id="contrast" min="0.8" max="1.4" step="0.05"></label>
+    <label>🎨 Cores <input type="range" id="satur" min="0.7" max="1.6" step="0.05"></label>
+    <label>📱 Gráficos
+      <select id="quality"><option value="leve">Leve (celular simples)</option><option value="media">Médio (recomendado)</option><option value="alta">Alto (sombras e brilho, esquenta mais)</option></select>
+    </label>
+    <label>🎞️ Quadros por segundo
+      <select id="fpsSel"><option value="30">30 (economia, recomendado)</option><option value="60">60 (mais suave, esquenta mais)</option></select>
+    </label>
+    <label>📳 Vibrar ao tocar <input type="checkbox" id="vibrar"></label>
+    <div id="tempInfo" class="hint"></div>
+    <div id="padStatus" class="hint">🎮 Conecte um controle PlayStation/Xbox ou joystick USB/Bluetooth e aperte um botão.</div>
+    <div class="howto">
+      <b>Como jogar</b>
+      <p>🕹️ Joystick: anda para onde quiser · <b>🏃 CORRER</b> (ou <b>Shift</b>) liga/desliga a corrida · arraste a tela para girar a câmera.</p>
+      <p>Acrobacias e parkour enchem o medidor <b>COMBO</b>. Cheio, aparece <b>💃 DANÇA COMBO</b>: dance no ritmo e cada acerto vale o triplo!</p>
+      <p><b>PULAR</b> (Espaço — toque 2x para <b>Pulo Duplo</b> ou pule na parede!) · no ar/chão: <b>MORTAL</b> (Z), <b>ESTRELA</b> (X), <b>FLIP</b> (C), <b>PIRUETA</b> (B), <b>💨 DASH / ESQUIVA</b> (Ctrl ou J), <b>🥾 SLIDE / AGACHAR</b> (T ou M).</p>
+      <p>Teclas 1–4 fazem passos de dança · 5 muda o estilo de dança no teto da carreta · K centraliza a câmera!</p>
+      <p><b>SUBIR</b> (E) perto da carreta escala a lateral · <b>DESCER</b> pula do teto · <b>DIRIGIR</b> (F) assume o volante.</p>
+      <p>Na praça a carreta para: toque os botões coloridos no ritmo e todo mundo dança junto!</p>
+      <p>🎮 Controle / Joystick: analógico esquerdo anda/navega menus · direito gira câmera · A/✕ pula/pulo duplo (ou buzina) · X/▢ mortal · Y/△ flip · B/○ estrela · RT/R2 pirueta (ou acelera) · RB/R1 dash/esquiva · LT/L2 slide/agachar (ou freia) · LB/L1 subir/descer · L3 correr · R3 câmera · ▲ dirigir · ▼ dança combo/estilo · Start pausa · Select personagens.</p>
+    </div>
+    <button id="btnConfigOk" class="big">OK</button>
+  </div>
+</div>
+
+<!-- escolher personagem durante o jogo -->
+<div id="picker" class="screen modal">
+  <div class="panel wide">
+    <h2>Quem você quer controlar?</h2>
+    <div id="pickList" class="grid chars small"></div>
+    <div class="row"><b>Fantasia do Arthur:</b><div id="pCostA" class="chips"></div></div>
+    <div class="row"><b>Fantasia do Afonso:</b><div id="pCostB" class="chips"></div></div>
+    <button id="btnPickOk" class="big">Voltar ao jogo</button>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="topleft">
+    <div id="score">0</div>
+    <div id="mult" class="hidden">x2</div>
+    <div id="meter"><i id="meterFill"></i><span>COMBO</span></div>
+    <button id="btnChars" class="who">🧒 <span id="who"></span> ▾</button>
+  </div>
+  <div class="topcenter">
+    <div id="timer">10:00</div>
+    <div id="cityname"></div>
+  </div>
+  <div class="topright">
+    <canvas id="minimap" width="150" height="150"></canvas>
+    <button id="btnPause" class="round">⏸</button>
+  </div>
+  <div id="toasts"></div>
+  <div id="hint"></div>
+
+  <div id="controls">
+    <div id="joyZone"></div>
+    <div id="joy"><div id="knob"></div></div>
+    <button class="ctl runbtn" id="btnRun" data-act="run">🚶 ANDAR</button>
+    <div class="mid">
+      <button class="ctl ctx" id="btnCtx" data-act="ctx">SUBIR</button>
+      <button class="ctl ctx2" id="btnDrive" data-act="drive">🚚 DIRIGIR</button>
+      <button class="ctl ctx3 hidden" id="btnHorn" data-act="horn">📯 BUZINA</button>
+      <button class="ctl ctx4 hidden" id="btnParty" data-act="party">💃 FESTA</button>
+      <button class="ctl ctx4 pulse hidden" id="btnCombo" data-act="combo">💃 DANÇA COMBO</button>
+    </div>
+    <div class="right" id="trickPad">
+      <button class="ctl trick t1" data-act="mortal">MORTAL</button>
+      <button class="ctl trick t2" data-act="flip">FLIP</button>
+      <button class="ctl trick t3" data-act="estrela">ESTRELA</button>
+      <button class="ctl trick t4" data-act="pirueta">PIRUETA</button>
+      <button class="ctl trick t5" id="btnDash" data-act="dash">💨 DASH</button>
+      <button class="ctl trick t6" id="btnSlide" data-act="slide">🥾 SLIDE</button>
+      <button class="ctl jump" data-act="jump">PULAR</button>
+    </div>
+    <div class="right hidden" id="drivePad">
+      <button class="ctl pedal brake" data-hold="brake">▼<small>RÉ/FREIO</small></button>
+      <button class="ctl pedal gas" data-hold="gas">▲<small>ACELERAR</small></button>
+    </div>
+  </div>
+</div>
+
+<!-- dança -->
+<div id="dance">
+  <div class="dtitle">💃 HORA DA DANÇA! 🕺</div>
+  <div class="dinfo"></div>
+  <div class="djudge"></div>
+  <div class="dlanes"><div class="dline"></div></div>
+  <div class="dpads"></div>
+</div>
+
+<div id="fade"></div>
+
+<!-- pausa -->
+<div id="pause" class="screen modal">
+  <div class="panel">
+    <h2>Pausado</h2>
+    <button id="btnResume" class="big">▶ Continuar</button>
+    <button id="btnPauseCfg" class="mid-btn">⚙️ Configurações</button>
+    <button id="btnRestart" class="mid-btn">↺ Recomeçar cidade</button>
+    <button id="btnMenu" class="mid-btn">🏠 Menu principal</button>
+    <button id="btnPauseExit" class="mid-btn exit-btn">🚪 Sair do jogo</button>
+  </div>
+</div>
+
+<!-- resultado -->
+<div id="results" class="screen modal">
+  <div class="panel">
+    <h2 id="resTitle">Chegamos!</h2>
+    <div id="resStars"></div>
+    <div id="resScore"></div>
+    <div id="resInfo"></div>
+    <button id="btnNext" class="big">Próxima cidade ▶</button>
+    <button id="btnAgain" class="mid-btn">↺ Jogar de novo</button>
+    <button id="btnResMenu" class="mid-btn">🏠 Menu</button>
+  </div>
+</div>
+
+<div id="rotate">📱↻<br>Gire o celular para jogar deitado</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
