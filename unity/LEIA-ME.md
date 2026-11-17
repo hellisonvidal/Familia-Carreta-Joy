@@ -22,7 +22,7 @@ Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipe
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 
 ## Como o APK é gerado (GitHub Actions)
-O workflow `.github/workflows/unity.yml` compila no Unity 6000.0.86f1 (imagem do GameCI) e publica um
+O workflow `.github/workflows/unity.yml` compila no Unity 6000.3.28f1 (imagem do GameCI) e publica um
 **pré-lançamento** `unity-vX.Y.Z` com o APK `CarretaJoy3D-vX.Y.Z.apk`.
 
 O Unity exige uma licença, mesmo a gratuita. **Configure uma vez:**
@@ -41,7 +41,7 @@ O Unity exige uma licença, mesmo a gratuita. **Configure uma vez:**
 5. Vá em *Actions → APK Unity → Run workflow*. A primeira vez demora uns 30–60 minutos.
 
 ## Abrir no seu computador (opcional)
-Abra a pasta `unity` no Unity Hub com a versão **6000.0.86f1** e o módulo **Android Build Support**.
+Abra a pasta `unity` no Unity Hub com a versão **6000.3.28f1** e o módulo **Android Build Support**.
 Depois use o menu **Carreta Joy → Preparar projeto** e aperte Play, ou **Carreta Joy → Gerar APK**.
 No computador: WASD/setas andam, espaço pula, Q mortal, E flip, R pirueta, Shift corre,
 F sobe/desce, G dança, Tab troca de menino, N dia/noite, e arrastar com o mouse gira a câmera.
