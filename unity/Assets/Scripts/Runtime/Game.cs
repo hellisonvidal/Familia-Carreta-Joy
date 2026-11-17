@@ -35,9 +35,11 @@ namespace CarretaJoy
         float fpsAcc; int fpsN;
         string copyTrick;
         float festaAcc, menuOrbit;
+        bool tricksOpen = true;
 
         public int CharCount => ROSTER.Length;
         public string CharName(int i) => ROSTER[Mathf.Clamp(i, 0, ROSTER.Length - 1)].nome;
+        public string CharId(int i) => ROSTER[Mathf.Clamp(i, 0, ROSTER.Length - 1)].id;
         public int StopCount => city != null ? city.map.Stops.Count : 0;
         public string StopName(int i) => city != null && city.map.Stops.Count > 0 ? city.map.Stops[Mathf.Clamp(i, 0, city.map.Stops.Count - 1)].name : "";
         public int PlayerIndex => playerIdx;
@@ -144,7 +146,7 @@ namespace CarretaJoy
         public void GoMenu() { if (Driving) ToggleDrive(false); playing = false; menu.Open(MenuUI.Page.Main); }
         public void PreviewStart() { if (!playing) PlaceAtStart(); }
         public void SelectPlayer(int i) { if (Driving) ToggleDrive(false); SetPlayer(i); ui.ShowToast("Agora: " + player.Name); }
-        public void TruckAuto() { if (Driving) ToggleDrive(false); truck.ResumeRoute(); ui.ShowToast("Carreta no piloto automático"); }
+        public void TruckAuto() { if (Driving) ToggleDrive(false); else truck.ReturnToRoute(); ui.ShowToast("Carreta no piloto automático"); }
 
         /// <summary>Carreta no ponto de partida escolhido; a turma espalhada em volta, na calçada.</summary>
         void PlaceAtStart()
@@ -291,7 +293,9 @@ namespace CarretaJoy
                 player.SetHidden(false);
                 rig.follow = null;
                 horn.Stop();
-                ui.ShowToast("Carreta estacionada");
+                // a carreta volta sozinha para o percurso e segue a volta pela cidade
+                truck.ReturnToRoute();
+                ui.ShowToast("A carreta segue o percurso sozinha");
             }
         }
 
@@ -320,7 +324,8 @@ namespace CarretaJoy
             {
                 truck.Tick(dt, truck.transform.position + truck.transform.forward * 1000f, true, music.Beat);
                 city.EnsureLoaded(truck.transform.position, false);
-                foreach (var c in crew) c.Tick(Vector3.zero, dt);
+                player.Tick(Vector3.zero, dt);
+                TickCrew(dt);
                 Lights();
                 return;
             }
@@ -358,7 +363,10 @@ namespace CarretaJoy
         void TickOnFoot(float dt)
         {
             bool nearTruck = truck.DistanceTo(player.transform.position) < 3.5f;
-            if (ui.Pressed("correr")) { var b = ui.B["correr"]; b.toggled = !b.toggled; player.Running = b.toggled; b.label = b.toggled ? "ANDAR" : "CORRER"; }
+            if (ui.Pressed("correr")) { player.Running = true; ui.ShowToast("Correndo"); }
+            if (ui.Pressed("andar")) { player.Running = false; ui.ShowToast("Andando"); }
+            ui.B["correr"].toggled = player.Running; ui.B["andar"].toggled = !player.Running;
+            if (ui.Pressed("manobras")) { tricksOpen = !tricksOpen; ui.B["manobras"].toggled = tricksOpen; }
             if (ui.Pressed("pular")) player.Jump();
             if (ui.Pressed("mortal")) { player.DoTrick("mortal"); CrewCopy("mortal"); }
             if (ui.Pressed("flip")) { player.DoTrick("flip"); CrewCopy("flip"); }
@@ -389,7 +397,7 @@ namespace CarretaJoy
             SetVisible(false);
             ui.B["dirigir"].visible = true; ui.B["dirigir"].label = "SAIR";
             // joystick: lados viram, para frente acelera, para trás freia/ré
-            truck.Drive(ui.Move.x, ui.Move.y, dt);
+            truck.Drive(ui.Move.x, ui.Throttle, dt);
             if (ui.B["buzina"].held) { if (!horn.isPlaying) horn.Play(); } else if (horn.isPlaying) horn.Stop();
             // o motorista vai junto (escondido na cabine)
             player.FollowCab(truck.transform.TransformPoint(new Vector3(0, 1.2f, Truck.LENGTH / 2f - 2.5f)));
@@ -398,7 +406,9 @@ namespace CarretaJoy
 
         void SetVisible(bool foot)
         {
-            foreach (var id in new[] { "pular", "mortal", "flip", "pirueta", "correr", "dancar", "subir" }) ui.B[id].visible = foot;
+            foreach (var id in new[] { "pular", "correr", "andar", "manobras", "dancar", "subir" }) ui.B[id].visible = foot;
+            // manobras: abertas pelo botão MANOBRAS (o controle de videogame alcança sempre)
+            foreach (var id in new[] { "mortal", "flip", "pirueta" }) ui.B[id].visible = foot && (tricksOpen || Pad.Connected);
             ui.B["buzina"].visible = !foot;
         }
 
@@ -459,7 +469,8 @@ namespace CarretaJoy
             {
                 if (b == p) continue;
                 int k = slot++;
-                if (!Settings.CrewFollows || Driving)
+                if (Settings.CrewMode == 0) { RideTruck(b, k, dt); continue; }
+                if (Settings.CrewMode == 2 || Driving || !playing)
                 {
                     // cada um fica no seu lugar (parado, dançando ou em cima da carreta)
                     b.Tick(Vector3.zero, dt);
@@ -498,6 +509,29 @@ namespace CarretaJoy
                 if (!b.OnTruck && p.Grounded && b.Grounded && p.transform.position.y - b.transform.position.y > 0.6f && dist < 3f) b.Jump();
                 b.Tick(wish, dt);
             }
+        }
+
+        /// <summary>A turma vai junto com a carreta pelo percurso: sobe e dança lá em cima.</summary>
+        void RideTruck(Kid b, int k, float dt)
+        {
+            if (b.OnTruck)
+            {
+                if (!b.Busy && b.Trick == null && !b.Dancing) b.ToggleDance();
+                b.Tick(Vector3.zero, dt);
+                return;
+            }
+            if (!b.Busy && b.Trick == null)
+            {
+                float d = truck.DistanceTo(b.transform.position);
+                if (d < 3.2f) { b.ClimbOrDescend(); b.Tick(Vector3.zero, dt); return; }
+                if (d > 25f) { b.ResetState(); b.PlaceOnTruck(truck, truck.RoofSlot(k)); b.Tick(Vector3.zero, dt); return; }
+                // corre até a carreta
+                var to = truck.transform.position - b.transform.position; to.y = 0;
+                b.Running = true;
+                b.Tick(to.normalized, dt);
+                return;
+            }
+            b.Tick(Vector3.zero, dt);
         }
 
         static AudioClip MakeHorn()

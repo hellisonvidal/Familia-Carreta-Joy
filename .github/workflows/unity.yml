@@ -135,5 +135,8 @@ jobs:
             - Turma toda jogável: Arthur, Afonso, Chaves, Fofão, Chapolin, Máscara, Homem-Aranha, Capitão América e Hulk
             - Mundo aberto: escolha o personagem, explore a cidade, suba na carreta ou **dirija a carreta**
             - Menu inicial, pausa, ajustes (gráficos, 30/60 quadros, câmera, turma segue ou não), ponto de partida da carreta
-            - Minimapa com a carreta e a turma; 4 câmeras (normal, perto, longe, aérea)
+            - Câmera TPS (sobre o ombro) como padrão, mais normal, perto, longe e aérea; minimapa com a carreta e a turma
+            - A carreta segue o percurso sozinha e a turma vai em cima dela dançando (ou: me seguem / parados)
+            - Seletor de personagens com fotos; botões ANDAR, CORRER e MANOBRAS
+            - Controle de videogame (Xbox, PlayStation e genéricos) no jogo e nos menus
             - Subir e descer da carreta, dançar em cima, mortal, flip e pirueta

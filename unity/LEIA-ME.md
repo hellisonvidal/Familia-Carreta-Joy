@@ -24,6 +24,11 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   dirigir a carreta (DIRIGIR perto da cabine; ao sair ela fica estacionada; "piloto auto" na pausa),
   minimapa (toque para ampliar), 4 câmeras, troca de personagem por lista, versão Windows com instalador.
 
+- **v0.5.0:** câmera TPS padrão; carreta sempre no percurso (ao largar o volante ela volta sozinha);
+  turma vai na carreta dançando; seletor com fotos; botões ANDAR/CORRER/MANOBRAS; controle de videogame
+  (A pula, B sobe/desce, X mortal, Y flip, LB pirueta, RB anda/corre, direcional: cima dança, baixo dirige,
+  esquerda câmera, direita troca; Start pausa; gatilhos aceleram/freiam). Corrigido: personagens gigantes e carreta em pé.
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 

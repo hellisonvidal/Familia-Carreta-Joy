@@ -20,7 +20,8 @@ namespace CarretaJoy
             white = Texture2D.whiteTexture;
         }
 
-        public void Open(Page p) { if (p == Page.Settings || p == Page.Chars || p == Page.Start) back = page; page = p; scroll = Vector2.zero; }
+        int openedFrame = -1;
+        public void Open(Page p) { openedFrame = Time.frameCount; if (p == Page.Settings || p == Page.Chars || p == Page.Start) back = page; page = p; scroll = Vector2.zero; }
 
         void Styles()
         {
@@ -95,35 +96,100 @@ namespace CarretaJoy
             if (B(new Rect(x, y + gap * 3, bw / 2 - u, bh), "Ajustes")) Open(Page.Settings);
             if (B(new Rect(x + bw / 2 + u, y + gap * 3, bw / 2 - u, bh), "Sair")) Application.Quit();
             small.alignment = TextAnchor.LowerCenter;
-            GUI.Label(new Rect(0, H - 8 * u, W, 6 * u), "Mapa: © colaboradores do OpenStreetMap", small);
+            GUI.Label(new Rect(0, H - 8 * u, W, 6 * u), (Pad.Connected ? "Controle: A jogar · Y personagem · X partida    " : "") + "Mapa: © colaboradores do OpenStreetMap", small);
             small.alignment = TextAnchor.MiddleLeft;
         }
+
+        readonly System.Collections.Generic.Dictionary<int, Texture2D> portraits = new System.Collections.Generic.Dictionary<int, Texture2D>();
+        Texture2D Portrait(int i)
+        {
+            if (!portraits.TryGetValue(i, out var t)) portraits[i] = t = Resources.Load<Texture2D>("Portraits/" + game.CharId(i));
+            return t;
+        }
+        int cursor;   // seleção pelo controle de videogame
 
         void Chars(float W, float H)
         {
             bool inGame = page == Page.Picker;
-            Title(W, 2 * u, inGame ? "QUEM VAI JOGAR?" : "PERSONAGEM", null);
-            int n = game.CharCount;
-            float cols = 3, bw = 40 * u, bh = 10 * u, gx = 2 * u;
-            float x0 = (W - (bw * cols + gx * (cols - 1))) / 2, y0 = 18 * u;
+            Title(W, 1 * u, inGame ? "QUEM VAI JOGAR?" : "ESCOLHA O PERSONAGEM", null);
+            int n = game.CharCount, cols = 5;
+            float gx = 2 * u, cw = Mathf.Min(30 * u, (W - 8 * u - gx * (cols - 1)) / cols), ch = cw * 1.22f;
+            float x0 = (W - (cw * cols + gx * (cols - 1))) / 2, y0 = 15 * u;
             for (int i = 0; i < n; i++)
             {
-                int c = i % 3, r = i / 3;
-                var rect = new Rect(x0 + c * (bw + gx), y0 + r * (bh + gx), bw, bh);
+                int c = i % cols, r = i / cols;
+                var rect = new Rect(x0 + c * (cw + gx), y0 + r * (ch + gx), cw, ch);
                 bool sel = inGame ? game.PlayerIndex == i && !game.Driving : Settings.StartChar == i;
-                if (B(rect, game.CharName(i), sel))
-                {
-                    if (inGame) { game.SelectPlayer(i); page = Page.None; }
-                    else { Settings.StartChar = i; Settings.Save(); page = back; }
-                }
+                bool hover = Pad.Connected && cursor == i;
+                // cartão com a foto
+                GUI.color = sel ? new Color(0.95f, 0.45f, 0.1f) : hover ? new Color(0.95f, 0.25f, 0.6f) : new Color(0.22f, 0.12f, 0.38f, 0.95f);
+                GUI.DrawTexture(rect, rr, ScaleMode.StretchToFill, true, 0, GUI.color, 0, 2.5f * u);
+                GUI.color = Color.white;
+                var pr = Portrait(i);
+                var img = new Rect(rect.x + u, rect.y + u, rect.width - 2 * u, rect.width - 2 * u);
+                if (pr != null) GUI.DrawTexture(img, pr, ScaleMode.ScaleToFit, true);
+                lbl.alignment = TextAnchor.MiddleCenter; lbl.fontSize = Mathf.RoundToInt(Mathf.Min(3.4f * u, cw / Mathf.Max(6, game.CharName(i).Length) * 1.7f));
+                GUI.Label(new Rect(rect.x, img.yMax, rect.width, rect.yMax - img.yMax), game.CharName(i), lbl);
+                lbl.alignment = TextAnchor.MiddleLeft;
+                if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) PickChar(i);
             }
-            float y = y0 + 3 * (bh + gx) + 2 * u;
+            float bw = 46 * u, bh = 9 * u, y = y0 + 2 * (ch + gx) + u;
             if (inGame)
             {
-                if (B(new Rect(x0, y, bw * 1.5f, bh), game.Driving ? "SAIR DA CARRETA" : "DIRIGIR A CARRETA", true)) { game.ToggleDrive(true); page = Page.None; }
-                if (B(new Rect(x0 + bw * 1.5f + gx, y, bw * 1.5f - gx + (bw + gx) * 0 + gx * 0, bh), "Voltar")) page = Page.None;
+                if (B(new Rect(W / 2 - bw - u, y, bw, bh), game.Driving ? "SAIR DA CARRETA" : "DIRIGIR A CARRETA", true)) { game.ToggleDrive(true); page = Page.None; }
+                if (B(new Rect(W / 2 + u, y, bw, bh), "Voltar")) page = Page.None;
             }
             else if (B(new Rect((W - bw) / 2, y, bw, bh), "Voltar")) page = back;
+        }
+
+        void PickChar(int i)
+        {
+            if (page == Page.Picker) { game.SelectPlayer(i); page = Page.None; }
+            else { Settings.StartChar = i; Settings.Save(); page = back; }
+        }
+
+        // ---------------- controle de videogame nos menus ----------------
+        void Update()
+        {
+            if (page == Page.None || game == null || Time.frameCount == openedFrame) return;
+            Pad.Update();
+            bool a = Pad.Down(Pad.A), bk = Pad.Down(Pad.B), st = Pad.Start;
+            int dx = (Pad.DRight || StickEdge(1) ? 1 : 0) - (Pad.DLeft || StickEdge(2) ? 1 : 0);
+            int dy = (Pad.DDown || StickEdge(3) ? 1 : 0) - (Pad.DUp || StickEdge(4) ? 1 : 0);
+            switch (page)
+            {
+                case Page.Main:
+                    if (a || st) game.StartGame();
+                    else if (Pad.Down(Pad.Y)) { cursor = Settings.StartChar; Open(Page.Chars); }
+                    else if (Pad.Down(Pad.X)) Open(Page.Start);
+                    break;
+                case Page.Chars: case Page.Picker:
+                    cursor = Mathf.Clamp(cursor + dx + dy * 5, 0, game.CharCount - 1);
+                    if (a) PickChar(cursor);
+                    else if (bk) page = page == Page.Picker ? Page.None : back;
+                    break;
+                case Page.Start:
+                    cursor = Mathf.Clamp(cursor + dx + dy * 2, 0, game.StopCount - 1);
+                    if (a) { Settings.StartStop = cursor; Settings.Save(); game.PreviewStart(); page = back; }
+                    else if (bk) page = back;
+                    break;
+                case Page.Settings:
+                    if (bk || a || st) { Settings.Save(); game.ApplySettings(); page = back; }
+                    break;
+                case Page.Pause:
+                    if (a || bk || st) page = Page.None;
+                    else if (Pad.Down(Pad.Y)) { cursor = game.PlayerIndex; Open(Page.Picker); }
+                    break;
+            }
+        }
+
+        float stickT;
+        bool StickEdge(int dir)
+        {
+            // empurrar o analógico também move a seleção (com intervalo)
+            var v = Pad.Left; bool on = dir == 1 ? v.x > 0.6f : dir == 2 ? v.x < -0.6f : dir == 3 ? v.y < -0.6f : v.y > 0.6f;
+            if (!on || Time.unscaledTime < stickT) return false;
+            stickT = Time.unscaledTime + 0.25f; return true;
         }
 
         void StartPage(float W, float H)
@@ -135,7 +201,7 @@ namespace CarretaJoy
             for (int i = 0; i < n; i++)
             {
                 var rect = new Rect(x0 + (i % 2) * (bw + gx), y0 + (i / 2) * (bh + gx), bw, bh);
-                if (B(rect, game.StopName(i), Settings.StartStop == i)) { Settings.StartStop = i; Settings.Save(); game.PreviewStart(); page = back; }
+                if (B(rect, game.StopName(i), Settings.StartStop == i || (Pad.Connected && cursor == i))) { Settings.StartStop = i; Settings.Save(); game.PreviewStart(); page = back; }
             }
             if (B(new Rect((W - bw) / 2, y0 + ((n + 1) / 2) * (bh + gx) + u, bw, bh), "Voltar")) page = back;
         }
@@ -156,7 +222,7 @@ namespace CarretaJoy
             Row("Gráficos"); Settings.Quality = Choice(Settings.Quality, Settings.QualityNames); y += rowH;
             Row("Quadros/s"); Settings.Fps = Choice(Settings.Fps == 30 ? 0 : 1, new[] { "30 (economia)", "60 (suave)" }) == 0 ? 30 : 60; y += rowH;
             Row("Câmera"); Settings.CamMode = Choice(Settings.CamMode, Settings.CamNames); y += rowH;
-            Row("Turma"); Settings.CrewFollows = Choice(Settings.CrewFollows ? 1 : 0, new[] { "Cada um parado", "Todos me seguem" }) == 1; y += rowH;
+            Row("Turma"); Settings.CrewMode = Choice(Settings.CrewMode, Settings.CrewNames); y += rowH;
             Row("Sensibilidade"); Settings.Sensitivity = Mathf.Lerp(0.4f, 2f, Slider(new Rect(x + lw, y, cw, rowH * 0.85f), Mathf.InverseLerp(0.4f, 2f, Settings.Sensitivity))); y += rowH;
             if (B(new Rect(W / 2 - 20 * u, y + u, 40 * u, 10 * u), "OK", true)) { Settings.Save(); game.ApplySettings(); page = back; }
         }
@@ -179,7 +245,7 @@ namespace CarretaJoy
             Title(W, 4 * u, "PAUSA", null);
             float bw = 62 * u, bh = 10 * u, x = (W - bw) / 2, y = 22 * u, gap = 12 * u;
             if (B(new Rect(x, y, bw, bh), "Continuar", true)) { page = Page.None; game.Resume(); }
-            if (B(new Rect(x, y + gap, bw, bh), "Trocar de personagem")) Open(Page.Picker);
+            if (B(new Rect(x, y + gap, bw, bh), "Trocar de personagem")) { cursor = game.PlayerIndex; Open(Page.Picker); }
             if (B(new Rect(x, y + gap * 2, bw / 2 - u, bh), "Ajustes")) Open(Page.Settings);
             if (B(new Rect(x + bw / 2 + u, y + gap * 2, bw / 2 - u, bh), game.TruckManual ? "Carreta: piloto auto" : "Recomeçar")) { if (game.TruckManual) game.TruckAuto(); else game.StartGame(); page = Page.None; game.Resume(); }
             if (B(new Rect(x, y + gap * 3, bw, bh), "Menu principal")) game.GoMenu();

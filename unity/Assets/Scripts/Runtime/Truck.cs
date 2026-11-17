@@ -43,11 +43,13 @@ namespace CarretaJoy
 
             var m = Instantiate(prefab, transform);
             m.name = "Modelo";
-            m.transform.localPosition = Vector3.zero; m.transform.localRotation = Quaternion.identity;
+            m.transform.localPosition = Vector3.zero;   // mantém a rotação de importação (o FBX do Blender vem deitado com -90° em X)
             // mede o modelo (cabine virada para +Z)
             var rends = m.GetComponentsInChildren<Renderer>();
             Bounds b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
-            if (b.size.x > b.size.z) { m.transform.localRotation = Quaternion.Euler(0, 90, 0); b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds); }
+            // segurança: se ainda estiver em pé (comprimento na vertical), deita; depois alinha o comprimento com Z
+            if (b.size.y > Mathf.Max(b.size.x, b.size.z)) { m.transform.localRotation = Quaternion.Euler(-90, 0, 0) * m.transform.localRotation; b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds); }
+            if (b.size.x > b.size.z) { m.transform.localRotation = Quaternion.Euler(0, 90, 0) * m.transform.localRotation; b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds); }
             float s = LENGTH / Mathf.Max(b.size.x, b.size.z);
             m.transform.localScale *= s;
             b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
@@ -156,6 +158,7 @@ namespace CarretaJoy
         public System.Func<float, float, float> GroundHeight;
         float yaw;
         public float ManualSpeed => speed;
+        public Vector3 RoofSlot(int k) => ClampToRoof(new Vector3(k % 2 == 0 ? 0.55f : -0.55f, 0, Mathf.Lerp(roofZ0 + 0.6f, roofZ1 - 0.6f, (k / 2) / 4f)));
 
         /// <summary>Volante: steer -1..1, acelerador -1 (ré/freio) .. 1.</summary>
         public void Drive(float steer, float throttle, float dt)
@@ -195,10 +198,36 @@ namespace CarretaJoy
         }
         float Ground(Vector3 p) => GroundHeight != null ? GroundHeight(p.x, p.z) : 0f;
 
+        // volta sozinha para o percurso depois que o jogador larga o volante
+        public bool Returning;
+        int retIdx; float stuckT, retT;
+        public void ReturnToRoute()
+        {
+            int best = 0; float bd = float.MaxValue;
+            for (int i = 0; i < path.Count; i++) { float d = (path[i] - transform.position).sqrMagnitude; if (d < bd) { bd = d; best = i; } }
+            retIdx = best; Returning = true; stuckT = 0; retT = 0;
+            if (bd < 6f * 6f) { Returning = false; ResumeRoute(); }
+        }
+        void TickReturn(float dt)
+        {
+            Vector3 tgt = path[retIdx];
+            Vector3 to = tgt - transform.position; to.y = 0;
+            if (to.magnitude < 7f) { Returning = false; ResumeRoute(); return; }
+            float ang = Vector3.SignedAngle(transform.forward, to, Vector3.up);
+            bool reverse = Mathf.Abs(ang) > 120f && to.magnitude < 25f;
+            float steer = Mathf.Clamp(ang / 35f, -1f, 1f) * (reverse ? -1 : 1);
+            float throttle = reverse ? -0.5f : Mathf.Lerp(0.6f, 0.15f, Mathf.Abs(ang) / 90f);
+            Drive(steer, throttle, dt);
+            stuckT = Mathf.Abs(speed) < 0.4f ? stuckT + dt : 0;
+            retT += dt;
+            // presa em algum prédio ou demorando demais: volta direto para o percurso
+            if (stuckT > 3f || retT > 60f) { Returning = false; ResumeRoute(); }
+        }
+
         /// <summary>Volta para o percurso (piloto automático) a partir do ponto mais perto.</summary>
         public void ResumeRoute()
         {
-            Manual = false;
+            Manual = false; Returning = false;
             int best = 0; float bd = float.MaxValue;
             for (int i = 0; i < path.Count; i++) { float d = (path[i] - transform.position).sqrMagnitude; if (d < bd) { bd = d; best = i; } }
             dist = cum[best]; speed = 0; stopTimer = 2f;
@@ -209,7 +238,7 @@ namespace CarretaJoy
         /// <summary>Começa a volta em um ponto do percurso (ponto de partida escolhido no menu).</summary>
         public void StartAt(float d)
         {
-            Manual = false; dist = d; speed = 0; stopTimer = 4f;
+            Manual = false; Returning = false; dist = d; speed = 0; stopTimer = 4f;
             PickNextStop();
             Place(0);
         }
@@ -224,6 +253,7 @@ namespace CarretaJoy
 
         public void Tick(float dt, Vector3 player, bool playerOnTruck, float beat)
         {
+            if (Returning) { TickReturn(dt); Lights(beat); return; }
             if (Manual) { Lights(beat); return; }
             // para nos pontos de festa
             if (stopTimer > 0) { stopTimer -= dt; speed = Mathf.MoveTowards(speed, 0, 8f * dt); }

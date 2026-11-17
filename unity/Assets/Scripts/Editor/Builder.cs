@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.4.0";
-        public const int VERSION_CODE = 4;
+        public const string VERSION = "0.5.0";
+        public const int VERSION_CODE = 5;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]
@@ -37,6 +37,7 @@ namespace CarretaJoy.EditorTools
                         AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(guid), ImportAssetOptions.ForceUpdate);
 
             SetupPipeline();
+            SetupInputAxes();
             SetupMaterials();
             SetupScene();
             SetupPlayer();
@@ -96,6 +97,43 @@ namespace CarretaJoy.EditorTools
             var p = so.FindProperty(name);
             if (p == null) { Debug.LogWarning("URP: campo não encontrado " + name); return; }
             if (v is bool b) p.boolValue = b; else p.intValue = (int)v;
+        }
+
+        // ---------------- controle de videogame ----------------
+        /// <summary>Eixos "PadAxis1".."PadAxis12" (todos os controles) no Input Manager clássico.</summary>
+        static void SetupInputAxes()
+        {
+            var objs = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/InputManager.asset");
+            if (objs == null || objs.Length == 0) { Debug.LogWarning("InputManager.asset não encontrado"); return; }
+            var so = new SerializedObject(objs[0]);
+            var axes = so.FindProperty("m_Axes");
+            for (int i = 1; i <= 12; i++)
+            {
+                string name = "PadAxis" + i;
+                bool exists = false;
+                for (int k = 0; k < axes.arraySize; k++)
+                    if (axes.GetArrayElementAtIndex(k).FindPropertyRelative("m_Name").stringValue == name) { exists = true; break; }
+                if (exists) continue;
+                axes.arraySize++;
+                var a = axes.GetArrayElementAtIndex(axes.arraySize - 1);
+                a.FindPropertyRelative("m_Name").stringValue = name;
+                a.FindPropertyRelative("descriptiveName").stringValue = "";
+                a.FindPropertyRelative("descriptiveNegativeName").stringValue = "";
+                a.FindPropertyRelative("negativeButton").stringValue = "";
+                a.FindPropertyRelative("positiveButton").stringValue = "";
+                a.FindPropertyRelative("altNegativeButton").stringValue = "";
+                a.FindPropertyRelative("altPositiveButton").stringValue = "";
+                a.FindPropertyRelative("gravity").floatValue = 0;
+                a.FindPropertyRelative("dead").floatValue = 0.05f;
+                a.FindPropertyRelative("sensitivity").floatValue = 1;
+                a.FindPropertyRelative("snap").boolValue = false;
+                a.FindPropertyRelative("invert").boolValue = false;
+                a.FindPropertyRelative("type").intValue = 2;        // eixo de joystick
+                a.FindPropertyRelative("axis").intValue = i - 1;
+                a.FindPropertyRelative("joyNum").intValue = 0;      // qualquer controle
+            }
+            so.ApplyModifiedPropertiesWithoutUndo();
+            Log("eixos do controle prontos");
         }
 
         // ---------------- materiais ----------------

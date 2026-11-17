@@ -158,15 +158,26 @@ namespace CarretaJoy
             var smr = m.GetComponentInChildren<SkinnedMeshRenderer>();
             if (smr != null && smr.sharedMesh != null)
             {
+                // altura medida na vertical de verdade: o modelo vindo do Blender chega girado
+                // (o eixo "para cima" do arquivo é o Z), então não dá para usar só o tamanho em Y
                 var b = smr.sharedMesh.bounds;
-                h = Mathf.Max(0.1f, b.size.y * smr.transform.lossyScale.y);
+                Vector3 upL = smr.transform.InverseTransformDirection(Vector3.up);
+                Vector3 ls = smr.transform.lossyScale;
+                h = Mathf.Abs(upL.x) * b.size.x * Mathf.Abs(ls.x) + Mathf.Abs(upL.y) * b.size.y * Mathf.Abs(ls.y) + Mathf.Abs(upL.z) * b.size.z * Mathf.Abs(ls.z);
+                var anim0 = m.GetComponent<Animator>();
+                if ((h < 0.3f || h > 6f) && anim0 != null && anim0.isHuman)
+                {
+                    // plano B: do pé até a cabeça pelo esqueleto
+                    var head = anim0.GetBoneTransform(HumanBodyBones.Head); var foot = anim0.GetBoneTransform(HumanBodyBones.LeftFoot);
+                    if (head && foot) h = (head.position.y - foot.position.y) * 1.15f;
+                }
+                h = Mathf.Max(0.1f, h);
                 smr.updateWhenOffscreen = true;
                 smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                 smr.quality = SkinQuality.Bone4;
             }
             m.transform.localScale *= height / h;
-            m.transform.localPosition = Vector3.zero;
-            m.transform.localRotation = Quaternion.identity;
+            m.transform.localPosition = Vector3.zero;   // a rotação de importação é mantida
             foreach (var t in m.GetComponentsInChildren<Transform>()) t.gameObject.layer = 2;
             kid.model = m.transform;
 
