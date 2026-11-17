@@ -135,6 +135,10 @@ namespace CarretaJoy
         Vector3 local; float localVy;
         float climbT = -1; Vector3 climbFrom, climbToLocal; bool climbingUp;
 
+        /// <summary>Altura do chão (definida pela cidade); null = chão plano em y = 0.</summary>
+        public static System.Func<float, float, float> GroundHeight;
+        float Ground(Vector3 p) => GroundHeight != null ? GroundHeight(p.x, p.z) : 0f;
+
         public float WalkSpeed => 1.7f * Height / 1.3f;
         public float RunSpeed => 4.6f * Height / 1.3f;
         public float HorizontalSpeed { get; private set; }
@@ -241,6 +245,26 @@ namespace CarretaJoy
             }
         }
 
+        bool hidden;
+        /// <summary>Volta ao estado normal (no chão, sem acrobacia, sem dança).</summary>
+        public void ResetState()
+        {
+            OnTruck = false; climbT = -1; Trick = null; Dancing = false; vel = Vector3.zero; localVy = 0; rootAccum = Vector3.zero;
+            if (!hidden) cc.enabled = true;
+        }
+        public void Teleport(Vector3 p, Quaternion rot)
+        {
+            cc.enabled = false; transform.SetPositionAndRotation(p, rot); vel = Vector3.zero;
+            cc.enabled = !hidden;
+        }
+        /// <summary>Some (motorista dentro da cabine) ou reaparece.</summary>
+        public void SetHidden(bool h)
+        {
+            hidden = h; model.gameObject.SetActive(!h); cc.enabled = !h;
+            if (!h) { anim?.Destroy(); anim = new KidAnim(model.GetComponent<Animator>(), clips, Name); }
+        }
+        public void FollowCab(Vector3 p) { transform.position = p; }
+
         public void PlaceOnTruck(Truck t, Vector3 localPos)
         {
             truck = t; OnTruck = true; cc.enabled = false; local = t.ClampToRoof(localPos); localVy = 0;
@@ -294,6 +318,13 @@ namespace CarretaJoy
                 return;
             }
             rootAccum = Vector3.zero;
+            // caiu para fora do mapa (buraco entre pedaços, colisor que ainda não carregou): volta para o chão
+            float g = Ground(transform.position);
+            if (transform.position.y < g - 3f)
+            {
+                cc.enabled = false; transform.position = new Vector3(transform.position.x, g + 1f, transform.position.z); cc.enabled = true;
+                vel = Vector3.zero;
+            }
             Vector3 want = wish * target;
             float acc = wish.sqrMagnitude > 0.01f ? (Grounded ? 30f : 8f) : (Grounded ? 18f : 2f);
             h = Vector3.MoveTowards(h, want, acc * dt);
@@ -347,7 +378,7 @@ namespace CarretaJoy
             float u = Mathf.Clamp01(climbT);
             float e = u * u * (3 - 2 * u);
             Vector3 to = climbingUp ? truck.RoofToWorld(climbToLocal) : truck.transform.TransformPoint(climbToLocal) + Vector3.up * 0.05f;
-            if (!climbingUp) to.y = 0.2f;
+            if (!climbingUp) to.y = Ground(to) + 0.15f;
             Vector3 p = Vector3.Lerp(climbFrom, to, e);
             p.y += Mathf.Sin(u * Mathf.PI) * 1.2f;
             transform.position = p;

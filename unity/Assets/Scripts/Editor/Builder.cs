@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.3.0";
-        public const int VERSION_CODE = 3;
+        public const string VERSION = "0.4.0";
+        public const int VERSION_CODE = 4;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]
@@ -192,8 +192,20 @@ namespace CarretaJoy.EditorTools
             PlayerSettings.Android.startInFullscreen = true;
             PlayerSettings.runInBackground = false;
 
+            // ícones: Android usa a versão quadrada (o sistema recorta); Windows a arredondada
             var icon = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Icon.png");
-            if (icon != null) PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
+            var iconSq = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/IconSquare.png") ?? icon;
+            if (icon != null)
+            {
+                PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
+                foreach (var (t, tex) in new[] { (NamedBuildTarget.Android, iconSq), (NamedBuildTarget.Standalone, icon) })
+                {
+                    var sizes = PlayerSettings.GetIconSizes(t, IconKind.Application);
+                    var arr = new Texture2D[sizes.Length];
+                    for (int i = 0; i < arr.Length; i++) arr[i] = tex;
+                    if (arr.Length > 0) PlayerSettings.SetIcons(t, arr, IconKind.Application);
+                }
+            }
 
             // mesma chave do APK atual (no futuro uma versão pode atualizar a outra)
             string ks = Path.GetFullPath(Path.Combine(Application.dataPath, "../../keystore/debug.keystore"));
@@ -231,6 +243,31 @@ namespace CarretaJoy.EditorTools
             var s = report.summary;
             Log($"Resultado: {s.result}  tamanho: {s.totalSize / (1024 * 1024)} MB  erros: {s.totalErrors}  saída: {outPath}");
             if (s.result != BuildResult.Succeeded) throw new Exception("Falha ao gerar o APK: " + s.result);
+        }
+
+        [MenuItem("Carreta Joy/Gerar Windows")]
+        public static void BuildWindows()
+        {
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64)
+                EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64);
+            Setup();
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+            PlayerSettings.fullScreenMode = FullScreenMode.FullScreenWindow;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.defaultScreenWidth = 1600; PlayerSettings.defaultScreenHeight = 900;
+            PlayerSettings.runInBackground = false;
+            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "com.familia.carretajoy3d");
+            string outPath = Arg("-customBuildPath") ?? "build/StandaloneWindows64/CarretaJoy3D.exe";
+            if (!outPath.EndsWith(".exe")) outPath = Path.Combine(outPath, "CarretaJoy3D.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)));
+            var opt = new BuildPlayerOptions
+            {
+                scenes = new[] { SCENE }, locationPathName = outPath,
+                target = BuildTarget.StandaloneWindows64, targetGroup = BuildTargetGroup.Standalone, options = BuildOptions.None
+            };
+            var s = BuildPipeline.BuildPlayer(opt).summary;
+            Log($"Windows: {s.result}  erros: {s.totalErrors}  saída: {outPath}");
+            if (s.result != BuildResult.Succeeded) throw new Exception("Falha ao gerar o Windows: " + s.result);
         }
 
         static string Arg(string name)

@@ -13,6 +13,7 @@ namespace CarretaJoy
         static readonly Dictionary<string, Material> cache = new Dictionary<string, Material>();
         public static readonly List<Material> NightGlows = new List<Material>();   // acendem à noite
         static readonly List<Color> nightBase = new List<Color>();
+        static bool isNight;
 
         static Material Template(ref Material t, string name)
         {
@@ -44,7 +45,7 @@ namespace CarretaJoy
             m.EnableKeyword("_EMISSION");
             m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
             SetGlow(m, c, intensity);
-            if (nightOnly) { NightGlows.Add(m); nightBase.Add(c * intensity); }
+            if (nightOnly) { NightGlows.Add(m); nightBase.Add(c * intensity); if (!isNight) m.SetColor("_EmissionColor", c * intensity * 0.04f); }
             return m;
         }
 
@@ -56,6 +57,7 @@ namespace CarretaJoy
         /// <summary>Janelas e postes: fracos de dia, fortes de noite.</summary>
         public static void ApplyNight(bool night)
         {
+            isNight = night;
             for (int i = 0; i < NightGlows.Count; i++)
                 NightGlows[i].SetColor("_EmissionColor", nightBase[i] * (night ? 1f : 0.04f));
         }

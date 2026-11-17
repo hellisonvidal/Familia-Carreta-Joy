@@ -495,7 +495,13 @@ for kk in order:
 # terreno ao redor das construções (quintais/calçadas): um pouco mais claro
 for b in buildings:
     if b['kind'] in (1, 2, 3, 7): dr.polygon([px(*q) for q in b['pts']], fill=(175, 170, 160))
-img = img.filter(ImageFilter.GaussianBlur(0.7))
+# ruas (aparecem de longe e no minimapa)
+for r in roads:
+    if r['kind'] in ('footway', 'path', 'steps', 'cycleway', 'track'): col, ww = (205, 195, 170), max(1, r['w'] / GP)
+    else: col, ww = ((150, 115, 80) if r['unpaved'] else (70, 70, 74)), max(1, (r['w'] + 2) / GP)
+    dr.line([px(*q) for q in r['pts']], fill=col, width=int(round(ww)), joint='curve')
+for w in waterways: dr.line([px(*q) for q in w['pts']], fill=COL['water'], width=max(1, int(w['w'] / GP)))
+img = img.filter(ImageFilter.GaussianBlur(0.6))
 # variação natural (ruído)
 noise = (np.random.default_rng(1).random((IH, IW, 1)) * 18 - 9).astype(np.int16)
 arr = np.clip(np.asarray(img).astype(np.int16) + noise, 0, 255).astype(np.uint8)

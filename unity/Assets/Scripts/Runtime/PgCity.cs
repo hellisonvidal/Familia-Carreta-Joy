@@ -14,9 +14,13 @@ namespace CarretaJoy
         public PgMap map;
         public float loadRadius = 420f, unloadRadius = 620f;
         public readonly List<Vector3> Ring = new List<Vector3>();
-        public readonly List<float> StopDistances = new List<float>();
+        public readonly List<float> StopDistances = new List<float>();        // em ordem ao longo do percurso
+        public readonly List<float> StopDistancesByStop = new List<float>();  // na ordem das paradas (menu)
         public Vector3 PlazaCenter;
         public readonly List<Material> DanceTiles = new List<Material>();
+        public const int GroundLayer = 8;
+        public Texture2D GroundTexture => groundTex;
+        public Rect GroundRect => groundRect;
 
         readonly Dictionary<Vector2Int, GameObject> live = new Dictionary<Vector2Int, GameObject>();
         readonly HashSet<Vector2Int> queued = new HashSet<Vector2Int>();
@@ -50,7 +54,7 @@ namespace CarretaJoy
             {
                 int best = 0; float bd = float.MaxValue;
                 for (int i = 0; i < Ring.Count; i++) { float d = (new Vector2(Ring[i].x, Ring[i].z) - s.pos).sqrMagnitude; if (d < bd) { bd = d; best = i; } }
-                StopDistances.Add(cum[best]);
+                StopDistances.Add(cum[best]); StopDistancesByStop.Add(cum[best]);
             }
             StopDistances.Sort();
 
@@ -65,8 +69,11 @@ namespace CarretaJoy
         public float Height(float x, float z) => map.Height(x, z);
 
         // ---------------- carregamento em pedaços ----------------
+        Vector3 lastScan = new Vector3(1e9f, 0, 0); bool pending = true;
         public void EnsureLoaded(Vector3 p, bool immediate)
         {
+            if (!immediate && !pending && (p - lastScan).sqrMagnitude < 15f * 15f) return;
+            lastScan = p;
             float C = map.ChunkSize;
             int ci = Mathf.FloorToInt(p.x / C), cj = Mathf.FloorToInt(p.z / C);
             int R = Mathf.CeilToInt(loadRadius / C);
@@ -83,6 +90,7 @@ namespace CarretaJoy
             else
             {
                 // um pedaço por quadro (o mais perto primeiro): sem travadas
+                pending = want.Count > 1;
                 if (want.Count > 0) BuildChunk(want[0].id);
                 var drop = new List<Vector2Int>();
                 foreach (var kv in live) if (DistToChunk(p, kv.Key) > unloadRadius) drop.Add(kv.Key);
@@ -154,6 +162,7 @@ namespace CarretaJoy
             var m = new Mesh { name = "relevo" };
             m.vertices = v; m.normals = nr; m.uv = uv; m.triangles = tri; m.RecalculateBounds();
             var go = new GameObject("Relevo");
+            go.layer = GroundLayer;   // chão: a carreta não "bate" nele
             go.transform.SetParent(parent, false);
             go.AddComponent<MeshFilter>().sharedMesh = m;
             var r = go.AddComponent<MeshRenderer>(); r.sharedMaterial = ground; r.shadowCastingMode = ShadowCastingMode.Off;
@@ -190,6 +199,7 @@ namespace CarretaJoy
             var r = go.AddComponent<MeshRenderer>(); r.sharedMaterial = ground; r.shadowCastingMode = ShadowCastingMode.Off; r.receiveShadows = false;
             // chão "de segurança" bem abaixo de tudo: ninguém cai no vazio
             var floor = new GameObject("PisoSeguranca");
+            floor.layer = GroundLayer;
             floor.transform.SetParent(transform, false);
             floor.transform.position = new Vector3(B.center.x, -40, B.center.y);
             floor.AddComponent<BoxCollider>().size = new Vector3(B.width + 2000, 1, B.height + 2000);

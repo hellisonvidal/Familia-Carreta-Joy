@@ -151,9 +151,81 @@ namespace CarretaJoy
             Velocity = dt > 0 ? (pos - old) / dt : Vector3.zero;
         }
 
+        // ---------------- dirigir (jogador no volante) ----------------
+        public bool Manual;
+        public System.Func<float, float, float> GroundHeight;
+        float yaw;
+        public float ManualSpeed => speed;
+
+        /// <summary>Volante: steer -1..1, acelerador -1 (ré/freio) .. 1.</summary>
+        public void Drive(float steer, float throttle, float dt)
+        {
+            if (!Manual) { Manual = true; yaw = transform.eulerAngles.y; }
+            float maxF = 16f, maxR = 5f;
+            if (throttle > 0.05f) speed += throttle * (speed < 0 ? 9f : 3.5f) * dt;
+            else if (throttle < -0.05f) speed += throttle * (speed > 0 ? 9f : 2.5f) * dt;
+            else speed = Mathf.MoveTowards(speed, 0, 2f * dt);
+            speed = Mathf.Clamp(speed, -maxR, maxF);
+            // vira mais devagar em alta velocidade (carreta comprida)
+            float turn = steer * Mathf.Clamp(speed / 6f, -1f, 1f) * (40f / (1f + Mathf.Abs(speed) * 0.08f));
+            float newYaw = yaw + turn * dt;
+            var rot = Quaternion.Euler(0, newYaw, 0);
+            Vector3 next = transform.position + rot * Vector3.forward * speed * dt;
+            if (GroundHeight != null) next.y = Ground(next);
+            // bate em prédios: confere o corpo da carreta na posição nova (acima do meio-fio)
+            var half = new Vector3(HalfWidth * 0.95f, 1.1f, LENGTH / 2f * 0.97f);
+            var ctr = next + Vector3.up * 2.0f;
+            if (Physics.CheckBox(ctr, half, rot, 1 << 0, QueryTriggerInteraction.Ignore))
+            {
+                speed = -speed * 0.25f;   // tranco para trás
+                Velocity = Vector3.zero;
+                return;
+            }
+            yaw = newYaw;
+            var old = transform.position;
+            // inclina conforme o chão nas rodas da frente e de trás / dos lados
+            Vector3 fwd = rot * Vector3.forward, right = rot * Vector3.right;
+            float hf = Ground(next + fwd * LENGTH * 0.4f), hb = Ground(next - fwd * LENGTH * 0.4f);
+            float hl = Ground(next - right * HalfWidth), hr = Ground(next + right * HalfWidth);
+            float pitch = -Mathf.Atan2(hf - hb, LENGTH * 0.8f) * Mathf.Rad2Deg;
+            float roll = Mathf.Atan2(hl - hr, HalfWidth * 2f) * Mathf.Rad2Deg;
+            next.y = (hf + hb) / 2f;
+            transform.SetPositionAndRotation(next, Quaternion.Euler(pitch, yaw, roll));
+            Velocity = dt > 0 ? (next - old) / dt : Vector3.zero;
+        }
+        float Ground(Vector3 p) => GroundHeight != null ? GroundHeight(p.x, p.z) : 0f;
+
+        /// <summary>Volta para o percurso (piloto automático) a partir do ponto mais perto.</summary>
+        public void ResumeRoute()
+        {
+            Manual = false;
+            int best = 0; float bd = float.MaxValue;
+            for (int i = 0; i < path.Count; i++) { float d = (path[i] - transform.position).sqrMagnitude; if (d < bd) { bd = d; best = i; } }
+            dist = cum[best]; speed = 0; stopTimer = 2f;
+            PickNextStop();
+            Place(0);
+        }
+
+        /// <summary>Começa a volta em um ponto do percurso (ponto de partida escolhido no menu).</summary>
+        public void StartAt(float d)
+        {
+            Manual = false; dist = d; speed = 0; stopTimer = 4f;
+            PickNextStop();
+            Place(0);
+        }
+
+        void PickNextStop()
+        {
+            if (stopList == null || stopList.Count == 0) return;
+            float cur = Mathf.Repeat(dist, total), nx = stopList[0];
+            foreach (var s in stopList) if (s > cur + 1f) { nx = s; break; }
+            nextStop = nx;
+        }
+
         public void Tick(float dt, Vector3 player, bool playerOnTruck, float beat)
         {
-            // para nos pontos de festa (a cada quarto de volta)
+            if (Manual) { Lights(beat); return; }
+            // para nos pontos de festa
             if (stopTimer > 0) { stopTimer -= dt; speed = Mathf.MoveTowards(speed, 0, 8f * dt); }
             else
             {
@@ -166,19 +238,18 @@ namespace CarretaJoy
                 if (ahead < 0.5f || ahead > total - 1f)
                 {
                     stopTimer = 15f;
-                    if (stopList != null && stopList.Count > 0)
-                    {
-                        float cur = Mathf.Repeat(dist, total), nx = stopList[0];
-                        foreach (var s in stopList) if (s > cur + 1f) { nx = s; break; }
-                        nextStop = nx;
-                    }
+                    if (stopList != null && stopList.Count > 0) PickNextStop();
                     else nextStop = Mathf.Repeat(nextStop + total * 0.25f, total);
                 }
                 speed = Mathf.MoveTowards(speed, want, (want > speed ? 2.5f : 6f) * dt);
             }
             dist += speed * dt;
             Place(dt);
+            Lights(beat);
+        }
 
+        void Lights(float beat)
+        {
             // luzes no ritmo
             float pulse = Mathf.Pow(1f - Mathf.Repeat(beat, 1f), 2f);
             for (int i = 0; i < lights.Count; i++)

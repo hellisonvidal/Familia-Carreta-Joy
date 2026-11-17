@@ -1,7 +1,7 @@
 name: APK Unity
 
-# Versão Unity (gráficos melhores). Fica separada da versão atual (WebView):
-# publica como "pré-lançamento" unity-vX.Y.Z, sem mexer no atualizador do jogo atual.
+# Versão Unity (gráficos melhores): Android (APK) e Windows (instalador).
+# Publica como "pré-lançamento" unity-vX.Y.Z, sem mexer no atualizador do jogo antigo.
 on:
   push:
     branches: [main]
@@ -11,15 +11,26 @@ on:
 permissions:
   contents: write
 
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
 jobs:
   build:
-    name: Gerar APK (Unity)
+    name: Gerar ${{ matrix.nome }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    env:
-      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nome: Android
+            target: Android
+            method: CarretaJoy.EditorTools.Builder.BuildAndroid
+          - nome: Windows
+            target: StandaloneWindows64
+            method: CarretaJoy.EditorTools.Builder.BuildWindows
     steps:
       - name: Conferir licença do Unity
         if: env.UNITY_LICENSE == '' || env.UNITY_EMAIL == '' || env.UNITY_PASSWORD == ''
@@ -31,7 +42,7 @@ jobs:
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           tool-cache: false
-          android: false
+          android: ${{ matrix.target != 'Android' }}
           dotnet: true
           haskell: true
           large-packages: false
@@ -42,18 +53,18 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: unity/Library
-          key: Library-Android-${{ hashFiles('unity/Assets/**', 'unity/Packages/**', 'unity/ProjectSettings/**') }}
-          restore-keys: Library-Android-
+          key: Library-${{ matrix.target }}-${{ hashFiles('unity/Assets/**', 'unity/Packages/**', 'unity/ProjectSettings/**') }}
+          restore-keys: Library-${{ matrix.target }}-
 
       - name: Compilar no Unity
         uses: game-ci/unity-builder@v4
         with:
           projectPath: unity
           unityVersion: 6000.3.28f1
-          targetPlatform: Android
+          targetPlatform: ${{ matrix.target }}
           androidExportType: androidPackage
           buildName: CarretaJoy3D
-          buildMethod: CarretaJoy.EditorTools.Builder.BuildAndroid
+          buildMethod: ${{ matrix.method }}
           allowDirtyBuild: true
 
       - name: Ler versão
@@ -61,19 +72,48 @@ jobs:
         run: echo "v=$(grep -oP 'VERSION = "\K[^"]+' unity/Assets/Scripts/Editor/Builder.cs)" >> "$GITHUB_OUTPUT"
 
       - name: Renomear APK
+        if: matrix.target == 'Android'
         run: |
           f=$(find build -name '*.apk' | head -1)
           echo "APK: $f"; ls -la "$f"
-          cp "$f" "CarretaJoy3D-v${{ steps.ver.outputs.v }}.apk"
+          mkdir -p out && cp "$f" "out/CarretaJoy3D-v${{ steps.ver.outputs.v }}.apk"
+
+      - name: Criar instalador do Windows
+        if: matrix.target == 'StandaloneWindows64'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q nsis
+          src=$(dirname "$(find build -name 'CarretaJoy3D.exe' | head -1)")
+          echo "Jogo em: $src"; ls -la "$src"
+          sudo rm -rf "$src"/*_BurstDebugInformation_DoNotShip "$src"/*_BackUpThisFolder_ButDontShipItWithYourGame || true
+          cd unity/Installer
+          makensis -V2 -DVERSION=${{ steps.ver.outputs.v }} -DSRC="$GITHUB_WORKSPACE/$src" CarretaJoy3D.nsi
+          mkdir -p "$GITHUB_WORKSPACE/out" && mv CarretaJoy3D-Setup-*.exe "$GITHUB_WORKSPACE/out/"
+          ls -la "$GITHUB_WORKSPACE/out"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: carreta-joy-unity-apk
-          path: CarretaJoy3D-*.apk
+          name: carreta-joy-${{ matrix.target }}
+          path: out/*
           retention-days: 30
 
+  release:
+    name: Publicar versão
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: unity/Assets/Scripts/Editor
+      - name: Ler versão
+        id: ver
+        run: echo "v=$(grep -oP 'VERSION = "\K[^"]+' unity/Assets/Scripts/Editor/Builder.cs)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - run: ls -la out
       - name: Publicar pré-lançamento
-        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: unity-v${{ steps.ver.outputs.v }}
@@ -81,9 +121,11 @@ jobs:
           prerelease: true
           make_latest: false
           name: Carreta Joy 3D (Unity) v${{ steps.ver.outputs.v }}
-          files: CarretaJoy3D-*.apk
+          files: out/*
           body: |
-            Versão nova feita em **Unity** (gráficos melhores). Instala separada da versão atual, então dá para comparar as duas.
+            Versão feita em **Unity** (gráficos melhores).
+
+            **Android:** baixe o `.apk`. **Windows:** baixe o `CarretaJoy3D-Setup-…exe` e siga o instalador (atalho na área de trabalho).
 
             - Arthur e Afonso com os modelos em alta qualidade e animações humanoides (sem deformar)
             - **Ponta Grossa de verdade**: ruas, relevo e bairros reais (Centro, Oficinas, Olarias, Uvaranas, Nova Rússia, Órfãs, Ronda, Jardim Carvalho, Estrela, Boa Vista, Contorno e Cará-Cará), com Catedral, Estação Saudade, Vila Hilda e Estádio Germano Krüger
@@ -91,4 +133,7 @@ jobs:
             - Carreta original com neon, luzes coloridas no ritmo, faróis e música
             - Sombras, brilho (bloom) e cores de cinema
             - Turma toda jogável: Arthur, Afonso, Chaves, Fofão, Chapolin, Máscara, Homem-Aranha, Capitão América e Hulk
+            - Mundo aberto: escolha o personagem, explore a cidade, suba na carreta ou **dirija a carreta**
+            - Menu inicial, pausa, ajustes (gráficos, 30/60 quadros, câmera, turma segue ou não), ponto de partida da carreta
+            - Minimapa com a carreta e a turma; 4 câmeras (normal, perto, longe, aérea)
             - Subir e descer da carreta, dançar em cima, mortal, flip e pirueta

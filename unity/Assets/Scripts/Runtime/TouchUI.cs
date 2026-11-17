@@ -4,9 +4,10 @@ using UnityEngine;
 namespace CarretaJoy
 {
     /// <summary>
-    /// Controles de tela (multitoque): joystick que aparece onde o dedo encosta, botões grandes
-    /// e arrastar no lado direito gira a câmera. No computador: WASD/setas, espaço, Q, E, R,
-    /// Shift corre, F sobe/desce, G dança, Tab troca, N dia/noite.
+    /// Controles de tela (multitoque): joystick que aparece onde o dedo encosta, botões grandes,
+    /// arrastar no lado direito gira a câmera, minimapa (toque para ampliar).
+    /// No computador: WASD/setas, espaço pula, Q mortal, E flip, R pirueta, Shift corre, F sobe/desce,
+    /// G dança, V dirige, H buzina, C câmera, M mapa, Tab troca, N dia/noite, Esc pausa; mouse gira a câmera.
     /// </summary>
     public class TouchUI : MonoBehaviour
     {
@@ -16,16 +17,24 @@ namespace CarretaJoy
             public bool pressed, held; public int finger = -1;
         }
 
+        public bool Active = true;         // falso quando um menu está aberto
         public Vector2 Move;               // -1..1
         public Vector2 CamDelta;           // graus neste quadro
+        public float Zoom;                 // roda do mouse / pinça
         public readonly Dictionary<string, Btn> B = new Dictionary<string, Btn>();
         public string Toast; float toastT;
         public string Score = "0", Info = "", Who = "";
         public float Fps;
 
+        // minimapa
+        public Texture MapTex; public Rect MapWorld; public Vector2 MapCenter; public float MapHeading;
+        public readonly List<(Vector2 pos, Color c, float size)> Dots = new List<(Vector2, Color, float)>();
+        public bool BigMap;
+        Rect miniRect, bigRect;
+
         int joyFinger = -1, camFinger = -1; Vector2 joyOrigin, joyPos, camLast;
         Vector2 mouseLast; bool mouseCam;
-        Texture2D circle, rrect;
+        Texture2D circle, rrect, arrow;
         GUIStyle label, big, small;
         float u;
 
@@ -33,16 +42,20 @@ namespace CarretaJoy
         {
             circle = MakeCircle(128);
             rrect = MakeRoundRect(64, 18);
+            arrow = MakeArrow(64);
             Add("pular", "PULAR", true, new Color(0.15f, 0.75f, 0.35f));
             Add("mortal", "MORTAL", true, new Color(0.95f, 0.35f, 0.25f));
             Add("flip", "FLIP", true, new Color(0.25f, 0.55f, 0.95f));
             Add("pirueta", "PIRUETA", true, new Color(0.75f, 0.35f, 0.95f));
             Add("correr", "CORRER", true, new Color(1f, 0.6f, 0.1f));
             Add("subir", "SUBIR", false, new Color(0.1f, 0.65f, 0.75f));
+            Add("dirigir", "DIRIGIR", false, new Color(0.95f, 0.45f, 0.1f));
+            Add("buzina", "BUZINA", true, new Color(0.95f, 0.8f, 0.1f));
             Add("dancar", "DANÇAR", false, new Color(0.95f, 0.25f, 0.6f));
             Add("trocar", "TROCAR", false, new Color(0.2f, 0.2f, 0.3f));
+            Add("camera", "CÂMERA", false, new Color(0.2f, 0.2f, 0.3f));
             Add("dia", "NOITE", false, new Color(0.2f, 0.2f, 0.45f));
-            Add("som", "SOM", false, new Color(0.2f, 0.2f, 0.3f));
+            Add("pausa", "II", false, new Color(0.2f, 0.2f, 0.3f));
         }
 
         void Add(string id, string l, bool round, Color c) { B[id] = new Btn { id = id, label = l, round = round, color = c }; }
@@ -54,17 +67,23 @@ namespace CarretaJoy
         {
             float W = Screen.width, H = Screen.height;
             u = Mathf.Min(W, H) / 100f;
-            float s = 1f;
-            B["pular"].r = new Rect(W - 30 * u, H - 30 * u, 24 * u * s, 24 * u * s);
+            B["pular"].r = new Rect(W - 30 * u, H - 30 * u, 24 * u, 24 * u);
             B["mortal"].r = new Rect(W - 52 * u, H - 22 * u, 17 * u, 17 * u);
             B["flip"].r = new Rect(W - 50 * u, H - 43 * u, 17 * u, 17 * u);
             B["pirueta"].r = new Rect(W - 30 * u, H - 52 * u, 17 * u, 17 * u);
-            B["correr"].r = new Rect(W - 21 * u, H - 72 * u, 16 * u, 16 * u);
+            B["correr"].r = new Rect(W - 73 * u, H - 19 * u, 16 * u, 16 * u);
+            B["buzina"].r = new Rect(W - 30 * u, H - 30 * u, 22 * u, 22 * u);
             B["subir"].r = new Rect(W / 2 + 2 * u, H - 15 * u, 26 * u, 11 * u);
+            B["dirigir"].r = new Rect(W / 2 + 31 * u, H - 15 * u, 26 * u, 11 * u);
             B["dancar"].r = new Rect(W / 2 - 28 * u, H - 15 * u, 26 * u, 11 * u);
-            B["trocar"].r = new Rect(3 * u, 13 * u, 30 * u, 9 * u);
-            B["dia"].r = new Rect(W - 64 * u, 3 * u, 22 * u, 9 * u);
-            B["som"].r = new Rect(W - 40 * u, 3 * u, 16 * u, 9 * u);
+            B["trocar"].r = new Rect(3 * u, 13 * u, 34 * u, 9 * u);
+            B["camera"].r = new Rect(3 * u, 24 * u, 22 * u, 8 * u);
+            B["pausa"].r = new Rect(W - 13 * u, 3 * u, 10 * u, 9 * u);
+            B["dia"].r = new Rect(W - 37 * u, 3 * u, 22 * u, 9 * u);
+            float ms = 32 * u;
+            miniRect = new Rect(W - ms - 3 * u, 14 * u, ms, ms);
+            float bs = Mathf.Min(W, H) * 0.86f;
+            bigRect = new Rect((W - bs) / 2, (H - bs) / 2, bs, bs);
         }
 
         Btn HitButton(Vector2 p)
@@ -79,12 +98,15 @@ namespace CarretaJoy
             return null;
         }
 
+        bool HitMap(Vector2 p) => MapTex != null && (BigMap || miniRect.Contains(p));
+
         void Update()
         {
             Layout();
             foreach (var b in B.Values) b.pressed = false;
-            CamDelta = Vector2.zero;
-            Move = Vector2.zero;
+            CamDelta = Vector2.zero; Move = Vector2.zero; Zoom = 0;
+            if (toastT > 0) toastT -= Time.unscaledDeltaTime;
+            if (!Active) { joyFinger = camFinger = -1; foreach (var b in B.Values) { b.held = false; b.finger = -1; } return; }
             float W = Screen.width, H = Screen.height;
 
             for (int i = 0; i < Input.touchCount; i++)
@@ -93,15 +115,16 @@ namespace CarretaJoy
                 var p = new Vector2(t.position.x, H - t.position.y); // coordenadas da tela (de cima)
                 if (t.phase == TouchPhase.Began)
                 {
+                    if (HitMap(p)) { BigMap = !BigMap; continue; }
                     var b = HitButton(p);
-                    if (b != null) { b.pressed = true; b.held = true; b.finger = t.fingerId; Buzz(); }
-                    else if (p.x < W * 0.45f && p.y > H * 0.25f && joyFinger < 0) { joyFinger = t.fingerId; joyOrigin = joyPos = p; }
+                    if (b != null) { b.pressed = true; b.held = true; b.finger = t.fingerId; }
+                    else if (p.x < W * 0.45f && p.y > H * 0.3f && joyFinger < 0) { joyFinger = t.fingerId; joyOrigin = joyPos = p; }
                     else if (camFinger < 0) { camFinger = t.fingerId; camLast = p; }
                 }
                 else if (t.phase == TouchPhase.Moved || t.phase == TouchPhase.Stationary)
                 {
                     if (t.fingerId == joyFinger) joyPos = p;
-                    else if (t.fingerId == camFinger) { var d = p - camLast; camLast = p; CamDelta += new Vector2(d.x, d.y) * (0.22f * 1000f / Mathf.Max(600, H)); }
+                    else if (t.fingerId == camFinger) { var d = p - camLast; camLast = p; CamDelta += d * (0.22f * Settings.Sensitivity * 1000f / Mathf.Max(600, H)); }
                 }
                 else
                 {
@@ -119,49 +142,45 @@ namespace CarretaJoy
                 float m = Move.magnitude; if (m < 0.12f) Move = Vector2.zero; else Move *= Mathf.Clamp01((m - 0.12f) / 0.88f) / m;
             }
 
-            // teclado e mouse (para testar no computador)
+            // teclado e mouse (computador)
             if (Input.touchCount == 0)
             {
                 Vector2 k = new Vector2((Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1 : 0) - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1 : 0),
                                         (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1 : 0) - (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1 : 0));
                 if (k != Vector2.zero) Move = k.normalized;
-                if (Input.GetKeyDown(KeyCode.Space)) B["pular"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.Q)) B["mortal"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.E)) B["flip"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.R)) B["pirueta"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.LeftShift)) B["correr"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.F)) B["subir"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.G)) B["dancar"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.Tab)) B["trocar"].pressed = true;
-                if (Input.GetKeyDown(KeyCode.N)) B["dia"].pressed = true;
+                void K(KeyCode c, string id) { if (Input.GetKeyDown(c) && B[id].visible) B[id].pressed = true; }
+                K(KeyCode.Space, "pular"); K(KeyCode.Q, "mortal"); K(KeyCode.E, "flip"); K(KeyCode.R, "pirueta");
+                K(KeyCode.LeftShift, "correr"); K(KeyCode.F, "subir"); K(KeyCode.G, "dancar"); K(KeyCode.V, "dirigir");
+                K(KeyCode.H, "buzina"); K(KeyCode.C, "camera"); K(KeyCode.Tab, "trocar"); K(KeyCode.N, "dia"); K(KeyCode.Escape, "pausa");
+                B["buzina"].held = Input.GetKey(KeyCode.H) || (B["buzina"].held && Input.GetMouseButton(0));
+                if (Input.GetKeyDown(KeyCode.M)) BigMap = !BigMap;
                 var mp = new Vector2(Input.mousePosition.x, H - Input.mousePosition.y);
-                if (Input.GetMouseButtonDown(0)) { var b = HitButton(mp); if (b != null) b.pressed = true; else { mouseCam = true; mouseLast = mp; } }
-                if (Input.GetMouseButtonUp(0)) mouseCam = false;
-                if (mouseCam && Input.GetMouseButton(0)) { var d = mp - mouseLast; mouseLast = mp; CamDelta += d * 0.25f; }
+                if (Input.GetMouseButtonDown(0))
+                {
+                    if (HitMap(mp)) BigMap = !BigMap;
+                    else { var b = HitButton(mp); if (b != null) { b.pressed = true; b.held = true; } else { mouseCam = true; mouseLast = mp; } }
+                }
+                if (Input.GetMouseButtonDown(1)) { mouseCam = true; mouseLast = mp; }
+                if (Input.GetMouseButtonUp(0) || Input.GetMouseButtonUp(1)) { mouseCam = false; foreach (var b in B.Values) if (b.finger < 0) b.held = false; }
+                if (mouseCam && (Input.GetMouseButton(0) || Input.GetMouseButton(1))) { var d = mp - mouseLast; mouseLast = mp; CamDelta += d * 0.25f * Settings.Sensitivity; }
+                Zoom = Input.mouseScrollDelta.y;
             }
-            if (toastT > 0) toastT -= Time.unscaledDeltaTime;
         }
 
         public bool Dragging => camFinger >= 0 || mouseCam;
-
-        void Buzz()
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            // vibração curtinha não existe na API simples; Handheld.Vibrate é longo demais, então fica sem.
-#endif
-        }
 
         // ---------------- desenho ----------------
         void OnGUI()
         {
             if (label == null)
             {
-                label = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
+                label = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = false, clipping = TextClipping.Overflow, normal = { textColor = Color.white } };
                 big = new GUIStyle(label); small = new GUIStyle(label) { alignment = TextAnchor.UpperLeft, fontStyle = FontStyle.Normal };
             }
-            label.fontSize = Mathf.RoundToInt(3.4f * u); big.fontSize = Mathf.RoundToInt(7f * u); small.fontSize = Mathf.RoundToInt(2.6f * u);
+            big.fontSize = Mathf.RoundToInt(7f * u); small.fontSize = Mathf.RoundToInt(2.6f * u);
+            GUI.depth = 10;
+            if (!Active) return;
 
-            // botões
             foreach (var b in B.Values)
             {
                 if (!b.visible) continue;
@@ -173,6 +192,9 @@ namespace CarretaJoy
                 if (b.round) GUI.DrawTexture(b.r, circle);
                 else GUI.DrawTexture(b.r, rrect, ScaleMode.StretchToFill, true, 0, c, 0, 2.2f * u);
                 GUI.color = Color.white;
+                // o texto cabe sempre em uma linha
+                float maxW = b.r.width * (b.round ? 0.86f : 0.9f);
+                label.fontSize = Mathf.RoundToInt(Mathf.Min(3.4f * u, maxW / Mathf.Max(3, b.label.Length) * 1.65f));
                 Shadowed(b.r, b.label, label);
             }
 
@@ -187,7 +209,7 @@ namespace CarretaJoy
                 GUI.DrawTexture(new Rect(k.x - 5 * u, k.y - 5 * u, 10 * u, 10 * u), circle);
                 GUI.color = Color.white;
             }
-            else
+            else if (Application.isMobilePlatform)
             {
                 GUI.color = new Color(1, 1, 1, 0.12f);
                 float R = 11 * u; var o = new Vector2(20 * u, Screen.height - 22 * u);
@@ -195,16 +217,45 @@ namespace CarretaJoy
                 GUI.color = Color.white;
             }
 
-            // placar e informações
+            label.fontSize = Mathf.RoundToInt(3.4f * u);
             Shadowed(new Rect(3 * u, 2 * u, 40 * u, 10 * u), Score, big, TextAnchor.MiddleLeft);
             Shadowed(new Rect(Screen.width / 2 - 40 * u, 2 * u, 80 * u, 6 * u), Info, label);
-            Shadowed(new Rect(Screen.width - 22 * u, 13 * u, 20 * u, 4 * u), Mathf.RoundToInt(Fps) + " FPS", small);
+            Shadowed(new Rect(Screen.width - 60 * u, 4 * u, 20 * u, 4 * u), Mathf.RoundToInt(Fps) + " FPS", small);
+            DrawMap(BigMap ? bigRect : miniRect, BigMap ? 3000f : 520f);
             if (toastT > 0)
             {
                 var c = GUI.color; GUI.color = new Color(1, 1, 1, Mathf.Clamp01(toastT * 2));
                 Shadowed(new Rect(0, Screen.height * 0.28f, Screen.width, 10 * u), Toast, big);
                 GUI.color = c;
             }
+        }
+
+        void DrawMap(Rect r, float span)
+        {
+            if (MapTex == null) return;
+            GUI.color = new Color(0, 0, 0, 0.45f);
+            GUI.DrawTexture(new Rect(r.x - 0.8f * u, r.y - 0.8f * u, r.width + 1.6f * u, r.height + 1.6f * u), rrect);
+            GUI.color = Color.white;
+            // recorte do mapa de cores em volta do jogador (norte para cima)
+            float uw = span / MapWorld.width, vh = span / MapWorld.height;
+            float cu = (MapCenter.x - MapWorld.xMin) / MapWorld.width, cv = (MapCenter.y - MapWorld.yMin) / MapWorld.height;
+            GUI.DrawTextureWithTexCoords(r, MapTex, new Rect(cu - uw / 2, cv - vh / 2, uw, vh));
+            foreach (var d in Dots)
+            {
+                var off = (d.pos - MapCenter) / span;
+                if (Mathf.Abs(off.x) > 0.5f || Mathf.Abs(off.y) > 0.5f) continue;
+                var c = r.center + new Vector2(off.x * r.width, -off.y * r.height);
+                float s = d.size * u;
+                GUI.color = Color.black; GUI.DrawTexture(new Rect(c.x - s / 2 - 1, c.y - s / 2 - 1, s + 2, s + 2), circle);
+                GUI.color = d.c; GUI.DrawTexture(new Rect(c.x - s / 2, c.y - s / 2, s, s), circle);
+            }
+            // seta do jogador (centro)
+            var pc = r.center; float a = 4.5f * u;
+            var m = GUI.matrix;
+            GUIUtility.RotateAroundPivot(MapHeading, pc);
+            GUI.color = Color.white; GUI.DrawTexture(new Rect(pc.x - a / 2, pc.y - a / 2, a, a), arrow);
+            GUI.matrix = m; GUI.color = Color.white;
+            if (BigMap) Shadowed(new Rect(r.x, r.yMax + 0.5f * u, r.width, 4 * u), "Toque para fechar o mapa", small, TextAnchor.UpperCenter);
         }
 
         static void Shadowed(Rect r, string s, GUIStyle st, TextAnchor? a = null)
@@ -218,7 +269,7 @@ namespace CarretaJoy
             st.alignment = old;
         }
 
-        static Texture2D MakeCircle(int s)
+        public static Texture2D MakeCircle(int s)
         {
             var t = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
             float R = s / 2f - 1;
@@ -234,7 +285,7 @@ namespace CarretaJoy
             return t;
         }
 
-        static Texture2D MakeRoundRect(int s, int rad)
+        public static Texture2D MakeRoundRect(int s, int rad)
         {
             var t = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
             for (int y = 0; y < s; y++)
@@ -243,6 +294,24 @@ namespace CarretaJoy
                     float cx = Mathf.Clamp(x + 0.5f, rad, s - rad), cy = Mathf.Clamp(y + 0.5f, rad, s - rad);
                     float d = new Vector2(x + 0.5f - cx, y + 0.5f - cy).magnitude;
                     t.SetPixel(x, y, new Color(1, 1, 1, Mathf.Clamp01(rad - d)));
+                }
+            t.Apply();
+            return t;
+        }
+
+        static Texture2D MakeArrow(int s)
+        {
+            // triângulo apontando para cima (topo da textura = cima na tela)
+            var t = new Texture2D(s, s, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                {
+                    float fy = 1f - (y + 0.5f) / s;                 // 0 em cima
+                    float half = fy * 0.5f;                          // largura cresce para baixo
+                    float dx = Mathf.Abs((x + 0.5f) / s - 0.5f);
+                    bool inside = dx < half && fy < 0.95f;
+                    bool edge = inside && (half - dx < 0.06f || fy > 0.85f);
+                    t.SetPixel(x, y, inside ? (edge ? new Color(0.1f, 0.1f, 0.1f, 1) : new Color(1f, 0.85f, 0.2f, 1)) : new Color(0, 0, 0, 0));
                 }
             t.Apply();
             return t;

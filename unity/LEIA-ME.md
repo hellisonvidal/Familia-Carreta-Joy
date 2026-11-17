@@ -19,6 +19,11 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   TROCAR (passa para o próximo personagem), DIA/NOITE e SOM. O outro menino acompanha e copia as acrobacias.
 - Música gerada na hora (funk/pop), mais alta perto da carreta.
 
+- **v0.4.0:** menu inicial (Jogar, Personagem, Ponto de partida, Ajustes, Sair), pausa, ajustes salvos
+  (música, gráficos Leve/Médio/Alto, 30/60 quadros, câmera, turma segue ou cada um parado, sensibilidade),
+  dirigir a carreta (DIRIGIR perto da cabine; ao sair ela fica estacionada; "piloto auto" na pausa),
+  minimapa (toque para ampliar), 4 câmeras, troca de personagem por lista, versão Windows com instalador.
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 
@@ -45,7 +50,8 @@ O Unity exige uma licença, mesmo a gratuita. **Configure uma vez:**
 Abra a pasta `unity` no Unity Hub com a versão **6000.3.28f1** e o módulo **Android Build Support**.
 Depois use o menu **Carreta Joy → Preparar projeto** e aperte Play, ou **Carreta Joy → Gerar APK**.
 No computador: WASD/setas andam, espaço pula, Q mortal, E flip, R pirueta, Shift corre,
-F sobe/desce, G dança, Tab troca de menino, N dia/noite, e arrastar com o mouse gira a câmera.
+F sobe/desce, G dança, V dirige/sai, H buzina, C câmera, M mapa, Tab troca, N dia/noite, Esc pausa;
+mouse arrasta para girar a câmera e a rodinha aproxima.
 
 ## Próximas fases
 2. Mundo aberto completo: as 5 cidades com subidas e descidas, carros, pessoas, parkour e dirigir a carreta.
