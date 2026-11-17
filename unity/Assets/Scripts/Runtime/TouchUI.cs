@@ -33,6 +33,7 @@ namespace CarretaJoy
         public bool BigMap;
         Rect miniRect, bigRect;
 
+        bool rtWas, ltWas;
         int joyFinger = -1, camFinger = -1; Vector2 joyOrigin, joyPos, camLast;
         Vector2 mouseLast; bool mouseCam;
         Texture2D circle, rrect, arrow;
@@ -51,6 +52,9 @@ namespace CarretaJoy
             Add("correr", "CORRER", true, new Color(1f, 0.6f, 0.1f));
             Add("andar", "ANDAR", true, new Color(0.3f, 0.7f, 0.6f));
             Add("manobras", "MANOBRAS", true, new Color(0.85f, 0.3f, 0.55f));
+            Add("rolar", "ROLAR", true, new Color(0.2f, 0.75f, 0.55f));
+            Add("deslizar", "DESLIZAR", true, new Color(0.95f, 0.55f, 0.15f));
+            Add("ninja", "NINJA", true, new Color(0.35f, 0.35f, 0.4f));
             Add("subir", "SUBIR", false, new Color(0.1f, 0.65f, 0.75f));
             Add("dirigir", "DIRIGIR", false, new Color(0.95f, 0.45f, 0.1f));
             Add("buzina", "BUZINA", true, new Color(0.95f, 0.8f, 0.1f));
@@ -75,9 +79,12 @@ namespace CarretaJoy
             B["andar"].r = new Rect(W - 71 * u, H - 17 * u, 15 * u, 15 * u);
             B["manobras"].r = new Rect(W - 49 * u, H - 42 * u, 17 * u, 17 * u);
             // manobras (abrem num leque acima do botão MANOBRAS)
-            B["mortal"].r = new Rect(W - 76 * u, H - 40 * u, 15 * u, 15 * u);
-            B["flip"].r = new Rect(W - 70 * u, H - 58 * u, 15 * u, 15 * u);
-            B["pirueta"].r = new Rect(W - 52 * u, H - 63 * u, 15 * u, 15 * u);
+            B["mortal"].r = new Rect(W - 76 * u, H - 40 * u, 14 * u, 14 * u);
+            B["flip"].r = new Rect(W - 71 * u, H - 57 * u, 14 * u, 14 * u);
+            B["pirueta"].r = new Rect(W - 54 * u, H - 62 * u, 14 * u, 14 * u);
+            B["rolar"].r = new Rect(W - 93 * u, H - 30 * u, 14 * u, 14 * u);
+            B["deslizar"].r = new Rect(W - 92 * u, H - 47 * u, 14 * u, 14 * u);
+            B["ninja"].r = new Rect(W - 87 * u, H - 64 * u, 14 * u, 14 * u);
             B["buzina"].r = new Rect(W - 30 * u, H - 30 * u, 22 * u, 22 * u);
             B["subir"].r = new Rect(W / 2 + 2 * u, H - 15 * u, 26 * u, 11 * u);
             B["dirigir"].r = new Rect(W / 2 + 31 * u, H - 15 * u, 26 * u, 11 * u);
@@ -157,7 +164,7 @@ namespace CarretaJoy
                 void K(KeyCode c, string id) { if (Input.GetKeyDown(c) && B[id].visible) B[id].pressed = true; }
                 K(KeyCode.Space, "pular"); K(KeyCode.Q, "mortal"); K(KeyCode.E, "flip"); K(KeyCode.R, "pirueta");
                 if (Input.GetKeyDown(KeyCode.LeftShift)) B[B["correr"].toggled ? "andar" : "correr"].pressed = true; K(KeyCode.F, "subir"); K(KeyCode.G, "dancar"); K(KeyCode.V, "dirigir");
-                K(KeyCode.H, "buzina"); K(KeyCode.C, "camera"); K(KeyCode.Tab, "trocar"); K(KeyCode.N, "dia"); K(KeyCode.Escape, "pausa");
+                K(KeyCode.H, "buzina"); K(KeyCode.Z, "rolar"); K(KeyCode.X, "deslizar"); K(KeyCode.T, "ninja"); K(KeyCode.C, "camera"); K(KeyCode.Tab, "trocar"); K(KeyCode.N, "dia"); K(KeyCode.Escape, "pausa");
                 B["buzina"].held = Input.GetKey(KeyCode.H) || (B["buzina"].held && Input.GetMouseButton(0));
                 if (Input.GetKeyDown(KeyCode.M)) BigMap = !BigMap;
                 var mp = new Vector2(Input.mousePosition.x, H - Input.mousePosition.y);
@@ -180,7 +187,10 @@ namespace CarretaJoy
                 CamDelta += Pad.Right * 150f * Time.unscaledDeltaTime * Settings.Sensitivity;
                 void P(bool down, string id) { if (down && B[id].visible) B[id].pressed = true; }
                 P(Pad.Down(Pad.A), "pular"); P(Pad.Down(Pad.B), "subir"); P(Pad.Down(Pad.X), "mortal"); P(Pad.Down(Pad.Y), "flip");
-                P(Pad.Down(Pad.LB), "pirueta");
+                P(Pad.Down(Pad.LB), "pirueta"); P(Pad.Down(9), "ninja");
+                // gatilhos: a pé rolam/deslizam; dirigindo aceleram/freiam
+                if (!B["buzina"].visible) { P(Pad.RT > 0.6f && !rtWas, "rolar"); P(Pad.LT > 0.6f && !ltWas, "deslizar"); }
+                rtWas = Pad.RT > 0.6f; ltWas = Pad.LT > 0.6f;
                 if (Pad.Down(Pad.RB)) P(true, B["correr"].toggled ? "andar" : "correr");
                 P(Pad.DUp, "dancar"); P(Pad.DDown || Pad.Down(Pad.L3W), "dirigir"); P(Pad.DLeft, "camera"); P(Pad.DRight, "trocar");
                 P(Pad.Start, "pausa"); P(Pad.Select, "dia");

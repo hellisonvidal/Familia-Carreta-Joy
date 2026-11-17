@@ -139,4 +139,6 @@ jobs:
             - A carreta segue o percurso sozinha e a turma vai em cima dela dançando (ou: me seguem / parados)
             - Seletor de personagens com fotos; botões ANDAR, CORRER e MANOBRAS
             - Controle de videogame (Xbox, PlayStation e genéricos) no jogo e nos menus
+            - **Atualização por dentro do jogo** (menu inicial / Ajustes): baixa e instala sem navegador
+            - Parkour e acrobacias novas (animações livres CC0 da Quaternius): rolar, deslizar, salto ninja, escalar muretas, 2ª dança; Afonso começa agachado
             - Subir e descer da carreta, dançar em cima, mortal, flip e pirueta

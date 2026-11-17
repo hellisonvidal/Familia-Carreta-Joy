@@ -29,6 +29,10 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   (A pula, B sobe/desce, X mortal, Y flip, LB pirueta, RB anda/corre, direcional: cima dança, baixo dirige,
   esquerda câmera, direita troca; Start pausa; gatilhos aceleram/freiam). Corrigido: personagens gigantes e carreta em pé.
 
+- **v0.6.0:** atualizador dentro do jogo (Android: PackageInstaller; Windows: baixa e abre o instalador);
+  animações livres CC0 da Quaternius (`Assets/Resources/Animations/Livres`): rolar, deslizar, salto ninja,
+  escalar mureta (parkour: PULAR de frente para um obstáculo de 0,5 a 2 m), 2ª dança, Afonso começa agachado.
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 

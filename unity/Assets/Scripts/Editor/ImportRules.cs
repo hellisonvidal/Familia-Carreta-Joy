@@ -58,14 +58,15 @@ namespace CarretaJoy.EditorTools
             if (!IsAnim(assetPath)) return;
             var mi = (ModelImporter)assetImporter;
             string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
-            bool loop = Loops.Contains(file);
+            bool loop = Loops.Contains(file) || file.EndsWith("_Loop");
+            bool livre = assetPath.Contains("/Animations/Livres/");   // Quaternius (CC0): corpo virado pela orientação do esqueleto
             var clips = mi.defaultClipAnimations;
             foreach (var c in clips)
             {
                 c.loopTime = loop;
                 c.loopPose = loop;
                 c.lockRootRotation = true;           // não gira o corpo sozinho
-                c.keepOriginalOrientation = true;
+                c.keepOriginalOrientation = !livre;
                 if (loop)
                 {
                     // andar/correr/dançar no lugar: quem move o menino é o jogo

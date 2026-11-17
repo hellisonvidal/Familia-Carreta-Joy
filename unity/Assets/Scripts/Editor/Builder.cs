@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.5.0";
-        public const int VERSION_CODE = 5;
+        public const string VERSION = "0.6.0";
+        public const int VERSION_CODE = 6;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]
@@ -227,6 +227,8 @@ namespace CarretaJoy.EditorTools
             PlayerSettings.allowedAutorotateToLandscapeLeft = true;
             PlayerSettings.allowedAutorotateToLandscapeRight = true;
             PlayerSettings.Android.renderOutsideSafeArea = true;
+            PlayerSettings.Android.forceInternetPermission = true;   // atualizador
+            PlayerSettings.Android.applicationEntry = AndroidApplicationEntry.Activity;
             PlayerSettings.Android.startInFullscreen = true;
             PlayerSettings.runInBackground = false;
 

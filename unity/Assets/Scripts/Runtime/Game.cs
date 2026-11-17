@@ -17,6 +17,7 @@ namespace CarretaJoy
         Camera cam; CameraRig rig; Light sun; Volume volume; Bloom bloom; ColorAdjustments color;
         Material sky;
         PgCity city; Truck truck; Music music; TouchUI ui; MenuUI menu;
+        public Updater updater;
         AudioSource horn;
         // turma: id do modelo, nome, altura (m)
         static readonly (string id, string nome, float h)[] ROSTER = {
@@ -87,10 +88,24 @@ namespace CarretaJoy
                 mortal = KidClips.Load("Animations/Mortal"),
                 flip = KidClips.Load("Animations/Flip"),
                 pirueta = KidClips.Load("Animations/RunToFlip"),
+                // animações livres (Quaternius, CC0)
+                air = KidClips.Load("Animations/Livres/PuloAr_Loop"),
+                roll = KidClips.Load("Animations/Livres/Rolamento"),
+                slideIn = KidClips.Load("Animations/Livres/Deslize_Inicio"),
+                slideLoop = KidClips.Load("Animations/Livres/Deslize_Loop"),
+                slideOut = KidClips.Load("Animations/Livres/Deslize_Fim"),
+                climb = KidClips.Load("Animations/Livres/Escalar"),
+                ninjaIn = KidClips.Load("Animations/Livres/Ninja_Inicio"),
+                ninjaLoop = KidClips.Load("Animations/Livres/Ninja_Loop"),
+                ninjaOut = KidClips.Load("Animations/Livres/Ninja_Fim"),
+                crouch = KidClips.Load("Animations/Livres/Agachado_Loop"),
+                dance2 = KidClips.Load("Animations/Livres/Danca2_Loop"),
             };
             var arthurClips = new KidClips
             {
                 idle = common.idle, dance = common.dance, jump = common.jump, mortal = common.mortal, flip = common.flip, pirueta = common.pirueta,
+                air = common.air, roll = common.roll, slideIn = common.slideIn, slideLoop = common.slideLoop, slideOut = common.slideOut, climb = common.climb,
+                ninjaIn = common.ninjaIn, ninjaLoop = common.ninjaLoop, ninjaOut = common.ninjaOut, crouch = common.crouch, dance2 = common.dance2,
                 walk = KidClips.Load("Animations/Arthur_AndarCorrer", "Walking") ?? common.walk,
                 run = KidClips.Load("Animations/Arthur_AndarCorrer", "Running") ?? common.run,
             };
@@ -107,6 +122,8 @@ namespace CarretaJoy
 
             ui = gameObject.AddComponent<TouchUI>();
             menu = gameObject.AddComponent<MenuUI>(); menu.game = this;
+            updater = gameObject.AddComponent<Updater>();
+            Invoke(nameof(CheckUpdates), 2f);
             rig = cam.gameObject.AddComponent<CameraRig>();
             ui.MapTex = city.GroundTexture; ui.MapWorld = city.GroundRect;
             PlaceAtStart();
@@ -143,6 +160,7 @@ namespace CarretaJoy
         }
 
         public void Resume() { }
+        void CheckUpdates() { if (Application.internetReachability != NetworkReachability.NotReachable) updater.Check(); }
         public void GoMenu() { if (Driving) ToggleDrive(false); playing = false; menu.Open(MenuUI.Page.Main); }
         public void PreviewStart() { if (!playing) PlaceAtStart(); }
         public void SelectPlayer(int i) { if (Driving) ToggleDrive(false); SetPlayer(i); ui.ShowToast("Agora: " + player.Name); }
@@ -167,6 +185,7 @@ namespace CarretaJoy
                 p.y = city.Height(p.x, p.z) + 0.3f;
                 var look = tp.position - p; look.y = 0;
                 k.Teleport(p, Quaternion.LookRotation(look.sqrMagnitude > 0.01f ? look : Vector3.forward, Vector3.up));
+                if (ROSTER[i].id == "Afonso") k.StartCrouched();   // a pose dele: começa agachado e levanta ao andar
             }
         }
 
@@ -371,6 +390,9 @@ namespace CarretaJoy
             if (ui.Pressed("mortal")) { player.DoTrick("mortal"); CrewCopy("mortal"); }
             if (ui.Pressed("flip")) { player.DoTrick("flip"); CrewCopy("flip"); }
             if (ui.Pressed("pirueta")) { player.DoTrick("pirueta"); CrewCopy("pirueta"); }
+            if (ui.Pressed("rolar")) { player.DoTrick("rolar"); CrewCopy("rolar"); }
+            if (ui.Pressed("deslizar")) { player.DoTrick("deslizar"); CrewCopy("deslizar"); }
+            if (ui.Pressed("ninja")) { player.DoTrick("ninja"); CrewCopy("ninja"); }
             if (ui.Pressed("dancar"))
             {
                 player.ToggleDance();
@@ -408,7 +430,7 @@ namespace CarretaJoy
         {
             foreach (var id in new[] { "pular", "correr", "andar", "manobras", "dancar", "subir" }) ui.B[id].visible = foot;
             // manobras: abertas pelo botão MANOBRAS (o controle de videogame alcança sempre)
-            foreach (var id in new[] { "mortal", "flip", "pirueta" }) ui.B[id].visible = foot && (tricksOpen || Pad.Connected);
+            foreach (var id in new[] { "mortal", "flip", "pirueta", "rolar", "deslizar", "ninja" }) ui.B[id].visible = foot && (tricksOpen || Pad.Connected);
             ui.B["buzina"].visible = !foot;
         }
 

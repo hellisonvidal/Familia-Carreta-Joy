@@ -76,6 +76,22 @@ namespace CarretaJoy
 
         bool B(Rect r, string s, bool sel = false) => GUI.Button(r, s, sel ? btnSel : btn);
 
+        /// <summary>Aviso de versão nova no menu inicial: baixa e instala sem sair do jogo.</summary>
+        void UpdateBox(float W, float x, float y, float w)
+        {
+            var up = game.updater;
+            if (up == null || w < 20 * u || !(up.Available || up.Busy && up.Progress > 0)) return;
+            var r = new Rect(x, y, w, 10 * u);
+            if (up.Busy)
+            {
+                GUI.color = new Color(0, 0, 0, 0.5f); GUI.DrawTexture(r, rr); GUI.color = new Color(0.3f, 0.85f, 0.4f);
+                GUI.DrawTexture(new Rect(r.x, r.y, r.width * Mathf.Clamp01(up.Progress), r.height), rr); GUI.color = Color.white;
+                lbl.alignment = TextAnchor.MiddleCenter; GUI.Label(r, up.Status, small); lbl.alignment = TextAnchor.MiddleLeft;
+            }
+            else if (B(r, "ATUALIZAR PARA " + up.Latest, true)) up.DownloadAndInstall();
+            if (!up.Busy) GUI.Label(new Rect(x, r.yMax, w, 5 * u), up.Status, small);
+        }
+
         void Title(float W, float y, string t, string s)
         {
             var c = title.normal.textColor;
@@ -91,11 +107,13 @@ namespace CarretaJoy
             Title(W, 6 * u, "CARRETA JOY", "Ponta Grossa - PR");
             float bw = 62 * u, bh = 10 * u, x = (W - bw) / 2, y = 30 * u, gap = 12 * u;
             if (B(new Rect(x, y, bw, bh), "JOGAR", true)) game.StartGame();
+            UpdateBox(W, x + bw + 3 * u, y, Mathf.Min(44 * u, W - (x + bw + 5 * u)));
             if (B(new Rect(x, y + gap, bw, bh), "Personagem: " + game.CharName(Settings.StartChar))) Open(Page.Chars);
             if (B(new Rect(x, y + gap * 2, bw, bh), "Partida: " + game.StopName(Settings.StartStop))) Open(Page.Start);
             if (B(new Rect(x, y + gap * 3, bw / 2 - u, bh), "Ajustes")) Open(Page.Settings);
             if (B(new Rect(x + bw / 2 + u, y + gap * 3, bw / 2 - u, bh), "Sair")) Application.Quit();
             small.alignment = TextAnchor.LowerCenter;
+            GUI.Label(new Rect(0, H - 13 * u, W, 5 * u), "versão " + Application.version, small);
             GUI.Label(new Rect(0, H - 8 * u, W, 6 * u), (Pad.Connected ? "Controle: A jogar · Y personagem · X partida    " : "") + "Mapa: © colaboradores do OpenStreetMap", small);
             small.alignment = TextAnchor.MiddleLeft;
         }
@@ -225,6 +243,15 @@ namespace CarretaJoy
             Row("Turma"); Settings.CrewMode = Choice(Settings.CrewMode, Settings.CrewNames); y += rowH;
             Row("Sensibilidade"); Settings.Sensitivity = Mathf.Lerp(0.4f, 2f, Slider(new Rect(x + lw, y, cw, rowH * 0.85f), Mathf.InverseLerp(0.4f, 2f, Settings.Sensitivity))); y += rowH;
             if (B(new Rect(W / 2 - 20 * u, y + u, 40 * u, 10 * u), "OK", true)) { Settings.Save(); game.ApplySettings(); page = back; }
+            // atualizações
+            var up = game.updater;
+            if (up != null)
+            {
+                float ux = W / 2 + 24 * u, uy = y + u;
+                if (!up.Busy && B(new Rect(ux, uy, 36 * u, 10 * u), up.Available ? "ATUALIZAR " + up.Latest : "Procurar versão nova", up.Available))
+                { if (up.Available) up.DownloadAndInstall(); else up.Check(); }
+                GUI.Label(new Rect(W / 2 - 60 * u, uy + 11 * u, 120 * u, 5 * u), "versão " + Application.version + "   " + up.Status, small);
+            }
         }
 
         float Slider(Rect r, float v)
