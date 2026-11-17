@@ -1,10 +1,44 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emory[Cc]apture/
+
+# Unity generated files
+*.pidb
+*.booproj
+*.csproj
+*.unityproj
+*.sln
+*.userprefs
+*.pidb
+
+# Gradle
 .gradle/
 build/
 app/build/
 local.properties
 *.iml
+
+# IDE
 .idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
-captures/
-.externalNativeBuild/
-.cxx/
+Thumbs.db
+
+# Android
+*.apk
+*.aab
+*.keystore
+keystore/
+*.jks
+
+# Logs
+*.log

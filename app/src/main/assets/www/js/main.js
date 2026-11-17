@@ -9,7 +9,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CITIES, DURATIONS } from './cities.js';
 import { City, HALF } from './city.js';
 import { Truck, VARIANTS, TRUCK_LEN } from './truck.js';
-import { Actor, TRICKS } from './actor.js';
+import { Actor, TRICKS, DANCE_NAMES } from './actor.js';
 import { CHARACTERS, COSTUMES, KID_COSTUMES, makeBody, POSES } from './characters.js';
 import { Music, STYLES } from './music.js';
 import { Dance, PADS } from './dance.js';
@@ -27,6 +27,8 @@ let save = {
   settings: { music: 0.8, sfx: 0.9, quality: 'media', bright: 1.2, contrast: 1.05, satur: 1.1, fps: 30, vibrar: true },
 };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s) save = { ...save, ...s, settings: { ...save.settings, ...(s.settings || {}) }, costumes: { ...save.costumes, ...(s.costumes || {}) } }; } catch (e) { }
+if (!CHARACTERS.some(c => c.id === save.char)) save.char = 'arthur';
+for (const k of ['arthur', 'afonso']) if (save.costumes[k] && save.costumes[k] !== 'normal' && !COSTUMES[save.costumes[k]]) save.costumes[k] = 'normal';
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { } };
 
 // ---------------- renderizador ----------------
@@ -39,10 +41,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.55;
+scene.environmentIntensity = 0.75;
 const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 5000);
 // luz que acompanha a câmera: ilumina o rosto dos personagens (nada de personagem escuro)
-const camLight = new THREE.DirectionalLight(0xffffff, 0.9);
+const camLight = new THREE.DirectionalLight(0xffffff, 1.05);
 scene.add(camLight, camLight.target);
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -109,6 +111,8 @@ async function loadModels() {
   const prog = {};
   const upd = () => { const v = Object.values(prog); const l = v.reduce((a, p) => a + p.l, 0), t = v.reduce((a, p) => a + p.t, 0) || 1; $('loadbar').style.width = `${Math.round(100 * l / t)}%`; };
   files.xbot = 'models/xbot.glb'; files.arthurRig = 'models/ArthurRig.glb'; files.afonsoRig = 'models/AfonsoRig.glb';
+  files.chavesRig = 'models/ChavesRig.glb'; files.fofaoRig = 'models/FofaoRig.glb'; files.chapolinRig = 'models/ChapolinRig.glb';
+  files.mascaraRig = 'models/MascaraRig.glb'; files.aranhaRig = 'models/AranhaRig.glb'; files.capitaoRig = 'models/CapitaoRig.glb'; files.hulkRig = 'models/HulkRig.glb';
   delete files.arthurBody; delete files.afonsoBody;
   for (const n of Object.keys(CLIP_INFO)) files['anim_' + n] = `anims/${n}.glb`;
   const raw = {};
@@ -127,15 +131,14 @@ async function loadModels() {
 
 // retrato para os menus
 const thumbs = {};
-function makeThumb(obj, key) {
-  const W = 192, H = 256, rt = new THREE.WebGLRenderTarget(W, H);
-  const sc = new THREE.Scene(); sc.environment = scene.environment;
-  sc.add(new THREE.HemisphereLight(0xffffff, 0x553377, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(1, 2, 3); sc.add(dl);
+const truckThumbs = {};
+function renderOffscreen(obj, W, H, camPos, camLookAt, fov = 28) {
+  const rt = new THREE.WebGLRenderTarget(W, H);
+  const sc = new THREE.Scene(); sc.environment = scene.environment; sc.environmentIntensity = 0.85;
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x553377, 2.3)); const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(1, 2, 3); sc.add(dl);
   sc.add(obj); obj.updateMatrixWorld(true);
-  const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
-  const cam = new THREE.PerspectiveCamera(28, W / H, 0.01, 100);
-  const look = new THREE.Vector3(c.x, box.min.y + s.y * 0.58, c.z);
-  cam.position.set(c.x + s.y * 0.15, look.y + s.y * 0.05, c.z + s.y * 2.3); cam.lookAt(look);
+  const cam = new THREE.PerspectiveCamera(fov, W / H, 0.05, 200);
+  cam.position.copy(camPos); cam.lookAt(camLookAt);
   renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(sc, cam);
   const px = new Uint8Array(W * H * 4);
   renderer.readRenderTargetPixels(rt, 0, 0, W, H, px); renderer.setRenderTarget(null);
@@ -143,7 +146,15 @@ function makeThumb(obj, key) {
   const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H);
   for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
   ctx.putImageData(img, 0, 0); rt.dispose(); sc.remove(obj);
-  thumbs[key] = cv.toDataURL(); return thumbs[key];
+  return cv.toDataURL();
+}
+function makeThumb(obj, key) {
+  obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const look = new THREE.Vector3(c.x, box.min.y + s.y * 0.58, c.z);
+  const pos = new THREE.Vector3(c.x + s.y * 0.15, look.y + s.y * 0.05, c.z + s.y * 2.3);
+  thumbs[key] = renderOffscreen(obj, 192, 256, pos, look, 28);
+  return thumbs[key];
 }
 function renderThumbs() {
   for (const def of CHARACTERS) {
@@ -153,6 +164,21 @@ function renderThumbs() {
       if (b.update) { for (let k = 0; k < 3; k++) b.update(0.1, pose); } else b.apply(pose.pose);
       makeThumb(b.root, def.id);
     } catch (e) { console.warn('retrato', def.id, e); }
+  }
+  for (const v of VARIANTS) {
+    try {
+      const t = new Truck(assets.carreta, v);
+      t.setNight(false);
+      t.root.matrixAutoUpdate = true;
+      t.root.updateMatrixWorld(true);
+      const h = t.height || 4.5;
+      truckThumbs[v.id] = renderOffscreen(
+        t.root, 320, 200,
+        new THREE.Vector3(14.5, h * 0.8 + 3.0, 14.0),
+        new THREE.Vector3(0, h * 0.52, 0),
+        34
+      );
+    } catch (e) { console.warn('carreta', v.id, e); }
   }
 }
 
@@ -188,14 +214,17 @@ function buildMenu() {
   const tl = $('trucklist'); tl.innerHTML = '';
   VARIANTS.forEach(v => {
     const b = document.createElement('button'); b.className = 'card' + (save.truck === v.id ? ' sel' : '');
-    b.innerHTML = `<div class="sw" style="background:${v.id === 'arcoiris' ? 'linear-gradient(90deg,#ff3d7f,#ffc400,#00c853,#2979ff)' : v.cor}"></div><b>${v.nome}</b><small>${v.desc}</small>`;
+    const img = truckThumbs[v.id] ? `<img class="truck-img" src="${truckThumbs[v.id]}" alt="${v.nome}">` : `<div class="sw" style="background:${v.id === 'arcoiris' ? 'linear-gradient(90deg,#ff3d7f,#ffc400,#00c853,#2979ff)' : v.cor}"></div>`;
+    b.innerHTML = `${img}<b>${v.nome}</b><small>${v.desc}</small>`;
     b.onclick = () => { save.truck = v.id; persist(); music.init(); music.sfx('click'); buildMenu(); menuScene(true); };
     tl.appendChild(b);
   });
   const tm = $('timelist'); tm.innerHTML = '';
   DURATIONS.forEach(m => { const b = document.createElement('button'); b.className = 'chip' + (save.minutes === m ? ' sel' : ''); b.textContent = `${m} min`; b.onclick = () => { save.minutes = m; persist(); music.init(); music.sfx('click'); buildMenu(); }; tm.appendChild(b); });
   const c = CITIES[G.cityIdx], def = CHARACTERS.find(d => d.id === save.char) || CHARACTERS[0], v = VARIANTS.find(v => v.id === save.truck) || VARIANTS[0];
-  $('summary').innerHTML = `🏙️ <b>${c.nome}</b> ${night ? '🌙' : '☀️'} · 🧒 <b>${def.nome}</b> · 🚚 <b>${v.nome}</b> · ⏱ <b>${save.minutes} min</b>`;
+  const txt = `🏙️ <b>${c.nome}</b> ${night ? '🌙' : '☀️'} · 🧒 <b>${def.nome}</b> · 🚚 <b>${v.nome}</b> · ⏱ <b>${save.minutes} min</b>`;
+  $('summary').innerHTML = txt;
+  if ($('homeSummary')) $('homeSummary').innerHTML = txt;
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('sel', x === t));
@@ -237,8 +266,19 @@ function openConfig() {
   $('volMusic').value = s.music; $('volSfx').value = s.sfx; $('quality').value = s.quality; $('bright').value = s.bright; $('contrast').value = s.contrast; $('satur').value = s.satur;
   show('config', true);
 }
-$('btnConfig').onclick = openConfig;
+$('btnHomePlay').onclick = () => { music.init(); music.sfx('click'); show('home', false); show('menu', true); };
+$('btnHomeConfig').onclick = () => { music.init(); music.sfx('click'); openConfig(); };
+$('btnHomeExit').onclick = () => exitGame();
+$('btnMenuBack').onclick = () => { music.init(); music.sfx('click'); show('menu', false); show('home', true); };
 $('btnPauseCfg').onclick = openConfig;
+$('btnPauseExit').onclick = () => exitGame();
+function exitGame() {
+  persist();
+  if (music.ctx) try { music.ctx.suspend(); } catch (e) { }
+  if (APP && APP.exitApp) { APP.exitApp(); return; }
+  window.close();
+  toast('Pode fechar a aba para sair do jogo.', 'small');
+}
 $('volMusic').oninput = (e) => { save.settings.music = +e.target.value; music.setVolumes(save.settings.music, save.settings.sfx); };
 $('volSfx').oninput = (e) => { save.settings.sfx = +e.target.value; music.setVolumes(save.settings.music, save.settings.sfx); music.init(); music.sfx('coin'); };
 $('bright').oninput = (e) => { save.settings.bright = +e.target.value; applyLook(); };
@@ -335,7 +375,7 @@ function startCity(idx, night) {
   G.total = save.minutes * 60; G.timeLeft = G.total;
   G.phase = 'intro'; G.phaseT = 0; G.paused = false; G.freeze = false; G.dancing = false;
   G.party = null; G.escort = null; G.startedEscort = false; escortRound = 0; G.meter = 0; G.comboDance = false;
-  ['menu', 'pause', 'results', 'picker'].forEach(s => show(s, false));
+  ['home', 'menu', 'pause', 'results', 'picker'].forEach(s => show(s, false));
   $('hud').classList.remove('hidden');
   $('cityname').textContent = `${G.cityDef.nome} · 🎵 ${STYLES[G.cityDef.musica].nome}`;
   drawMinimapBase();
@@ -380,7 +420,7 @@ function onEvent(type, a, x, y, airTime) {
       if (list.length) {
         let base = list.reduce((s, t) => s + TRICKS[t].pts, 0); if (list.length > 1) base *= 1 + (list.length - 1) * 0.5;
         const pts = addScore(base, a); bump(); if (me) fillCombo(pts); G.stats.tricks += list.length;
-        if (me) { toast(`${list.map(t => TRICKS[t].nome).join(' + ')}! +${pts}`, list.length > 1 ? 'gold' : ''); music.sfx(list.length > 1 ? 'combo' : 'trick'); }
+        if (me) { toast(`${list.map(t => TRICKS[t].nome).join(' + ')}! +${pts}`, list.length > 1 ? 'gold' : ''); music.sfx(list.length > 1 ? 'combo' : 'trick'); rumble(0.25, 0.5, 110); }
       }
       if (top && ['carro', 'banco', 'quiosque', 'container', 'loja', 'caixa', 'palco', 'tubo', 'degrau'].includes(top.kind) && me && airTime > 0.25) {
         const pts = addScore(top.kind === 'banco' ? 15 : 40, a); bump(); fillCombo(pts); G.stats.parkour++; toast(`PARKOUR! +${pts}`, 'small');
@@ -388,8 +428,12 @@ function onEvent(type, a, x, y, airTime) {
       if (me) music.sfx('land');
       break;
     }
-    case 'rampa': if (me) { toast('VOOOU! 🚀', 'small'); music.sfx('jump'); } addScore(30, a); break;
-    case 'tombo': G.combo = 0; G.stats.tombos++; if (me) { toast(x ? 'Caiu da manobra!' : 'Opa! Tombo!', 'bad'); music.sfx('crash'); G.shake = 0.4; } break;
+    case 'rampa': if (me) { toast('VOOOU! 🚀', 'small'); music.sfx('jump'); rumble(0.35, 0.2, 130); } addScore(30, a); break;
+    case 'dash': if (me) { music.sfx('jump'); const p = addScore(45, a); bump(); fillCombo(p); burst(a.worldPos(G), 0x00e5ff); toast(`💨 ESQUIVA! +${p}`, 'small'); } break;
+    case 'slide': if (me) { music.sfx('climb'); const p = addScore(60, a); bump(); fillCombo(p); burst(a.worldPos(G), 0xff9100); toast(`🥾 SLIDE! +${p}`, 'small'); } break;
+    case 'duploPulo': if (me) { music.sfx('jump'); const p = addScore(50, a); bump(); fillCombo(p); G.stats.tricks++; burst(a.worldPos(G), 0x69f0ae); toast(`✨ PULO DUPLO! +${p}`, 'small'); } break;
+    case 'walljump': if (me) { music.sfx('climb'); const p = addScore(80, a); bump(); fillCombo(p); G.stats.parkour++; burst(a.worldPos(G), 0xffc400); toast(`🧗 WALL JUMP! +${p}`, 'small'); } break;
+    case 'tombo': G.combo = 0; G.stats.tombos++; if (me) { toast(x ? 'Caiu da manobra!' : 'Opa! Tombo!', 'bad'); music.sfx('crash'); G.shake = 0.4; rumble(0.8, 0.4, 220); } break;
     case 'nota': addScore(10, a); G.comboT = Math.max(G.comboT, 2.5); G.stats.notes++; if (G.now - lastCoin > 0.06) { music.sfx('coin'); lastCoin = G.now; } break;
     case 'estrelaDourada': addScore(250, a); bump(); G.stats.gold++; music.sfx('star'); toast('⭐ ESTRELA DOURADA! ⭐', 'gold'); break;
   }
@@ -441,6 +485,7 @@ function updateControls() {
   $('meterFill').style.width = `${Math.min(100, 100 * (G.meter || 0) / COMBO_FULL)}%`; $('meter').classList.toggle('full', full);
   $('btnCombo').classList.toggle('hidden', !(full && !driving && !G.dancing));
   $('btnRun').classList.toggle('hidden', driving);
+  const sl = $('btnSlide'); if (sl) sl.textContent = p.frame === 'truck' ? '🪩 DANÇA' : '🥾 SLIDE';
   $('controls').style.visibility = G.dancing ? 'hidden' : 'visible';
   document.querySelector('.topcenter').style.visibility = G.dancing ? 'hidden' : 'visible';
   $('timer').textContent = '⏱ ' + fmtTime(G.timeLeft); $('timer').classList.toggle('low', G.timeLeft < 30);
@@ -489,8 +534,8 @@ function joyMove(e) {
   const R = joyEl.offsetWidth / 2;
   let dx = (e.clientX - joyC.x) / R, dy = (e.clientY - joyC.y) / R, m = Math.hypot(dx, dy);
   if (m > 1) { joyC.x += (dx / m) * (m - 1) * R; joyC.y += (dy / m) * (m - 1) * R; joyPlace(joyC.x, joyC.y); dx /= m; dy /= m; m = 1; }
-  // zona morta pequena + curva de resposta (mais preciso no começo, rápido no fim)
-  const dead = 0.1, k = m < dead ? 0 : Math.min(1, (m - dead) / (1 - dead)), out = m > 0 ? Math.pow(k, 0.85) / m : 0;
+  // zona morta pequena + curva de resposta (precisa no ajuste fino, rápida no fim)
+  const dead = 0.06, k = m < dead ? 0 : Math.min(1, (m - dead) / (1 - dead)), out = m > 0 ? Math.pow(k, 0.92) / m : 0;
   joy.x = dx * out; joy.y = -dy * out;
   knob.style.transform = `translate(${dx * R * 0.62}px, ${dy * R * 0.62}px)`;
 }
@@ -522,13 +567,54 @@ function act(a) {
   if (a === 'drive') { toggleDrive(); return; }
   if (a === 'run') { running = !running; $('btnRun').classList.toggle('on2', running); $('btnRun').innerHTML = running ? '🏃 CORRENDO' : '🚶 ANDAR'; music.sfx('click'); return; }
   if (a === 'combo') { startComboDance(); return; }
+  if (a === 'camReset') {
+    const yaw = p.mode === 'drive' ? G.truck.yaw : (p.frame === 'truck' ? p.yaw + G.truck.yaw : p.yaw);
+    camYaw = yaw + Math.PI; camPitch = 0.32; camDragT = G.now - 10; return;
+  }
+  if (a.startsWith('dance:')) { if (p.mode === 'normal' && p.grounded && !p.trick) { p.danceMove(a.slice(6)); music.sfx('click'); } return; }
   if (p.mode === 'drive') return;
   if (p.mode === 'pose') { p.standUp(G); return; }
   switch (a) {
-    case 'jump': if (p.jump()) music.sfx('jump'); else p.jumpBuf = 0.18; p.climbIntent = true; setTimeout(() => p.climbIntent = false, 400); break;
-    case 'mortal': case 'flip': case 'estrela': {
+    case 'jump': {
+      const j = p.jump(1, G);
+      if (j === 'double') G.onEvent('duploPulo', p);
+      else if (j) music.sfx('jump');
+      else p.jumpBuf = 0.18;
+      p.climbIntent = true; setTimeout(() => p.climbIntent = false, 400);
+      break;
+    }
+    case 'dash': {
+      const st = stickInput();
+      const fwdX = Math.sin(camYaw), fwdZ = Math.cos(camYaw), rx = -Math.cos(camYaw), rz = Math.sin(camYaw);
+      const wx = st.m > 0.15 ? fwdX * st.y + rx * st.x : 0;
+      const wz = st.m > 0.15 ? fwdZ * st.y + rz * st.x : 0;
+      if (p.startDash(G, wx, wz)) { G.onEvent('dash', p); rumble(0.18, 0.35, 70); }
+      break;
+    }
+    case 'slide': {
+      const res = p.slideOrDance(G);
+      if (res) {
+        if (res.type === 'slide') { G.onEvent('slide', p); rumble(0.15, 0.3, 80); }
+        else if (res.type === 'dive') music.sfx('jump');
+        else if (res.type === 'crouch') music.sfx('click');
+        else if (res.type === 'danceStyle') { music.sfx('click'); toast(`🪩 Estilo: ${DANCE_NAMES[res.idx]}`, 'small'); }
+      }
+      break;
+    }
+    case 'danceNext':
+      p.danceStyle = ((p.danceStyle || 0) + 1) % DANCE_NAMES.length;
+      music.sfx('click'); toast(`🪩 Dança: ${DANCE_NAMES[p.danceStyle]}`, 'small');
+      break;
+    case 'mortal': case 'flip': case 'estrela': case 'pirueta': {
       const wasGround = p.grounded;
-      if (a === 'estrela' && p.grounded) { if (p.startTrick('estrela')) { p.trick.dir = joy.x > 0.2 ? -1 : 1; music.sfx('trick'); } break; }
+      if (a === 'estrela' && p.grounded) {
+        const st = stickInput();
+        const fwdX = Math.sin(camYaw), fwdZ = Math.cos(camYaw), rx = -Math.cos(camYaw), rz = Math.sin(camYaw);
+        const wx = st.m > 0.15 ? fwdX * st.y + rx * st.x : 0;
+        const wz = st.m > 0.15 ? fwdZ * st.y + rz * st.x : 0;
+        if (p.startTrick('estrela', wx, wz, G)) music.sfx('trick');
+        break;
+      }
       if (p.startTrick(a)) music.sfx(wasGround ? 'jump' : 'trick');
       break;
     }
@@ -555,7 +641,13 @@ document.querySelectorAll('#controls .ctl[data-hold]').forEach(b => {
   const off = () => { holds[k] = false; b.classList.remove('on'); }; b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('lostpointercapture', off);
 });
 $('btnChars').onclick = () => act('chars');
-const KEYS = { ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', e: 'ctx', f: 'drive', h: 'horn', g: 'party', q: 'chars', r: 'run', v: 'combo' };
+const KEYS = {
+  ' ': 'jump', z: 'mortal', x: 'estrela', c: 'flip', b: 'pirueta',
+  control: 'dash', j: 'dash', t: 'slide', m: 'slide',
+  e: 'ctx', f: 'drive', h: 'horn', g: 'party', enter: 'party',
+  q: 'chars', tab: 'chars', r: 'run', shift: 'run', v: 'combo', k: 'camReset',
+  '1': 'dance:esq', '2': 'dance:cima', '3': 'dance:baixo', '4': 'dance:dir', '5': 'danceNext',
+};
 const DKEYS = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 2, ArrowRight: 3 };
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -565,32 +657,90 @@ addEventListener('keydown', (e) => {
   const a = KEYS[e.key.toLowerCase()]; if (a) { act(a); e.preventDefault(); }
 });
 addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
-// ---------------- controle PlayStation / Xbox ----------------
-const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, down: new Set(), native: false, name: '' };
-const dz = (v) => Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82;
-// mapeamento: índice padrão do navegador -> nome; e código de tecla do Android -> nome
-const STD = { 0: 'A', 1: 'B', 2: 'X', 3: 'Y', 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT', 8: 'SELECT', 9: 'START', 12: 'UP', 13: 'DOWN', 14: 'LEFT', 15: 'RIGHT' };
-const AND = { 96: 'A', 97: 'B', 99: 'X', 100: 'Y', 102: 'LB', 103: 'RB', 104: 'LT', 105: 'RT', 109: 'SELECT', 108: 'START', 19: 'UP', 20: 'DOWN', 21: 'LEFT', 22: 'RIGHT', 23: 'A' };
+// ---------------- controle PlayStation / Xbox / Joystick ----------------
+const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, down: new Set(), native: false, nativeAt: 0, name: '', activeIdx: -1, navDir: '', navT: 0, menuIdx: 0 };
+const dz = (v) => Math.abs(v) < 0.1 ? 0 : (v - Math.sign(v) * 0.1) / 0.9;
+function dz2(x, y, dead = 0.1) {
+  const m = Math.hypot(x, y);
+  if (m < dead) return [0, 0];
+  const k = Math.min(1, (m - dead) / (1 - dead));
+  const s = Math.pow(k, 1.35) / m;
+  return [x * s, y * s];
+}
+// mapeamento: índice padrão do navegador -> nome; e código de tecla do Android (padrão + HID genérico) -> nome
+const STD = { 0: 'A', 1: 'B', 2: 'X', 3: 'Y', 4: 'LB', 5: 'RB', 6: 'LT', 7: 'RT', 8: 'SELECT', 9: 'START', 10: 'L3', 11: 'R3', 12: 'UP', 13: 'DOWN', 14: 'LEFT', 15: 'RIGHT' };
+const AND = {
+  96: 'A', 97: 'B', 99: 'X', 100: 'Y', 102: 'LB', 103: 'RB', 104: 'LT', 105: 'RT', 106: 'L3', 107: 'R3', 109: 'SELECT', 108: 'START',
+  19: 'UP', 20: 'DOWN', 21: 'LEFT', 22: 'RIGHT', 23: 'A',
+  // botões genéricos (KEYCODE_BUTTON_1..12) para joysticks Bluetooth/USB HID
+  188: 'A', 189: 'B', 190: 'X', 191: 'Y', 192: 'LB', 193: 'RB', 194: 'LT', 195: 'RT', 196: 'SELECT', 197: 'START', 198: 'L3', 199: 'R3',
+};
+function padMenuItems(screenId) {
+  const root = $(screenId); if (!root) return [];
+  return [...root.querySelectorAll('button:not(.hidden)')].filter(b => b.offsetParent !== null && !b.disabled);
+}
+function padFocus(screenId, delta = 0) {
+  document.querySelectorAll('.gp-focus').forEach(el => el.classList.remove('gp-focus'));
+  const items = padMenuItems(screenId); if (!items.length) return null;
+  pad.menuIdx = ((pad.menuIdx + delta) % items.length + items.length) % items.length;
+  const el = items[pad.menuIdx]; el.classList.add('gp-focus');
+  el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  return el;
+}
+function rumble(strong = 0.4, weak = 0.3, ms = 120) {
+  if (!save.settings.vibrar || !navigator.getGamepads) return;
+  const gp = [...navigator.getGamepads()].find(g => g && g.connected && g.vibrationActuator);
+  if (gp && gp.vibrationActuator.playEffect) {
+    try { gp.vibrationActuator.playEffect('dual-rumble', { startDelay: 0, duration: ms, strongMagnitude: strong, weakMagnitude: weak }); } catch (e) { }
+  }
+}
 function padPress(b) {
   music.init();
   const shown = (id) => $(id).classList.contains('show');
+  if (shown('config')) {
+    if (b === 'B' || b === 'START') { document.querySelectorAll('.gp-focus').forEach(el => el.classList.remove('gp-focus')); persist(); show('config', false); }
+    else if (b === 'UP' || b === 'DOWN') { padFocus('config', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'A') { const el = padFocus('config', 0); el && el.click(); }
+    return;
+  }
+  if (shown('home')) {
+    if (b === 'UP' || b === 'DOWN') { padFocus('home', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'A') { const el = document.querySelector('#home .gp-focus') || $('btnHomePlay'); el.click(); }
+    else if (b === 'X' || b === 'START') $('btnHomeConfig').click();
+    else if (b === 'Y') $('btnPlay').click();
+    return;
+  }
   if (shown('menu')) {
     if (b === 'A') $('btnPlay').click();
+    else if (b === 'B') $('btnMenuBack').click();
     else if (b === 'LEFT' || b === 'RIGHT') { G.cityIdx = (G.cityIdx + (b === 'RIGHT' ? 1 : CITIES.length - 1)) % CITIES.length; G.night = null; buildMenu(); menuScene(); music.sfx('click'); }
     else if (b === 'UP' || b === 'DOWN') { G.night = !(G.night ?? CITIES[G.cityIdx].noite); buildMenu(); menuScene(); music.sfx('click'); }
     else if (b === 'X') { const i = CHARACTERS.findIndex(d => d.id === save.char); save.char = CHARACTERS[(i + 1) % CHARACTERS.length].id; persist(); buildMenu(); music.sfx('click'); }
     else if (b === 'Y') { const i = VARIANTS.findIndex(v => v.id === save.truck); save.truck = VARIANTS[(i + 1) % VARIANTS.length].id; persist(); buildMenu(); menuScene(true); music.sfx('click'); }
+    else if (b === 'LB' || b === 'RB') { const cur = DURATIONS.indexOf(save.minutes); save.minutes = DURATIONS[((cur < 0 ? 1 : cur) + (b === 'RB' ? 1 : DURATIONS.length - 1)) % DURATIONS.length]; persist(); buildMenu(); music.sfx('click'); }
     else if (b === 'START') openConfig();
     return;
   }
-  if (shown('results')) { if (b === 'A') $('btnNext').click(); else if (b === 'B') $('btnResMenu').click(); else if (b === 'X') $('btnAgain').click(); return; }
-  if (shown('config')) { if (b === 'B' || b === 'START') { persist(); show('config', false); } return; }
+  if (shown('results')) {
+    if (b === 'UP' || b === 'DOWN') { padFocus('results', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'A') { const el = document.querySelector('#results .gp-focus') || $('btnNext'); el.click(); }
+    else if (b === 'B') $('btnResMenu').click(); else if (b === 'X') $('btnAgain').click();
+    return;
+  }
   if (shown('picker')) { if (b === 'B' || b === 'START' || b === 'A') $('btnPickOk').click(); else if (b === 'LEFT' || b === 'RIGHT') { const i = G.actors.indexOf(G.player); switchTo(G.actors[(i + (b === 'RIGHT' ? 1 : G.actors.length - 1)) % G.actors.length]); buildPicker(); } return; }
-  if (shown('pause')) { if (b === 'START' || b === 'A') togglePause(false); else if (b === 'B') $('btnMenu').click(); return; }
+  if (shown('pause')) {
+    if (b === 'UP' || b === 'DOWN') { padFocus('pause', b === 'DOWN' ? 1 : -1); music.sfx('click'); }
+    else if (b === 'START') togglePause(false);
+    else if (b === 'A') { const el = document.querySelector('#pause .gp-focus') || $('btnResume'); el.click(); }
+    else if (b === 'B') $('btnMenu').click();
+    return;
+  }
   if (b === 'START') { togglePause(); return; }
   if (G.dancing) { const m = { X: 0, LEFT: 0, Y: 1, UP: 1, A: 2, DOWN: 2, B: 3, RIGHT: 3 }; if (m[b] !== undefined) dance.press(m[b]); return; }
-  const map = { A: 'jump', B: 'estrela', X: 'mortal', Y: 'flip', LB: 'ctx', RB: 'run', SELECT: 'chars', UP: 'drive', DOWN: 'combo', LEFT: 'horn', RIGHT: 'party' };
-  if (G.player && G.player.mode === 'drive' && (b === 'A')) { act('horn'); return; }
+  if (G.player && G.player.mode === 'drive' && b === 'A') { act('horn'); return; }
+  if (G.player && G.player.mode === 'drive' && b === 'LT') return;
+  if (b === 'DOWN' && G.meter < COMBO_FULL && G.player && G.player.frame === 'truck') { act('danceNext'); return; }
+  const map = { A: 'jump', B: 'estrela', X: 'mortal', Y: 'flip', RT: 'pirueta', RB: 'dash', LT: 'slide', LB: 'ctx', L3: 'run', R3: 'camReset', SELECT: 'chars', UP: 'drive', DOWN: 'combo', LEFT: 'horn', RIGHT: 'party' };
   if (map[b]) act(map[b]);
 }
 function padSet(b, down) {
@@ -598,28 +748,80 @@ function padSet(b, down) {
   else if (!down) pad.down.delete(b);
   if (b === 'RT') holds.gas = down; if (b === 'LT') holds.brake = down;
 }
+function padStickMenu(dt) {
+  const inUi = ['config', 'home', 'menu', 'results', 'picker', 'pause'].some(id => $(id).classList.contains('show'));
+  if (!inUi) { pad.navDir = ''; pad.navT = 0; return; }
+  let dir = '';
+  if (Math.abs(pad.lx) > Math.abs(pad.ly)) { if (pad.lx > 0.55) dir = 'RIGHT'; else if (pad.lx < -0.55) dir = 'LEFT'; }
+  else { if (pad.ly < -0.55) dir = 'UP'; else if (pad.ly > 0.55) dir = 'DOWN'; }
+  if (!dir) { pad.navDir = ''; pad.navT = 0; return; }
+  if (dir !== pad.navDir) { pad.navDir = dir; pad.navT = 0.28; padPress(dir); }
+  else { pad.navT -= dt; if (pad.navT <= 0) { pad.navT = 0.16; padPress(dir); } }
+}
 // eventos vindos do app Android (botões e analógicos do controle)
-window.onPadKey = (code, down) => { pad.native = true; const b = AND[code]; if (b) padSet(b, down); };
-window.onPadAxes = (lx, ly, rx, ry, lt, rt, hx, hy) => {
-  pad.native = true; pad.lx = dz(lx); pad.ly = dz(ly); pad.rx = dz(rx); pad.ry = dz(ry); pad.lt = lt; pad.rt = rt;
-  holds.gas = rt > 0.3 || pad.down.has('RT'); holds.brake = lt > 0.3 || pad.down.has('LT');
+window.onPadKey = (code, down, name) => {
+  pad.native = true; pad.nativeAt = performance.now();
+  const b = AND[code]; if (b) padSet(b, down);
+  padHello(name || 'Controle');
+};
+window.onPadAxes = (lx, ly, rx, ry, lt, rt, hx, hy, name) => {
+  pad.native = true; pad.nativeAt = performance.now();
+  [pad.lx, pad.ly] = dz2(lx, ly); [pad.rx, pad.ry] = dz2(rx, ry);
+  pad.lt = lt; pad.rt = rt;
+  holds.gas = rt > 0.25 || pad.down.has('RT'); holds.brake = lt > 0.25 || pad.down.has('LT');
+  padSet('RT', rt > 0.45); padSet('LT', lt > 0.45);
   padSet('LEFT', hx < -0.5); padSet('RIGHT', hx > 0.5); padSet('UP', hy < -0.5); padSet('DOWN', hy > 0.5);
-  padHello('Controle');
+  padHello(name || 'Controle');
 };
 let padSeen = false;
-function padHello(name) { if (padSeen) return; padSeen = true; $('padStatus').textContent = `🎮 ${name} conectado!`; if (G.phase === 'play') toast('🎮 Controle conectado!', 'small'); }
-// Gamepad API do navegador
+function padHello(name) { if (padSeen) return; padSeen = true; $('padStatus').textContent = `🎮 ${name} conectado!`; if (G.phase === 'play') toast(`🎮 ${name} conectado!`, 'small'); }
+// Gamepad API do navegador (controles padrão + joysticks USB/Bluetooth genéricos)
+function pickGamepad(list) {
+  let best = null;
+  for (const g of list) {
+    if (!g || !g.connected) continue;
+    if (!best) best = g;
+    const active = g.buttons.some(b => b.pressed || b.value > 0.3) || g.axes.some(a => Math.abs(a) > 0.25);
+    if (active) { pad.activeIdx = g.index; return g; }
+    if (g.index === pad.activeIdx) best = g;
+  }
+  return best;
+}
 function pollGamepad(dt) {
-  if (pad.native || !navigator.getGamepads) return;
-  const gp = [...navigator.getGamepads()].find(g => g && g.connected); if (!gp) return;
+  padStickMenu(dt);
+  if ((pad.native && performance.now() - pad.nativeAt < 1500) || !navigator.getGamepads) return;
+  const gp = pickGamepad(navigator.getGamepads()); if (!gp) return;
   padHello(gp.id.split('(')[0].trim() || 'Controle');
-  pad.lx = dz(gp.axes[0] || 0); pad.ly = dz(gp.axes[1] || 0); pad.rx = dz(gp.axes[2] || 0); pad.ry = dz(gp.axes[3] || 0);
-  for (const [i, b] of Object.entries(STD)) { const bt = gp.buttons[i]; if (bt) padSet(b, bt.pressed || bt.value > 0.5); }
-  holds.gas = (gp.buttons[7] && gp.buttons[7].value > 0.3) || false; holds.brake = (gp.buttons[6] && gp.buttons[6].value > 0.3) || false;
+  const ax = gp.axes || [];
+  [pad.lx, pad.ly] = dz2(ax[0] || 0, ax[1] || 0);
+  // analógico direito: padrão [2,3] ou joysticks genéricos [2,5] / [3,4]
+  let rx = ax[2] || 0, ry = ax[3] || 0;
+  if (gp.mapping !== 'standard' && ax.length >= 6 && Math.abs(rx) < 0.05 && Math.abs(ry) < 0.05) { rx = ax[3] || 0; ry = ax[4] || 0; }
+  [pad.rx, pad.ry] = dz2(rx, ry);
+  for (const [i, b] of Object.entries(STD)) { const bt = gp.buttons[i]; if (bt) padSet(b, bt.pressed || bt.value > 0.45); }
+  // POV / D-pad em eixos (joysticks DirectInput / genéricos)
+  if (gp.mapping !== 'standard') {
+    if (ax.length >= 10 && Math.abs(ax[9]) <= 1.1) {
+      const v = ax[9];
+      if (v >= -1.05 && v <= 1.05) {
+        padSet('UP', v < -0.75 || v > 0.9);
+        padSet('RIGHT', v > -0.7 && v < -0.1);
+        padSet('DOWN', v > -0.1 && v < 0.45);
+        padSet('LEFT', v > 0.45 && v < 0.9);
+      } else { padSet('UP', false); padSet('RIGHT', false); padSet('DOWN', false); padSet('LEFT', false); }
+    } else if (ax.length >= 8 && (Math.abs(ax[6]) > 0.5 || Math.abs(ax[7]) > 0.5)) {
+      padSet('LEFT', ax[6] < -0.5); padSet('RIGHT', ax[6] > 0.5);
+      padSet('UP', ax[7] < -0.5); padSet('DOWN', ax[7] > 0.5);
+    }
+  }
+  const rtVal = gp.buttons[7] ? gp.buttons[7].value : (gp.mapping !== 'standard' && ax[5] > -0.9 ? (ax[5] + 1) * 0.5 : 0);
+  const ltVal = gp.buttons[6] ? gp.buttons[6].value : (gp.mapping !== 'standard' && ax[4] > -0.9 ? (ax[4] + 1) * 0.5 : 0);
+  holds.gas = rtVal > 0.25 || pad.down.has('RT'); holds.brake = ltVal > 0.25 || pad.down.has('LT');
 }
 addEventListener('gamepadconnected', (e) => padHello(e.gamepad.id.split('(')[0].trim() || 'Controle'));
+addEventListener('gamepaddisconnected', (e) => { if (e.gamepad.index === pad.activeIdx) pad.activeIdx = -1; });
 function padCamera(dt) {
-  if (pad.rx || pad.ry) { camYaw -= pad.rx * dt * 2.6; camPitch = clamp(camPitch + pad.ry * dt * 1.4, 0.08, 1.1); camDragT = G.now; }
+  if (pad.rx || pad.ry) { camYaw -= pad.rx * dt * 3.4; camPitch = clamp(camPitch + pad.ry * dt * 1.9, 0.08, 1.1); camDragT = G.now; }
 }
 
 function stickInput() {
@@ -953,8 +1155,9 @@ $('btnAgain').onclick = () => startCity(G.cityIdx, G.night);
 $('btnNext').onclick = () => { G.cityIdx = (G.cityIdx + 1) % CITIES.length; G.night = null; startCity(G.cityIdx, CITIES[G.cityIdx].noite); };
 $('btnResMenu').onclick = () => goMenu();
 window.onAndroidBack = () => {
-  if ($('config').classList.contains('show')) { show('config', false); return true; }
+  if ($('config').classList.contains('show')) { persist(); show('config', false); return true; }
   if ($('picker').classList.contains('show')) { show('picker', false); G.paused = false; return true; }
+  if ($('menu').classList.contains('show')) { show('menu', false); show('home', true); return true; }
   if (G.phase === 'menu' || G.phase === 'loading') return false;
   if (G.phase === 'fim') { goMenu(); return true; }
   togglePause(); return true;
@@ -964,24 +1167,27 @@ window.onAppResume = () => { if (!G.paused && music.ctx) music.ctx.resume(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) window.onAppPause(); });
 function goMenu() {
   dance.cancel(); G.dancing = false;
-  ['results', 'pause', 'picker'].forEach(s => show(s, false));
+  ['results', 'pause', 'picker', 'menu'].forEach(s => show(s, false));
   $('hud').classList.add('hidden');
-  menuScene(true); buildMenu(); show('menu', true);
+  menuScene(true); buildMenu(); show('home', true);
 }
 
 // ---------------- loop ----------------
-let last = performance.now(), fpsAcc = 0, fpsN = 0, lowFps = 0;
+let last = performance.now(), padLast = last, fpsAcc = 0, fpsN = 0, lowFps = 0;
 function frame(nowMs) {
   requestAnimationFrame(frame);
+  const padDt = Math.min(0.05, Math.max(0.001, (nowMs - padLast) / 1000));
+  padLast = nowMs;
+  pollGamepad(padDt);
   // limite de quadros por segundo (30 por padrão: o celular esquenta bem menos)
   const cap = G.paused || G.phase === 'menu' ? 20 : perf.fpsCap;
   if (nowMs - last < 1000 / cap - 3) return;
   const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
   if (!G.city) return;
-  if (G.paused) { pollGamepad(dt); if (!G.pausedDrawn) { render(); G.pausedDrawn = true; } return; }
+  if (G.paused) { if (!G.pausedDrawn) { render(); G.pausedDrawn = true; } return; }
   G.pausedDrawn = false;
   G.now += dt;
-  pollGamepad(dt); padCamera(dt);
+  padCamera(dt);
   music.update(dt);
   G.beat = music.playing ? music.beatPos() : G.now * 2;
   if (G.phase === 'intro') { G.phaseT += dt; if (G.phaseT > 1.5) { G.phase = 'play'; toast('VAI! 🎉', 'big gold'); } }
@@ -1046,7 +1252,7 @@ async function boot() {
   await new Promise(r => setTimeout(r, 30));
   try { renderThumbs(); } catch (e) { console.warn(e); }
   menuScene(true);
-  show('loading', false); buildMenu(); show('menu', true);
+  show('loading', false); buildMenu(); show('home', true);
   const first = () => { music.init(); if (!music.playing) { music.play(CITIES[G.cityIdx].musica); music.muffle(true); } removeEventListener('pointerdown', first); };
   addEventListener('pointerdown', first);
   requestAnimationFrame(frame);

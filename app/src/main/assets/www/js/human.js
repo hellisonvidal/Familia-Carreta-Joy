@@ -96,7 +96,6 @@ export function paintAtlas(def, C, tools) {
       g.fillStyle = hex(m.cor);
       if (m.tipo === 'total') g.fillRect(x, y, w, h);
       else if (m.tipo === 'capuz') { g.fillRect(x, y, w, h); g.fillStyle = hex(skin); g.beginPath(); g.ellipse(cx, Y(0.36), w * 0.12, h * 0.32, 0, 0, 7); g.fill(); }
-      else if (m.tipo === 'garras') { g.fillRect(x, y, w, h * 0.55); g.fillStyle = hex(m.cor2 ?? 0x111111); g.beginPath(); g.moveTo(cx - w * 0.12, Y(0.48)); g.lineTo(cx, Y(0.62)); g.lineTo(cx + w * 0.12, Y(0.48)); g.lineTo(cx + w * 0.1, Y(0.56)); g.lineTo(cx, Y(0.72)); g.lineTo(cx - w * 0.1, Y(0.56)); g.fill(); }
       else if (m.tipo === 'olhos') g.fillRect(x, Y(0.6), w, h * 0.18);
       if (m.teia) { g.strokeStyle = '#111'; g.lineWidth = 1.3; for (let a = 0; a < 18; a++) { g.beginPath(); g.moveTo(cx, eyeY); g.lineTo(cx + Math.cos(a / 18 * 6.28) * w, eyeY + Math.sin(a / 18 * 6.28) * h); g.stroke(); } for (let r = 12; r < w; r += 14) { g.beginPath(); g.ellipse(cx, eyeY, r, r * 0.6, 0, 0, 7); g.stroke(); } }
     }

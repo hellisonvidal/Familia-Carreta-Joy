@@ -11,8 +11,8 @@ android {
         applicationId = "com.familia.carretajoy"
         minSdk = 24
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.5.4"
+        versionCode = 14
+        versionName = "0.6.4"
     }
 
     signingConfigs {

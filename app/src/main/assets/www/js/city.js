@@ -319,12 +319,35 @@ export class City {
   }
   buildStreets() {
     const tex = this.t(TX.asphaltStreet());
-    const mx = this.m(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }));
-    const mz = this.m(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    const mx = this.m(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.88 }));
+    const mz = this.m(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.88, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     const gx = [], gz = [];
     for (let k = 0; k <= N; k++) { gx.push(this.streetGeo('x', lineC(k))); gz.push(this.streetGeo('z', lineC(k))); }
     this.add(mergeGeometries(gx), mx); this.add(mergeGeometries(gz), mz);
     gx.concat(gz).forEach(g => g.dispose());
+    this.buildCrosswalks();
+  }
+  buildCrosswalks() {
+    const parts = [];
+    const stripe = (cx, cz, w, d) => {
+      const g = new THREE.PlaneGeometry(w, d, 2, 2); g.rotateX(-Math.PI / 2);
+      const p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) { const x = cx + p.getX(i), z = cz + p.getZ(i); p.setXYZ(i, x, this.height(x, z) + 0.04, z); }
+      g.computeVertexNormals();
+      parts.push(g);
+    };
+    for (let ix = 0; ix <= N; ix++) for (let iz = 0; iz <= N; iz++) {
+      const cx = lineC(ix), cz = lineC(iz);
+      for (const s of [-1, 1]) {
+        for (let k = -4; k <= 4; k += 2) {
+          stripe(cx + k * 0.72, cz + s * (RW + 1.5), 0.75, 2.2);
+          stripe(cx + s * (RW + 1.5), cz + k * 0.72, 2.2, 0.75);
+        }
+      }
+    }
+    const g = mergeGeometries(parts);
+    parts.forEach(p => p.dispose());
+    this.add(g, this.m(new THREE.MeshStandardMaterial({ color: 0xf2f2ec, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 })));
   }
 
   // ---------------- quarteirões e prédios ----------------
@@ -363,7 +386,7 @@ export class City {
     [...slabs, ...plazas, ...curbs, ...grass].forEach(g => g.dispose());
 
     const fac = TX.facade(Pd.tipo); this.t(fac.map); this.t(fac.emissive);
-    const mat = this.m(new THREE.MeshStandardMaterial({ map: fac.map, vertexColors: true, roughness: 0.85, emissive: 0xffffff, emissiveMap: fac.emissive, emissiveIntensity: this.night ? 0.75 : 0 }));
+    const mat = this.m(new THREE.MeshStandardMaterial({ map: fac.map, vertexColors: true, roughness: 0.82, emissive: 0xffffff, emissiveMap: fac.emissive, emissiveIntensity: this.night ? 0.92 : 0 }));
     const roofMat = this.m(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }));
     const acc = new Acc(), roofs = new Acc(), shops = new Acc();
     const shopFac = TX.facade('casarao'); this.t(shopFac.map); this.t(shopFac.emissive);
@@ -406,10 +429,25 @@ export class City {
           continue;
         }
         const top = topG + h;
-        acc.add(buildingBox(w, top - base, dd, Pd.tipo === 'casarao' ? 8 : 12), M4(cx, base, cz), pick(r, Pd.cores));
-        if (Pd.tipo === 'casarao') roofs.add(prism(w, dd, 2.2), M4(cx, top, cz), 0xb5532d);
-        else if (Pd.tipo === 'torre' && r() < 0.3) { roofs.add(new THREE.CylinderGeometry(0.15, 0.15, 8, 5).translate(0, 4, 0), M4(cx, top, cz), 0x888888); this.blinkers.push(new THREE.Vector3(cx, top + 8.2, cz)); }
-        else if (r() < 0.4) roofs.add(new THREE.BoxGeometry(w * 0.3, 2.5, dd * 0.3).translate(0, 1.25, 0), M4(cx, top, cz), 0x9a9a9a);
+        const col = pick(r, Pd.cores);
+        acc.add(buildingBox(w, top - base, dd, Pd.tipo === 'casarao' ? 8 : 12), M4(cx, base, cz), col);
+        if (Pd.tipo === 'casarao') {
+          roofs.add(prism(w, dd, 2.2), M4(cx, top, cz), 0xb5532d);
+        } else {
+          // platibanda / borda no topo dos prédios
+          roofs.add(new THREE.BoxGeometry(w + 0.35, 0.45, dd + 0.35).translate(0, 0.22, 0), M4(cx, top, cz), 0x8a8d94);
+          if (Pd.tipo === 'torre' && h > 42 && r() < 0.45) {
+            const sh = range(r, 4, 9);
+            acc.add(buildingBox(w * 0.65, sh, dd * 0.65, 12), M4(cx, top, cz), col);
+            roofs.add(new THREE.CylinderGeometry(0.16, 0.2, 8, 5).translate(0, 4, 0), M4(cx, top + sh, cz), 0x888888);
+            this.blinkers.push(new THREE.Vector3(cx, top + sh + 8.2, cz));
+          } else if (Pd.tipo === 'torre' && r() < 0.3) {
+            roofs.add(new THREE.CylinderGeometry(0.15, 0.15, 8, 5).translate(0, 4, 0), M4(cx, top, cz), 0x888888);
+            this.blinkers.push(new THREE.Vector3(cx, top + 8.2, cz));
+          } else if (r() < 0.45) {
+            roofs.add(new THREE.BoxGeometry(w * 0.32, 2.2, dd * 0.32).translate(0, 1.1, 0), M4(cx, top, cz), 0x9a9a9a);
+          }
+        }
         this.addCollider({ x0: lx0, x1: lx1, z0: lz0, z1: lz1, top, walk: true, base, kind: 'predio' });
       }
     }
@@ -440,9 +478,9 @@ export class City {
     const poleGeo = this.g(mergeGeometries([new THREE.CylinderGeometry(0.12, 0.16, 8, 6).translate(0, 4, 0), new THREE.BoxGeometry(0.12, 0.12, 2.4).translate(0, 7.9, 1.15)]));
     const headGeo = this.g(new THREE.BoxGeometry(0.4, 0.18, 0.8).translate(0, 7.8, 2.25));
     const poles = new THREE.InstancedMesh(poleGeo, this.m(new THREE.MeshStandardMaterial({ color: 0x55585e, roughness: 0.6, metalness: 0.4 })), list.length);
-    const heads = new THREE.InstancedMesh(headGeo, this.m(new THREE.MeshBasicMaterial({ color: this.night ? 0xfff0c8 : 0xcfd2d6 })), list.length);
-    const pools = this.night ? new THREE.InstancedMesh(this.g(new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2)),
-      this.m(new THREE.MeshBasicMaterial({ map: this.t(TX.radial('255,214,150')), transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending })), list.length) : null;
+    const heads = new THREE.InstancedMesh(headGeo, this.m(new THREE.MeshBasicMaterial({ color: this.night ? 0xffe6a8 : 0xcfd2d6 })), list.length);
+    const pools = this.night ? new THREE.InstancedMesh(this.g(new THREE.PlaneGeometry(12, 12).rotateX(-Math.PI / 2)),
+      this.m(new THREE.MeshBasicMaterial({ map: this.t(TX.radial('255,214,150')), transparent: true, opacity: 0.34, depthWrite: false, blending: THREE.AdditiveBlending })), list.length) : null;
     list.forEach(([x, z, a], i) => {
       const y = this.floorY(x, z);
       const m = M4(x, y, z, a); poles.setMatrixAt(i, m); heads.setMatrixAt(i, m);

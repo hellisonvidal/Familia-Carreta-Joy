@@ -1,0 +1,23 @@
+{
+  "dependencies": {
+    "com.unity.inputsystem": "1.6.3",
+    "com.unity.textmeshpro": "3.0.6",
+    "com.unity.ugui": "1.0.0",
+    "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.imgui": "1.0.0",
+    "com.unity.modules.particlesystem": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.ui": "1.0.0",
+    "com.unity.modules.uielements": "1.0.0"
+  },
+  "scopedRegistries": [
+    {
+      "name": "Unity Registry",
+      "url": "https://packages.unity.com",
+      "scopes": [
+        "com.unity"
+      ]
+    }
+  ]
+}

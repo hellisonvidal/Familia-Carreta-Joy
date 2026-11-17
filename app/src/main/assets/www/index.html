@@ -19,10 +19,24 @@
   <p id="loadtxt">Carregando a carreta...</p>
 </div>
 
-<!-- menu -->
+<!-- menu inicial (Jogar / Configurações / Sair) -->
+<div id="home" class="screen">
+  <div class="home-wrap">
+    <div class="logo"><span>Carreta</span><b>JOY</b></div>
+    <div id="homeSummary" class="home-summary"></div>
+    <div class="home-actions">
+      <button id="btnHomePlay" class="big">▶ JOGAR</button>
+      <button id="btnHomeConfig" class="mid-btn">⚙️ CONFIGURAÇÕES</button>
+      <button id="btnHomeExit" class="mid-btn exit-btn">🚪 SAIR DO JOGO</button>
+    </div>
+  </div>
+</div>
+
+<!-- menu Jogar -->
 <div id="menu" class="screen">
   <div class="menu-wrap">
     <div class="menu-head">
+      <button id="btnMenuBack" class="chip">← Voltar</button>
       <div class="logo small"><span>Carreta</span><b>JOY</b></div>
       <div class="tabs">
         <button class="tab sel" data-tab="tCidade">🏙️ Cidade</button>
@@ -30,7 +44,6 @@
         <button class="tab" data-tab="tCarreta">🚚 Carreta</button>
         <button class="tab" data-tab="tTempo">⏱ Tempo</button>
       </div>
-      <button id="btnConfig" class="chip">⚙️ Ajustes</button>
     </div>
     <div class="menu-body">
       <div class="tabpage show" id="tCidade">
@@ -55,15 +68,15 @@
         <button id="btnNoite">🌙<span>NOITE</span></button>
       </div>
       <div id="summary"></div>
-      <button id="btnPlay" class="big">▶ JOGAR</button>
+      <button id="btnPlay" class="big">▶ COMEÇAR</button>
     </div>
   </div>
 </div>
 
-<!-- ajustes -->
+<!-- configurações -->
 <div id="config" class="screen modal">
   <div class="panel">
-    <h2>Ajustes</h2>
+    <h2>Configurações</h2>
     <div class="updbox">
       <b>🔄 Atualizações</b>
       <div class="row"><span id="verAtual">Versão</span><button id="btnUpd" class="chip">Verificar</button></div>
@@ -84,15 +97,16 @@
     </label>
     <label>📳 Vibrar ao tocar <input type="checkbox" id="vibrar"></label>
     <div id="tempInfo" class="hint"></div>
-    <div id="padStatus" class="hint">🎮 Conecte um controle PlayStation/Xbox (Bluetooth ou USB) e aperte um botão.</div>
+    <div id="padStatus" class="hint">🎮 Conecte um controle PlayStation/Xbox ou joystick USB/Bluetooth e aperte um botão.</div>
     <div class="howto">
       <b>Como jogar</b>
-      <p>🕹️ Joystick: anda para onde quiser · <b>🏃 CORRER</b> liga/desliga a corrida · arraste a tela para girar a câmera.</p>
+      <p>🕹️ Joystick: anda para onde quiser · <b>🏃 CORRER</b> (ou <b>Shift</b>) liga/desliga a corrida · arraste a tela para girar a câmera.</p>
       <p>Acrobacias e parkour enchem o medidor <b>COMBO</b>. Cheio, aparece <b>💃 DANÇA COMBO</b>: dance no ritmo e cada acerto vale o triplo!</p>
-      <p><b>PULAR</b> · no ar: <b>MORTAL</b>, <b>FLIP</b>, <b>ESTRELA</b> (termine antes de cair!). Corra contra muros baixos e carros para escalar (parkour). Rampas fazem voar!</p>
-      <p><b>SUBIR</b> perto da carreta escala a lateral · <b>DESCER</b> pula do teto · <b>DIRIGIR</b> assume o volante.</p>
+      <p><b>PULAR</b> (Espaço — toque 2x para <b>Pulo Duplo</b> ou pule na parede!) · no ar/chão: <b>MORTAL</b> (Z), <b>ESTRELA</b> (X), <b>FLIP</b> (C), <b>PIRUETA</b> (B), <b>💨 DASH / ESQUIVA</b> (Ctrl ou J), <b>🥾 SLIDE / AGACHAR</b> (T ou M).</p>
+      <p>Teclas 1–4 fazem passos de dança · 5 muda o estilo de dança no teto da carreta · K centraliza a câmera!</p>
+      <p><b>SUBIR</b> (E) perto da carreta escala a lateral · <b>DESCER</b> pula do teto · <b>DIRIGIR</b> (F) assume o volante.</p>
       <p>Na praça a carreta para: toque os botões coloridos no ritmo e todo mundo dança junto!</p>
-      <p>🎮 Controle: analógico esquerdo anda · direito gira a câmera · A/✕ pula · X/▢ mortal · Y/△ flip · B/○ estrela · RB/R1 correr · LB/L1 subir/descer · RT/R2 acelera · LT/L2 freia · ▲ dirigir · ▼ dança combo · Start pausa · Select personagens.</p>
+      <p>🎮 Controle / Joystick: analógico esquerdo anda/navega menus · direito gira câmera · A/✕ pula/pulo duplo (ou buzina) · X/▢ mortal · Y/△ flip · B/○ estrela · RT/R2 pirueta (ou acelera) · RB/R1 dash/esquiva · LT/L2 slide/agachar (ou freia) · LB/L1 subir/descer · L3 correr · R3 câmera · ▲ dirigir · ▼ dança combo/estilo · Start pausa · Select personagens.</p>
     </div>
     <button id="btnConfigOk" class="big">OK</button>
   </div>
@@ -143,6 +157,9 @@
       <button class="ctl trick t1" data-act="mortal">MORTAL</button>
       <button class="ctl trick t2" data-act="flip">FLIP</button>
       <button class="ctl trick t3" data-act="estrela">ESTRELA</button>
+      <button class="ctl trick t4" data-act="pirueta">PIRUETA</button>
+      <button class="ctl trick t5" id="btnDash" data-act="dash">💨 DASH</button>
+      <button class="ctl trick t6" id="btnSlide" data-act="slide">🥾 SLIDE</button>
       <button class="ctl jump" data-act="jump">PULAR</button>
     </div>
     <div class="right hidden" id="drivePad">
@@ -168,9 +185,10 @@
   <div class="panel">
     <h2>Pausado</h2>
     <button id="btnResume" class="big">▶ Continuar</button>
-    <button id="btnPauseCfg" class="mid-btn">⚙️ Ajustes</button>
+    <button id="btnPauseCfg" class="mid-btn">⚙️ Configurações</button>
     <button id="btnRestart" class="mid-btn">↺ Recomeçar cidade</button>
-    <button id="btnMenu" class="mid-btn">🏠 Menu</button>
+    <button id="btnMenu" class="mid-btn">🏠 Menu principal</button>
+    <button id="btnPauseExit" class="mid-btn exit-btn">🚪 Sair do jogo</button>
   </div>
 </div>
 

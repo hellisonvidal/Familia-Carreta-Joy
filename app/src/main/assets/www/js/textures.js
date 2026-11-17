@@ -79,36 +79,58 @@ export function sidewalk(kind) {
 // Fachada de prédio: 4 colunas x 4 andares de janelas por "bloco" de 12 m x 12 m.
 // Retorna {map, emissive}
 export function facade(kind) {
-  const [c, g] = canvas(256, 256);
-  const [e, ge] = canvas(256, 256);
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 256);
-  ge.fillStyle = '#000'; ge.fillRect(0, 0, 256, 256);
-  speckle(g, 256, 256, 1500, ['#eeeeee', '#f6f6f6', '#e4e4e4'], 3);
+  const S = 512;
+  const [c, g] = canvas(S, S);
+  const [e, ge] = canvas(S, S);
+  g.fillStyle = '#f8f8f6'; g.fillRect(0, 0, S, S);
+  ge.fillStyle = '#000'; ge.fillRect(0, 0, S, S);
+  speckle(g, S, S, 3200, ['#eaeae6', '#ffffff', '#e0e0da'], 3);
   const lit = ['#ffd27a', '#ffe9b0', '#fff3d6', '#ffc46b', '#bfe3ff'];
   if (kind === 'casarao') {
-    // 2 andares, 3 janelas com moldura (sobrados coloniais)
+    // 2 andares, 3 janelas coloniais com moldura, veneziana e balcão
     for (let row = 0; row < 2; row++) for (let col = 0; col < 3; col++) {
-      const x = 22 + col * 80, y = 30 + row * 118, w = 50, h = 80;
-      g.fillStyle = '#fbfbf5'; g.fillRect(x - 6, y - 6, w + 12, h + 12);
-      g.fillStyle = '#2b2b33'; g.fillRect(x, y, w, h);
-      g.fillStyle = '#3c6e71'; g.fillRect(x, y, w / 2 - 2, h); g.fillRect(x + w / 2 + 2, y, w / 2 - 2, h);
-      g.fillStyle = '#fbfbf5'; g.fillRect(x - 10, y + h + 4, w + 20, 6);
-      if (Math.random() < 0.55) { ge.fillStyle = lit[(Math.random() * 3) | 0]; ge.fillRect(x + 4, y + 4, w - 8, h - 8); }
+      const x = 44 + col * 160, y = 60 + row * 236, w = 100, h = 160;
+      g.fillStyle = '#fbfbf5'; g.fillRect(x - 12, y - 12, w + 24, h + 24);
+      g.fillStyle = '#252730'; g.fillRect(x, y, w, h);
+      // folhas da janela
+      g.fillStyle = '#335d63'; g.fillRect(x + 2, y + 2, w / 2 - 4, h - 4); g.fillRect(x + w / 2 + 2, y + 2, w / 2 - 4, h - 4);
+      g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(x + 6, y + 8, 12, h - 20); g.fillRect(x + w / 2 + 6, y + 8, 12, h - 20);
+      // travessas
+      g.fillStyle = '#e8e4d8'; g.fillRect(x, y + h * 0.48, w, 5);
+      // peitoril / sacada
+      g.fillStyle = '#fbfbf5'; g.fillRect(x - 18, y + h + 8, w + 36, 12);
+      g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(x - 16, y + h + 20, w + 32, 6);
+      if (Math.random() < 0.58) { ge.fillStyle = lit[(Math.random() * 3) | 0]; ge.fillRect(x + 6, y + 6, w - 12, h - 12); }
     }
-    g.fillStyle = '#fbfbf5'; g.fillRect(0, 122, 256, 8);
+    g.fillStyle = '#fbfbf5'; g.fillRect(0, 244, S, 16);
+    g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, 260, S, 6);
   } else {
-    for (let row = 0; row < 4; row++) for (let col = 0; col < 4; col++) {
-      const x = 10 + col * 64, y = 12 + row * 64, w = 44, h = 40;
-      g.fillStyle = kind === 'medio' ? '#3d4a57' : '#2f4252';
-      g.fillRect(x, y, w, h);
-      g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x + 3, y + 3, w * 0.35, h - 6);
-      if (kind === 'medio') { g.fillStyle = '#d9d9d9'; g.fillRect(x - 4, y + h, w + 8, 5); }
-      if (Math.random() < 0.42) { ge.fillStyle = lit[(Math.random() * lit.length) | 0]; ge.fillRect(x + 2, y + 2, w - 4, h - 4); }
+    // 4x4 janelas com moldura, reflexo de céu, peitoril e variação de cortina
+    for (let row = 0; row < 4; row++) {
+      // friso horizontal de andar
+      g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(0, row * 128 + 2, S, 4);
+      for (let col = 0; col < 4; col++) {
+        const x = 20 + col * 128, y = 24 + row * 128, w = 88, h = 80;
+        g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x - 3, y - 3, w + 6, h + 6);
+        const gr = g.createLinearGradient(x, y, x, y + h);
+        if (kind === 'torre') { gr.addColorStop(0, '#3a5975'); gr.addColorStop(1, '#1e3040'); }
+        else { gr.addColorStop(0, '#465868'); gr.addColorStop(1, '#28333d'); }
+        g.fillStyle = gr; g.fillRect(x, y, w, h);
+        // reflexo diagonal suave e divisória central
+        g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(x + 5, y + 5, w * 0.34, h - 10);
+        g.fillStyle = 'rgba(20,25,30,0.55)'; g.fillRect(x + w / 2 - 2, y, 4, h);
+        if (kind === 'medio') { g.fillStyle = '#dcdad4'; g.fillRect(x - 6, y + h, w + 12, 9); }
+        if (Math.random() < 0.45) {
+          ge.fillStyle = lit[(Math.random() * lit.length) | 0];
+          ge.fillRect(x + 4, y + 4, w - 8, h - 8);
+          ge.fillStyle = 'rgba(0,0,0,0.35)'; ge.fillRect(x + w / 2 - 2, y + 4, 4, h - 8);
+        }
+      }
     }
   }
   // faixa lisa no topo (usada pelo telhado)
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 4);
-  ge.fillStyle = '#000'; ge.fillRect(0, 0, 256, 4);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, S, 6);
+  ge.fillStyle = '#000'; ge.fillRect(0, 0, S, 6);
   return { map: tex(c), emissive: tex(e) };
 }
 
@@ -141,10 +163,15 @@ export function beamTexture() {
 export function asphaltStreet() {
   const c = document.createElement('canvas'); c.width = 512; c.height = 512;
   const g = c.getContext('2d');
-  g.fillStyle = '#3c3d40'; g.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 9000; i++) { g.fillStyle = ['#323336', '#47484c', '#37383b', '#4e4f52'][i % 4]; g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2); }
+  g.fillStyle = '#38393c'; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 10000; i++) { g.fillStyle = ['#2e2f32', '#444549', '#343538', '#4c4d50'][i % 4]; g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2); }
   const X = (lat) => (lat + 7) / 14 * 512;
-  g.fillStyle = '#e8e8e2';
+  // marcas sutis de desgaste dos pneus nas faixas
+  for (const lat of [-5.2, -1.8, 1.8, 5.2]) {
+    g.fillStyle = 'rgba(18,18,20,0.16)';
+    g.fillRect(X(lat) - 14, 0, 28, 512);
+  }
+  g.fillStyle = '#ecece6';
   g.fillRect(X(-6.6), 0, 6, 512); g.fillRect(X(6.6) - 6, 0, 6, 512);
   for (const lat of [-3.5, 3.5]) for (let v = 0; v < 512; v += 128) g.fillRect(X(lat) - 3, v, 6, 64);
   g.fillStyle = '#f2c230'; g.fillRect(X(0) - 7, 0, 4, 512); g.fillRect(X(0) + 3, 0, 4, 512);
