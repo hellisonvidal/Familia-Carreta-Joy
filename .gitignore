@@ -17,9 +17,17 @@
 *.userprefs
 *.pidb
 
-# VS Code
-.vscode/
-*.code-workspace
+# Gradle
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+
+# IDE
+.idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -31,17 +39,6 @@ Thumbs.db
 *.keystore
 keystore/
 *.jks
-
-# Gradle
-.gradle/
-build/
-local.properties
-*.iml
-
-# IDE
-.idea/
-*.swp
-*.swo
 
 # Logs
 *.log
