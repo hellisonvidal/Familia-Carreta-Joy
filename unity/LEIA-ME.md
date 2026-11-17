@@ -41,6 +41,11 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   (Quaternius CC0, `tools/pessoas.py`); trânsito com 13 carros (Kenney CC0); menus com fotos das carretas e
   miniaturas 3D dos pontos de partida (`tools/pg/miniaturas.py`); acrobacias e danças da CMU (`tools/cmuanims.py`).
 
+- **v0.8.0:** correções de animação (correr sem "teletransporte", pés do Arthur, sem afundar nas acrobacias);
+  medidor FESTA e festa da turma em fileiras; turma dança na rua nas paradas; pessoas humanas da Kenney (CC0,
+  `tools/pessoas_kenney.py`) que acenam/gritam/dançam; arquibancada atrás na carreta; sons CC0 (`Resources/Sounds`);
+  texturas da cidade (`tools/pg/texturas.py`, ambientCG CC0) e casas do City Kit Suburban (`tools/casas.py`) perto do jogador.
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 

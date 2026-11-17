@@ -23,6 +23,7 @@ namespace CarretaJoy
         public void SetStops(List<float> s) { stopList = s; if (s != null && s.Count > 0) nextStop = s[0] + 0.01f; }
         float stopTimer, nextStop;
         public bool Stopped => stopTimer > 0;
+        public float StopLeft => stopTimer;
         public Vector3 Velocity { get; private set; }
 
         readonly List<Light> lights = new List<Light>();
@@ -185,25 +186,33 @@ namespace CarretaJoy
             }
         }
 
-        /// <summary>Bancos nas pontas do palco: a gente da cidade vai sentada olhando a festa.</summary>
+        /// <summary>Arquibancada na parte de trás do palco: duas fileiras de bancos com gente sentada olhando a rua.</summary>
         void Benches()
         {
             var wood = Mats.Lit(new Color(0.45f, 0.3f, 0.17f), 0.2f);
+            var metal = Mats.Lit(new Color(0.75f, 0.76f, 0.8f), 0.7f, 0.8f);
             float[] xs = { -HalfWidth + 0.55f, 0f, HalfWidth - 0.55f };
             for (int row = 0; row < 2; row++)
             {
-                float z = row == 0 ? roofZ1 - 0.45f : roofZ0 + 0.45f;
-                float yaw = row == 0 ? 180f : 0f;   // olham para o meio do palco
+                float z = roofZ0 + 0.45f + row * 1.0f;
+                float h = 0.42f + row * 0.3f;                 // a fileira de dentro é mais alta (arquibancada)
                 foreach (var x in xs)
                 {
                     var bench = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     Destroy(bench.GetComponent<Collider>());
                     bench.name = "Banco";
                     bench.transform.SetParent(transform, false);
-                    bench.transform.localPosition = new Vector3(x, RoofY + 0.21f, z + (row == 0 ? 0.12f : -0.12f));
-                    bench.transform.localScale = new Vector3(0.62f, 0.42f, 0.45f);
+                    bench.transform.localPosition = new Vector3(x, RoofY + h / 2f, z + 0.1f);
+                    bench.transform.localScale = new Vector3(0.62f, h, 0.42f);
                     bench.GetComponent<MeshRenderer>().sharedMaterial = wood;
-                    Seats.Add((new Vector3(x, RoofY, z), yaw));
+                    // encosto
+                    var back = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    Destroy(back.GetComponent<Collider>());
+                    back.transform.SetParent(transform, false);
+                    back.transform.localPosition = new Vector3(x, RoofY + h + 0.25f, z + 0.3f);
+                    back.transform.localScale = new Vector3(0.62f, 0.5f, 0.05f);
+                    back.GetComponent<MeshRenderer>().sharedMaterial = metal;
+                    Seats.Add((new Vector3(x, RoofY + h - 0.42f, z), 180f));   // olham para trás, para a rua
                 }
             }
         }
@@ -296,7 +305,7 @@ namespace CarretaJoy
         public System.Func<float, float, float> GroundHeight;
         float yaw;
         public float ManualSpeed => speed;
-        public Vector3 RoofSlot(int k) => ClampToRoof(new Vector3(k % 2 == 0 ? 0.55f : -0.55f, 0, Mathf.Lerp(roofZ0 + 1.4f, roofZ1 - 1.4f, (k / 2) / 4f)));
+        public Vector3 RoofSlot(int k) => ClampToRoof(new Vector3(k % 2 == 0 ? 0.55f : -0.55f, 0, Mathf.Lerp(roofZ0 + 2.6f, roofZ1 - 1.0f, (k / 2) / 4f)));
 
         /// <summary>Volante: steer -1..1, acelerador -1 (ré/freio) .. 1.</summary>
         float lastSteer;

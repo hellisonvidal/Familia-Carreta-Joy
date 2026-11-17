@@ -1,0 +1,3 @@
+Pessoas: "Animated Characters 1, 2 e 3" de Kenney (www.kenney.nl), licença Creative Commons Zero (CC0).
+Fontes: opengameart.org/content/animated-characters-1 (2, 3).
+Esqueleto ajustado para Humanoid com tools/pessoas_kenney.py; peles com roupas e tons de pele variados geradas a partir das originais.

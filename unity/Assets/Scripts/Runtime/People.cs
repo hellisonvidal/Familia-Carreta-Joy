@@ -6,51 +6,55 @@ using UnityEngine.Playables;
 namespace CarretaJoy
 {
     /// <summary>
-    /// Gente da cidade (personagens CC0 da Quaternius com cores sorteadas): passeia pelas calçadas,
-    /// conversa, dança quando a carreta passa e vai sentada nos bancos em cima da carreta.
+    /// Gente da cidade (personagem humano da Kenney, CC0, com roupas e tons de pele sorteados):
+    /// passeia pelas calçadas e conversa; quando a carreta passa, uns acenam, outros gritam e chamam,
+    /// outros dançam e alguns nem ligam. Vai gente sentada na arquibancada da parte de trás da carreta.
     /// Só existe perto do jogador (aparece e some fora da vista).
     /// </summary>
     public class People : MonoBehaviour
     {
-        static readonly string[] Types = { "Casual_Male", "Casual_Female", "Casual2_Male", "Casual2_Female", "Casual3_Male", "Casual3_Female",
-            "Casual_Bald", "Suit_Male", "Suit_Female", "Worker_Male", "Worker_Female", "Chef_Female", "Doctor_Male_Young", "Doctor_Female_Young",
-            "OldClassy_Male", "OldClassy_Female", "Cowboy_Male", "Cowboy_Female" };
-        static readonly Color[] Skin = { new Color(0.98f, 0.82f, 0.7f), new Color(0.93f, 0.74f, 0.6f), new Color(0.82f, 0.6f, 0.45f),
-                                         new Color(0.68f, 0.47f, 0.33f), new Color(0.52f, 0.34f, 0.22f), new Color(0.36f, 0.23f, 0.15f) };
-        static readonly Color[] Hair = { new Color(0.1f, 0.07f, 0.05f), new Color(0.25f, 0.15f, 0.08f), new Color(0.45f, 0.3f, 0.15f),
-                                         new Color(0.85f, 0.7f, 0.4f), new Color(0.6f, 0.25f, 0.1f), new Color(0.7f, 0.7f, 0.72f) };
-        static readonly Color[] Cloth = { new Color(0.9f, 0.2f, 0.25f), new Color(0.2f, 0.45f, 0.9f), new Color(0.2f, 0.7f, 0.4f), new Color(0.98f, 0.8f, 0.2f),
-                                          new Color(0.95f, 0.5f, 0.15f), new Color(0.6f, 0.3f, 0.8f), new Color(0.95f, 0.95f, 0.95f), new Color(0.15f, 0.15f, 0.2f),
-                                          new Color(0.95f, 0.45f, 0.65f), new Color(0.3f, 0.75f, 0.85f), new Color(0.5f, 0.35f, 0.25f), new Color(0.35f, 0.4f, 0.5f) };
-
         class Person
         {
             public GameObject go; public Animator an;
             public PlayableGraph graph; public AnimationPlayableOutput output; public AnimationClipPlayable play; public AnimationClip cur;
-            public int mode;            // 0 anda, 1 conversa/parado, 2 sentado na carreta, 3 dança
+            public int mode;            // 0 anda, 1 conversa/parado, 2 sentado na carreta, 3 reage à carreta
             public Vector2[] path; public int seg; public float u, dir = 1, speed;
-            public float yaw, think; public int seat = -1;
+            public float yaw, think, shoutT; public int seat = -1;
+            public int reaction = -1;   // 0 acena, 1 grita/chama, 2 dança, 3 ignora
         }
 
         PgCity city; Truck truck;
-        readonly List<GameObject> prefabs = new List<GameObject>();
-        AnimationClip walk, idle, talk, sit;
+        GameObject prefab;
+        readonly List<Material> skins = new List<Material>();
+        AnimationClip walk, idle, talk, sit, wave, call;
         AnimationClip[] dances;
+        AudioClip[] shouts; AudioClip claps, crowd;
         readonly List<Person> street = new List<Person>(), riders = new List<Person>();
         readonly System.Random rnd = new System.Random(7);
         public int MaxStreet = 18;
-        float spawnT;
-        Material faceMat;
+        float spawnT, crowdT;
+        AudioSource voice;
 
         public void Init(PgCity c, Truck t, AnimationClip[] danceClips)
         {
             city = c; truck = t; dances = danceClips;
-            foreach (var n in Types) { var p = Resources.Load<GameObject>("People/" + n); if (p != null) prefabs.Add(p); }
+            prefab = Resources.Load<GameObject>("People/Pessoa");
+            var baseMat = Resources.Load<Material>("Materials/Lit");
+            foreach (var tex in Resources.LoadAll<Texture2D>("People/Peles"))
+            {
+                var m = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                m.SetTexture("_BaseMap", tex); m.SetColor("_BaseColor", Color.white); m.SetFloat("_Smoothness", 0.15f);
+                skins.Add(m);
+            }
             walk = KidClips.Load("Animations/Livres/Passeio_Loop") ?? KidClips.Load("Animations/Walk");
             idle = KidClips.Load("Animations/Idle");
             talk = KidClips.Load("Animations/Livres/Conversa_Loop") ?? idle;
             sit = KidClips.Load("Animations/Livres/Sentado_Loop") ?? idle;
-            faceMat = Mats.Lit(new Color(0.08f, 0.06f, 0.06f), 0.4f);
+            wave = KidClips.Load("Animations/CMU/Acenar_Loop") ?? idle;
+            call = KidClips.Load("Animations/Livres/Chamar_Loop") ?? wave;
+            shouts = new[] { Resources.Load<AudioClip>("Sounds/Grito_1"), Resources.Load<AudioClip>("Sounds/Grito_2"), Resources.Load<AudioClip>("Sounds/Uuu") };
+            claps = Resources.Load<AudioClip>("Sounds/Palmas"); crowd = Resources.Load<AudioClip>("Sounds/Torcida");
+            voice = gameObject.AddComponent<AudioSource>(); voice.playOnAwake = false; voice.spatialBlend = 0f;
             SeatRiders();
         }
 
@@ -65,7 +69,7 @@ namespace CarretaJoy
 
         void SeatRiders()
         {
-            if (truck == null || prefabs.Count == 0) return;
+            if (truck == null || prefab == null) return;
             int n = Mathf.Min(truck.Seats.Count, Settings.Quality == 0 ? 4 : 6);
             for (int i = 0; i < n; i++)
             {
@@ -79,25 +83,23 @@ namespace CarretaJoy
         }
 
         float Random(float a, float b) => a + (float)rnd.NextDouble() * (b - a);
-        T Pick<T>(T[] a) => a[rnd.Next(a.Length)];
 
         Person Spawn(float height)
         {
-            if (prefabs.Count == 0) return null;
-            var prefab = prefabs[rnd.Next(prefabs.Count)];
+            if (prefab == null) return null;
             var root = new GameObject("Pessoa");
             var m = Instantiate(prefab, root.transform);
             m.transform.localPosition = Vector3.zero;
+            var mat = skins.Count > 0 ? skins[rnd.Next(skins.Count)] : null;
             // altura pela caixa das partes no mundo (o modelo vem girado do Blender)
-            var parts = m.GetComponentsInChildren<SkinnedMeshRenderer>();
             Bounds bb = new Bounds(root.transform.position, Vector3.zero); bool any = false;
-            foreach (var smr in parts)
+            foreach (var smr in m.GetComponentsInChildren<SkinnedMeshRenderer>())
             {
                 if (smr.sharedMesh == null) continue;
                 smr.updateWhenOffscreen = false;
                 smr.quality = SkinQuality.Bone2;
                 smr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                smr.sharedMaterial = ColorFor(smr.gameObject.name);
+                if (mat != null) smr.sharedMaterial = mat;
                 if (!any) { bb = smr.bounds; any = true; } else bb.Encapsulate(smr.bounds);
             }
             var an = m.GetComponent<Animator>();
@@ -105,7 +107,7 @@ namespace CarretaJoy
             if ((h < 0.3f || h > 8f) && an != null && an.isHuman)
             {
                 var head = an.GetBoneTransform(HumanBodyBones.Head); var foot = an.GetBoneTransform(HumanBodyBones.LeftFoot);
-                if (head && foot) h = (head.position.y - foot.position.y) * 1.3f;
+                if (head && foot) h = (head.position.y - foot.position.y) * 1.2f;
             }
             if (h < 0.05f) h = 1.7f;
             float k = height / h;
@@ -120,23 +122,6 @@ namespace CarretaJoy
             p.graph = PlayableGraph.Create("Pessoa");
             p.graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
             return p;
-        }
-
-        Material ColorFor(string part)
-        {
-            string k = part.StartsWith("M_") ? part.Substring(2) : part;
-            int cut = k.IndexOfAny(new[] { '.', ' ' }); if (cut > 0) k = k.Substring(0, cut);
-            switch (k)
-            {
-                case "Skin": return Mats.Lit(Pick(Skin), 0.3f);
-                case "Face": return faceMat;
-                case "Hair": return Mats.Lit(Pick(Hair), 0.35f);
-                case "Black": case "DarkClothes": return Mats.Lit(new Color(0.08f, 0.08f, 0.1f), 0.3f);
-                case "Belt": case "Brown": case "HatBrown": return Mats.Lit(new Color(0.3f, 0.18f, 0.1f), 0.3f);
-                case "HatLightBrown": return Mats.Lit(new Color(0.7f, 0.5f, 0.3f), 0.3f);
-                case "Main": case "Clothes": return Mats.Lit(new Color(0.95f, 0.95f, 0.95f), 0.3f);   // jaleco / roupa de chef
-                default: return Mats.Lit(Pick(Cloth), 0.3f);
-            }
         }
 
         void Play(Person p, AnimationClip clip, float t0 = 0)
@@ -158,10 +143,26 @@ namespace CarretaJoy
             if (p.go != null) Destroy(p.go);
         }
 
+        void Shout(Vector3 at, float vol)
+        {
+            if (shouts == null) return;
+            var c = shouts[rnd.Next(shouts.Length)];
+            if (c != null) AudioSource.PlayClipAtPoint(c, at, vol);
+        }
+
+        /// <summary>Palmas e gritos da torcida (combos, festa da turma).</summary>
+        public void Cheer(bool big)
+        {
+            if (voice == null) return;
+            var c = big ? (crowd != null ? crowd : claps) : claps;
+            if (c != null) voice.PlayOneShot(c, big ? 0.55f : 0.35f);
+            if (big && claps != null) voice.PlayOneShot(claps, 0.4f);
+        }
+
         // ---------------- rua ----------------
         bool SpawnOnStreet(Vector3 focus)
         {
-            // escolhe uma rua carregada, perto mas fora do foco (atrás das casas ou longe)
+            // escolhe uma rua carregada, perto mas fora do foco
             var roads = city.RoadsNear(focus, 140f);
             if (roads.Count == 0) return false;
             for (int tries = 0; tries < 6; tries++)
@@ -207,7 +208,6 @@ namespace CarretaJoy
         {
             if (city == null) return;
             int max = Settings.Quality == 0 ? MaxStreet / 2 : Settings.Quality == 1 ? MaxStreet : MaxStreet + 8;
-            // some quem ficou longe; aparece gente nova aos poucos
             for (int i = street.Count - 1; i >= 0; i--)
             {
                 var p = street[i];
@@ -217,34 +217,58 @@ namespace CarretaJoy
             if (street.Count < max && spawnT <= 0) { spawnT = 0.25f; SpawnOnStreet(focus); }
 
             Vector3 tp = truck != null ? truck.transform.position : new Vector3(1e6f, 0, 0);
-            foreach (var p in street) TickStreet(p, dt, tp, truckStopped);
-            // na carreta: sentados olhando a festa; nas paradas levantam e dançam
+            foreach (var p in street) TickStreet(p, dt, tp);
+            // na carreta: sentados na arquibancada; nas paradas levantam e dançam
             for (int i = 0; i < riders.Count; i++)
             {
                 var p = riders[i];
                 if (truck == null || p.seat >= truck.Seats.Count) continue;
                 var s = truck.Seats[p.seat];
-                // sentado: os pés na frente do banco; na parada fica de pé ao lado dele
-                p.go.transform.localPosition = s.pos + Quaternion.Euler(0, s.yaw, 0) * Vector3.forward * (truckStopped ? 0.45f : 0.12f);
-                p.go.transform.localRotation = Quaternion.Euler(0, s.yaw, 0);
+                var rot = Quaternion.Euler(0, s.yaw, 0);
+                p.go.transform.localPosition = truckStopped ? new Vector3(s.pos.x, truck.RoofY, s.pos.z) + rot * Vector3.forward * 0.55f
+                                                            : s.pos + rot * Vector3.forward * 0.12f;
+                p.go.transform.localRotation = truckStopped ? Quaternion.Euler(0, 0, 0) : rot;
                 Play(p, truckStopped && dances != null && dances.Length > 0 ? dances[(i + 1) % dances.Length] : sit, Random(0, 1f));
             }
+            // torcida nas paradas de festa
+            crowdT -= dt;
+            if (truckStopped && crowdT <= 0 && (tp - focus).sqrMagnitude < 40f * 40f) { crowdT = 14f; Cheer(false); }
         }
 
-        void TickStreet(Person p, float dt, Vector3 truckPos, bool truckStopped)
+        void TickStreet(Person p, float dt, Vector3 truckPos)
         {
             var tr = p.go.transform;
             float dTruck = (tr.position - truckPos).sqrMagnitude;
-            // a carreta da alegria passou perto: todo mundo dança
-            bool party = dTruck < 26f * 26f;
-            if (party && p.mode != 3 && dances != null && dances.Length > 0)
+            bool near = dTruck < 28f * 28f;
+            if (near && p.mode != 3)
             {
-                p.mode = 3; Play(p, dances[rnd.Next(dances.Length)], Random(0, 1f));
-                var look = truckPos - tr.position; look.y = 0;
-                if (look.sqrMagnitude > 0.1f) tr.rotation = Quaternion.LookRotation(look);
+                // a carreta da alegria chegou: cada um reage do seu jeito
+                if (p.reaction < 0)
+                {
+                    double x = rnd.NextDouble();
+                    p.reaction = x < 0.4 ? 0 : x < 0.62 ? 1 : x < 0.85 ? 2 : 3;
+                }
+                if (p.reaction != 3)
+                {
+                    p.mode = 3;
+                    Play(p, p.reaction == 0 ? wave : p.reaction == 1 ? call : dances[rnd.Next(dances.Length)], Random(0, 1f));
+                    p.shoutT = Random(0.2f, 1.5f);
+                }
             }
-            else if (!party && p.mode == 3) { p.mode = 0; Play(p, walk); }
+            else if (!near && p.mode == 3) { p.mode = 0; p.reaction = -1; Play(p, walk); }
+            else if (!near) p.reaction = -1;
 
+            if (p.mode == 3)
+            {
+                var look = truckPos - tr.position; look.y = 0;
+                if (look.sqrMagnitude > 0.1f) tr.rotation = Quaternion.Slerp(tr.rotation, Quaternion.LookRotation(look), 1 - Mathf.Exp(-dt * 5f));
+                if (p.reaction == 1)
+                {
+                    p.shoutT -= dt;
+                    if (p.shoutT <= 0) { p.shoutT = Random(2.5f, 5f); Shout(tr.position + Vector3.up * 1.6f, 0.9f); }
+                }
+                return;
+            }
             if (p.mode == 0)
             {
                 // anda pela calçada; no fim da rua dá meia-volta

@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.7.0";
-        public const int VERSION_CODE = 7;
+        public const string VERSION = "0.8.0";
+        public const int VERSION_CODE = 8;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]
@@ -31,7 +31,7 @@ namespace CarretaJoy.EditorTools
             Directory.CreateDirectory("Assets/Resources/Materials");
 
             // garante que modelos e animações passaram pelas regras de importação
-            foreach (var dir in new[] { "Assets/Resources/Characters", "Assets/Resources/Animations", "Assets/Resources/Vehicles", "Assets/Resources/People", "Assets/Resources/Traffic" })
+            foreach (var dir in new[] { "Assets/Resources/Characters", "Assets/Resources/Animations", "Assets/Resources/Vehicles", "Assets/Resources/People", "Assets/Resources/Traffic", "Assets/Resources/Houses", "Assets/Resources/City", "Assets/Resources/Sounds" })
                 if (AssetDatabase.IsValidFolder(dir))
                     foreach (var guid in AssetDatabase.FindAssets("", new[] { dir }))
                         AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(guid), ImportAssetOptions.ForceUpdate);

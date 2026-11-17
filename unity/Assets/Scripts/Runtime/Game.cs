@@ -110,9 +110,8 @@ namespace CarretaJoy
             foreach (var dc in new[] { common.dance, common.dance2, KidClips.Load("Animations/CMU/Charleston_Loop"), KidClips.Load("Animations/CMU/Russa_Loop"), KidClips.Load("Animations/CMU/Salsa_Loop") })
                 if (dc != null) danceList.Add(dc);
             common.dances = danceList.ToArray();
-            var arthurClips = common.Clone();
-            arthurClips.walk = KidClips.Load("Animations/Arthur_AndarCorrer", "Walking") ?? common.walk;
-            arthurClips.run = KidClips.Load("Animations/Arthur_AndarCorrer", "Running") ?? common.run;
+            // o Arthur usa as mesmas passadas da turma (as dele tinham os pés virados para fora)
+            var arthurClips = common;
             for (int i = 0; i < ROSTER.Length; i++)
             {
                 var r = ROSTER[i];
@@ -194,7 +193,8 @@ namespace CarretaJoy
             if (Driving) ToggleDrive(false);
             PlaceAtStart();
             SetPlayer(Mathf.Clamp(Settings.StartChar, 0, crew.Count - 1));
-            score = 0; ui.Score = "0";
+            score = 0; ui.Score = "0"; festa = 0;
+            if (group) { group = false; rig.distance = savedDist; }
             playing = true;
             menu.page = MenuUI.Page.None;
             ui.ShowToast("Ponta Grossa: " + StopName(Settings.StartStop) + "!");
@@ -202,7 +202,7 @@ namespace CarretaJoy
 
         public void Resume() { }
         void CheckUpdates() { if (Application.internetReachability != NetworkReachability.NotReachable) updater.Check(); }
-        public void GoMenu() { if (Driving) ToggleDrive(false); playing = false; menu.Open(MenuUI.Page.Main); }
+        public void GoMenu() { if (Driving) ToggleDrive(false); if (group) { group = false; rig.distance = savedDist; } playing = false; menu.Open(MenuUI.Page.Main); }
         public void PreviewStart() { if (!playing) PlaceAtStart(); }
         public void SelectPlayer(int i) { if (Driving) ToggleDrive(false); SetPlayer(i); ui.ShowToast("Agora: " + player.Name); }
         public void TruckAuto() { if (Driving) ToggleDrive(false); else truck.ReturnToRoute(); ui.ShowToast("Carreta no piloto automático"); }
@@ -243,6 +243,7 @@ namespace CarretaJoy
             }
             city.loadRadius = Settings.Quality == 0 ? 300f : Settings.Quality == 1 ? 400f : 520f;
             city.unloadRadius = city.loadRadius + 200f;
+            city.detailRadius = Settings.Quality == 0 ? 0f : Settings.Quality == 1 ? 180f : 260f;
             bloom.active = Settings.Quality > 0;
             rig.mode = Settings.CamMode;
             if (truck != null) truck.cruise = Settings.TruckSpeedValue;
@@ -364,6 +365,7 @@ namespace CarretaJoy
         public void AddScore(int pts, string msg)
         {
             score += pts;
+            if (!group) festa = Mathf.Min(FESTA_MAX, festa + pts);
             ui.Score = score.ToString();
             if (msg != null) ui.ShowToast(msg + " +" + pts);
         }
@@ -406,11 +408,17 @@ namespace CarretaJoy
             rig.Rotate(ui.CamDelta);
             rig.Zoom(ui.Zoom);
 
-            if (Driving) TickDriving(dt);
-            else TickOnFoot(dt);
-
-            // os outros personagens
-            TickCrew(dt);
+            ui.Festa = group ? groupT / GROUP_TIME : festa / FESTA_MAX;
+            ui.FestaOn = group;
+            if (group) TickGroup(dt);
+            else
+            {
+                if (Driving) TickDriving(dt);
+                else TickOnFoot(dt);
+                // os outros personagens
+                TickCrew(dt);
+                if (festa >= FESTA_MAX && !Driving && !player.Busy && player.Trick == null && (player.Grounded || player.OnTruck)) StartGroup();
+            }
 
             Vector3 focus = Driving ? truck.transform.position : player.transform.position;
             city.EnsureLoaded(focus, false);
@@ -512,7 +520,7 @@ namespace CarretaJoy
             player.DoTrick(move);
             if (player.Trick == null) return;
             chain = linked ? chain + 1 : 1;
-            if (combo) AddScore(150 + 50 * chain, "COMBO: " + Kid.TrickTitle(move) + "!");
+            if (combo) { AddScore(150 + 50 * chain, "COMBO: " + Kid.TrickTitle(move) + "!"); people.Cheer(false); }
             else if (chain >= 2) AddScore(40 * chain, "SEQUÊNCIA x" + chain + "!");
             if (chain == 5) AddScore(500, "SUPER COMBO x5!");
             CrewCopy(move);
@@ -528,6 +536,108 @@ namespace CarretaJoy
                 if (Time.time - pendingT > 1.6f) pending = null;
                 else if (!tr && !player.Busy) { var m = pending; pending = null; DoMove(m, pendingCombo); }
             }
+        }
+
+        // ---------------- festa da turma ----------------
+        const float FESTA_MAX = 2500f, GROUP_TIME = 30f;
+        float festa, groupT, savedDist;
+        bool group; int groupStyle;
+        Vector3 groupFace;
+        readonly Dictionary<Kid, Vector3> groupSlot = new Dictionary<Kid, Vector3>();
+        readonly Dictionary<Kid, float> olaDelay = new Dictionary<Kid, float>();
+
+        /// <summary>Medidor cheio: a turma toda se junta em fileiras, de frente para a câmera, e dança junto.</summary>
+        void StartGroup()
+        {
+            group = true; groupT = GROUP_TIME; groupStyle = 0;
+            Vector3 c = player.transform.position;
+            if (player.OnTruck)
+            {
+                // desce todo mundo para a rua, do lado da carreta
+                var tp = truck.transform;
+                c = tp.TransformPoint(new Vector3(truck.HalfWidth + 6f, 0, 0));
+            }
+            c.y = city.Height(c.x, c.z);
+            // de frente para a câmera
+            var f = cam.transform.position - c; f.y = 0;
+            if (f.sqrMagnitude < 0.01f) f = -player.transform.forward;
+            f.Normalize(); groupFace = f;
+            var right = Vector3.Cross(Vector3.up, f).normalized;
+            // fileiras: o jogador no meio da primeira, os outros atrás em fileiras de 4
+            var order = new List<Kid> { player };
+            foreach (var k in crew) if (k != player) order.Add(k);
+            groupSlot.Clear();
+            for (int i = 0; i < order.Count; i++)
+            {
+                int row, col; float cols;
+                if (i == 0) { row = 0; col = 0; cols = 1; }
+                else { int j = i - 1; row = 1 + j / 4; col = j % 4; cols = 4; }
+                var pos = c - f * (row * 1.9f) + right * ((col - (cols - 1) / 2f) * 1.6f);
+                pos.y = city.Height(pos.x, pos.z) + 0.1f;
+                var k = order[i];
+                groupSlot[k] = pos;
+                k.ResetState();
+                k.Teleport(pos, Quaternion.LookRotation(f));
+            }
+            foreach (var k in crew) k.SetDanceStyle(groupStyle);
+            savedDist = rig.distance; rig.distance = Mathf.Max(rig.distance, 11f);
+            people.Cheer(true);
+            ui.ShowToast("FESTA DA TURMA! Todos juntos!");
+        }
+
+        void GroupStyle(int st)
+        {
+            groupStyle = Mathf.Clamp(st, 0, Kid.DanceNames.Length - 1);
+            foreach (var k in crew) { if (k.Trick == null && !k.Busy) k.SetDanceStyle(groupStyle); }
+            AddScore(60, "TODOS: " + Kid.DanceNames[groupStyle].ToUpper());
+            people.Cheer(false);
+        }
+
+        void TickGroup(float dt)
+        {
+            SetVisible(true);
+            ui.B["subir"].visible = false; ui.B["dirigir"].visible = false;
+            ui.Info = "Festa da turma! Os botões mudam o passo de todos";
+            // passos de dança enfileirados: os botões mudam o passo da turma inteira ao mesmo tempo
+            if (ui.Pressed("dancar")) GroupStyle((groupStyle + 1) % Kid.DanceNames.Length);
+            if (ui.Pressed("ninja")) GroupStyle(1);
+            if (ui.Pressed("mortal")) GroupStyle(2);
+            if (ui.Pressed("flip")) GroupStyle(3);
+            if (ui.Pressed("pirueta")) GroupStyle(4);
+            if (ui.Pressed("pular"))
+            {
+                // "ola": cada um pula um pouquinho depois do vizinho
+                int i = 0; foreach (var k in crew) olaDelay[k] = 0.12f * i++;
+                AddScore(80, "OLA!");
+            }
+            if (ui.Pressed("rolar")) { foreach (var k in crew) k.DoTrick("giro", false); AddScore(120, "GIRO DA TURMA!"); }
+            if (ui.Pressed("deslizar")) { foreach (var k in crew) k.DoTrick("moonwalk", false); AddScore(120, "MOONWALK DA TURMA!"); }
+            foreach (var k in crew)
+            {
+                if (olaDelay.TryGetValue(k, out var od) && od >= 0) { od -= dt; olaDelay[k] = od; if (od < 0) k.Jump(); }
+                bool free = k.Trick == null && !k.Busy && k.Grounded;
+                if (free && groupSlot.TryGetValue(k, out var slot))
+                {
+                    // volta para o lugar na fileira e retoma o passo da turma
+                    var to = slot - k.transform.position; to.y = 0;
+                    if (to.magnitude > 0.25f) { var np = k.transform.position + to * Mathf.Min(1f, dt * 3f); np.y = slot.y; k.Teleport(np, Quaternion.LookRotation(groupFace)); }
+                    if (!k.Dancing) k.SetDanceStyle(groupStyle);
+                    k.transform.rotation = Quaternion.Slerp(k.transform.rotation, Quaternion.LookRotation(groupFace), 1 - Mathf.Exp(-dt * 6f));
+                }
+                k.Tick(Vector3.zero, dt);
+            }
+            festaAcc += dt; if (festaAcc > 1f) { festaAcc = 0; AddScore(15, null); }
+            groupT -= dt;
+            if (groupT <= 0) EndGroup();
+        }
+
+        void EndGroup()
+        {
+            group = false; festa = 0;
+            rig.distance = savedDist;
+            foreach (var k in crew) k.StopDance();
+            AddScore(500, "FESTA COMPLETA!");
+            people.Cheer(true);
         }
 
         void SyncCrewDance()
@@ -664,6 +774,31 @@ namespace CarretaJoy
         /// <summary>A turma vai junto com a carreta pelo percurso: sobe e dança lá em cima.</summary>
         void RideTruck(Kid b, int k, float dt)
         {
+            // parada de festa: a turma desce e dança na rua, ao lado da carreta
+            if (truck.Stopped && truck.StopLeft > 3f && !Driving)
+            {
+                if (b.OnTruck)
+                {
+                    if (!b.Busy && b.Trick == null) { b.StopDance(); b.ClimbOrDescend(); }
+                    b.Tick(Vector3.zero, dt);
+                    return;
+                }
+                var slot = truck.transform.TransformPoint(new Vector3((k % 2 == 0 ? 1 : -1) * (truck.HalfWidth + 2.2f), 0, 3f - (k / 2) * 2.2f));
+                var tos = slot - b.transform.position; tos.y = 0;
+                if (tos.magnitude > 0.8f && !b.Dancing && !b.Busy && b.Trick == null)
+                {
+                    b.Running = tos.magnitude > 4f;
+                    b.Tick(tos.normalized * Mathf.Clamp01(tos.magnitude), dt);
+                }
+                else
+                {
+                    if (!b.Dancing && !b.Busy && b.Trick == null) b.SetDanceStyle((k + 1) % Kid.DanceNames.Length);
+                    var face = truck.transform.position - b.transform.position; face.y = 0;
+                    if (face.sqrMagnitude > 0.1f && b.Trick == null) b.transform.rotation = Quaternion.Slerp(b.transform.rotation, Quaternion.LookRotation(face), 1 - Mathf.Exp(-dt * 4f));
+                    b.Tick(Vector3.zero, dt);
+                }
+                return;
+            }
             if (b.OnTruck)
             {
                 if (!b.Busy && b.Trick == null && !b.Dancing) b.ToggleDance();

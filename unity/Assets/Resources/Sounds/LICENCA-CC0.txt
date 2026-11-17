@@ -1,0 +1,6 @@
+Sons (todos CC0, domínio público, do OpenGameArt.org):
+- Palmas.ogg: "Applause in a large hall or church" (opengameart.org/content/applause-in-a-large-hall-or-church)
+- Torcida.ogg: "Crowd shouting/speaking ambience" (opengameart.org/content/crowd-shoutingspeaking-ambience)
+- Grito_1.ogg, Grito_2.ogg: "Cheers" (opengameart.org/content/cheers-0)
+- Uuu.ogg: "Oooooooooooooo" (opengameart.org/content/oooooooooooooo)
+Recortados e convertidos para mono 22 kHz.

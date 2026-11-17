@@ -1,0 +1,3 @@
+Casas: "City Kit (Suburban)" de Kenney (www.kenney.nl), licença Creative Commons Zero (CC0).
+Fonte: opengameart.org/content/city-kit-suburban
+Simplificadas com tools/casas.py; telhados recoloridos (barro, cinza, marrom) a partir do colormap original.

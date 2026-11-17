@@ -25,6 +25,8 @@ namespace CarretaJoy
         public readonly Dictionary<string, Btn> B = new Dictionary<string, Btn>();
         public string Toast; float toastT;
         public string Score = "0", Info = "", Who = "";
+        public float Festa;                // 0..1: medidor da festa da turma (enche com as acrobacias)
+        public bool FestaOn;               // festa da turma acontecendo
         public float Fps;
 
         // minimapa
@@ -256,6 +258,18 @@ namespace CarretaJoy
 
             label.fontSize = Mathf.RoundToInt(3.4f * u);
             Shadowed(new Rect(3 * u, 2 * u, 40 * u, 10 * u), Score, big, TextAnchor.MiddleLeft);
+            // medidor da festa da turma
+            {
+                var fr = new Rect(Screen.width / 2f - 26 * u, 8.5f * u, 52 * u, 3.2f * u);
+                GUI.color = new Color(0, 0, 0, 0.45f); GUI.DrawTexture(fr, rrect, ScaleMode.StretchToFill, true, 0, GUI.color, 0, 1.6f * u);
+                float f = Mathf.Clamp01(Festa);
+                var fc = FestaOn ? Color.HSVToRGB(Mathf.Repeat(Time.time * 0.5f, 1f), 0.8f, 1f) : Color.Lerp(new Color(1f, 0.35f, 0.7f), new Color(1f, 0.85f, 0.2f), f);
+                if (f > 0.01f) GUI.DrawTexture(new Rect(fr.x, fr.y, fr.width * f, fr.height), rrect, ScaleMode.StretchToFill, true, 0, fc, 0, 1.6f * u);
+                GUI.color = Color.white;
+                small.alignment = TextAnchor.MiddleCenter;
+                GUI.Label(fr, FestaOn ? "FESTA DA TURMA!" : f >= 1f ? "FESTA CHEIA!" : "FESTA " + Mathf.RoundToInt(f * 100) + "%", small);
+                small.alignment = TextAnchor.UpperLeft;
+            }
             Shadowed(new Rect(Screen.width / 2 - 40 * u, 2 * u, 80 * u, 6 * u), Info, label);
             Shadowed(new Rect(Screen.width - 60 * u, 4 * u, 20 * u, 4 * u), Mathf.RoundToInt(Fps) + " FPS", small);
             DrawMap(BigMap ? bigRect : miniRect, BigMap ? 3000f : 520f);

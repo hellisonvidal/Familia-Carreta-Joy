@@ -42,6 +42,15 @@ namespace CarretaJoy.EditorTools
                 mi.animationCompression = ModelImporterAnimationCompression.Optimal;
                 mi.resampleCurves = true;
             }
+            else if (assetPath.Contains("/Resources/Houses/"))
+            {
+                // casas: o jogo lê os vértices para juntar com o resto do quarteirão
+                mi.animationType = ModelImporterAnimationType.None;
+                mi.importAnimation = false;
+                mi.materialImportMode = ModelImporterMaterialImportMode.None;
+                mi.isReadable = true;
+                mi.meshCompression = ModelImporterMeshCompression.Off;
+            }
             else if (IsVehicle(assetPath))
             {
                 mi.animationType = ModelImporterAnimationType.None;
@@ -67,18 +76,17 @@ namespace CarretaJoy.EditorTools
                 c.loopPose = loop;
                 c.lockRootRotation = true;           // não gira o corpo sozinho
                 c.keepOriginalOrientation = !livre;
-                if (loop)
+                // altura sempre dentro da pose, medida do chão original do arquivo: o corpo sobe no mortal,
+                // agacha no rolamento e nunca afunda no chão (o jogo mantém os pés do menino no piso)
+                c.lockRootHeightY = true; c.keepOriginalPositionY = true; c.heightFromFeet = false;
+                // deslocamento para a frente/lados vira root motion (pelo centro de massa):
+                // nos ciclos (andar/correr/dançar) o jogo ignora, então o corpo fica no lugar sem "pular para trás"
+                // a cada passada; nas acrobacias o jogo aplica (o flip avança, a estrela vai para o lado)
+                c.lockRootPositionXZ = false; c.keepOriginalPositionXZ = false;
+                if (file == "Escalar")
                 {
-                    // andar/correr/dançar no lugar: quem move o menino é o jogo
-                    c.lockRootHeightY = true; c.keepOriginalPositionY = true;
-                    c.lockRootPositionXZ = true; c.keepOriginalPositionXZ = true;
-                }
-                else
-                {
-                    // acrobacias: o movimento (subir no mortal, avançar no flip) vira root motion
-                    // altura pelo centro de massa: o corpo sobe no mortal e volta ao chão
-                    c.lockRootHeightY = false; c.keepOriginalPositionY = false; c.heightFromFeet = false;
-                    c.lockRootPositionXZ = false; c.keepOriginalPositionXZ = true;
+                    // escalar: quem sobe o menino até o topo da mureta é o jogo; a pose não pode subir junto
+                    c.lockRootHeightY = false; c.keepOriginalPositionY = false;
                 }
             }
             mi.clipAnimations = clips;
@@ -98,7 +106,7 @@ namespace CarretaJoy.EditorTools
                 tm.SetPlatformTextureSettings(a);
                 return;
             }
-            if (assetPath.Contains("/Resources/Traffic/"))
+            if (assetPath.Contains("/Resources/Traffic/") || assetPath.Contains("/Resources/Houses/"))
             {
                 // paleta de cores dos carros: pixels nítidos, sem compressão que borre as cores
                 var tt = (TextureImporter)assetImporter;

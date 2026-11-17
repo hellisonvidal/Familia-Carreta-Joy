@@ -1,0 +1,2 @@
+Texturas da cidade feitas com tools/pg/texturas.py a partir de texturas CC0 do ambientCG (ambientcg.com):
+Plaster001, Concrete034, Bricks059, RoofingTiles014A, PavingStones092, Asphalt026B.

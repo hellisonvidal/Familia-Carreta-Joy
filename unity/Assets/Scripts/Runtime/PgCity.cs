@@ -65,11 +65,91 @@ namespace CarretaJoy
                                              new Color(0.97f, 0.96f, 0.94f), new Color(0.98f, 0.6f, 0.2f) };
 
         // =====================================================================
+        // casas de verdade (City Kit Suburban da Kenney, CC0) nos quarteirões perto do jogador
+        class HouseModel { public Mesh mesh; public Matrix4x4 baseM; public float sx, sz, sy; }
+        readonly List<HouseModel> houseModels = new List<HouseModel>();
+        Material[] houseMats;
+        readonly HashSet<Vector2Int> detailed = new HashSet<Vector2Int>();
+        public float detailRadius = 220f;   // 0 = desliga (gráficos leves)
+
+        void LoadHouses()
+        {
+            foreach (var go in Resources.LoadAll<GameObject>("Houses"))
+            {
+                var mf = go.GetComponentInChildren<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null || !mf.sharedMesh.isReadable) continue;
+                // posição/rotação/escala da malha dentro do modelo importado (o FBX do Blender vem girado)
+                var m = Matrix4x4.identity; var t = mf.transform;
+                while (t != null && t != go.transform.parent) { m = Matrix4x4.TRS(t.localPosition, t.localRotation, t.localScale) * m; t = t.parent; }
+                m = Matrix4x4.TRS(Vector3.zero, go.transform.localRotation, go.transform.localScale) * Matrix4x4.Inverse(Matrix4x4.TRS(go.transform.localPosition, go.transform.localRotation, go.transform.localScale)) * m;
+                var vs = mf.sharedMesh.vertices;
+                Vector3 mn = Vector3.one * 1e9f, mx = -Vector3.one * 1e9f;
+                foreach (var v in vs) { var w = m.MultiplyPoint3x4(v); mn = Vector3.Min(mn, w); mx = Vector3.Max(mx, w); }
+                var size = mx - mn;
+                if (size.x < 0.01f || size.z < 0.01f) continue;
+                // centraliza e põe a base no chão
+                m = Matrix4x4.Translate(new Vector3(-(mn.x + mx.x) / 2f, -mn.y, -(mn.z + mx.z) / 2f)) * m;
+                houseModels.Add(new HouseModel { mesh = mf.sharedMesh, baseM = m, sx = size.x, sz = size.z, sy = size.y });
+            }
+            var tex = new[] { "telhado_barro", "telhado_barro", "telhado_cinza", "telhado_marrom" };
+            houseMats = new Material[tex.Length];
+            for (int i = 0; i < tex.Length; i++)
+            {
+                houseMats[i] = new Material(Resources.Load<Material>("Materials/Lit"));
+                var t2 = Resources.Load<Texture2D>("Houses/" + tex[i]);
+                if (t2) houseMats[i].SetTexture("_BaseMap", t2);
+                houseMats[i].SetColor("_BaseColor", Color.white); houseMats[i].SetFloat("_Smoothness", 0.2f);
+            }
+        }
+
+        /// <summary>Troca a casa-caixote por uma casa modelada, encaixada no terreno (orientada pelo lado maior).</summary>
+        bool KenneyHouse(MultiMesh mb, MultiMesh coll, PgMap.Building b, float gmin)
+        {
+            int n = b.pts.Length;
+            if (houseModels.Count == 0 || n < 4 || n > 6) return false;
+            // lado mais comprido = direção da casa
+            int best = 0; float bl = 0;
+            for (int i = 0; i < n; i++) { float l = (b.pts[(i + 1) % n] - b.pts[i]).sqrMagnitude; if (l > bl) { bl = l; best = i; } }
+            Vector2 dir = (b.pts[(best + 1) % n] - b.pts[best]).normalized, per = new Vector2(-dir.y, dir.x);
+            float a0 = 1e9f, a1 = -1e9f, c0 = 1e9f, c1 = -1e9f, area = 0;
+            for (int i = 0; i < n; i++)
+            {
+                var p = b.pts[i]; var q = b.pts[(i + 1) % n];
+                float pa = Vector2.Dot(p, dir), pc = Vector2.Dot(p, per);
+                a0 = Mathf.Min(a0, pa); a1 = Mathf.Max(a1, pa); c0 = Mathf.Min(c0, pc); c1 = Mathf.Max(c1, pc);
+                area += p.x * q.y - q.x * p.y;
+            }
+            float L = a1 - a0, Wd = c1 - c0;
+            if (L < 4.5f || Wd < 4f || L > 20f || Wd > 16f) return false;
+            if (Mathf.Abs(area) / 2f < 0.72f * L * Wd) return false;   // só formatos quase retangulares
+            Vector2 cen = dir * ((a0 + a1) / 2f) + per * ((c0 + c1) / 2f);
+            int h = Mathf.Abs((int)(cen.x * 7.31f) * 73856093 ^ (int)(cen.y * 3.17f) * 19349663);
+            var hm = houseModels[h % houseModels.Count];
+            bool longX = hm.sx >= hm.sz;
+            float mLong = longX ? hm.sx : hm.sz, mShort = longX ? hm.sz : hm.sx;
+            float kL = L / mLong, kW = Wd / mShort, kY = Mathf.Sqrt(kL * kW) * 1.05f;
+            float yaw = Mathf.Atan2(-dir.y, dir.x) * Mathf.Rad2Deg + (longX ? 0f : 90f) + ((h >> 3) % 2 == 0 ? 180f : 0f);
+            var scale = longX ? new Vector3(kL, kY, kW) : new Vector3(kW, kY, kL);
+            var mtx = Matrix4x4.TRS(new Vector3(cen.x, gmin - 0.08f, cen.y), Quaternion.Euler(0, yaw, 0), scale) * hm.baseM;
+            mb.Get(houseMats[(h >> 5) % houseMats.Length]).AddMesh(hm.mesh, 0, mtx);
+            // colisão: paredes no contorno do terreno
+            var Cc = coll.Get(roofFlat);
+            float top = gmin + hm.sy * kY * 0.55f;
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 p0 = b.pts[i], p1 = b.pts[(i + 1) % n];
+                var outN = new Vector3(p1.y - p0.y, 0, -(p1.x - p0.x)).normalized;
+                Cc.Quad(new Vector3(p0.x, gmin - 0.6f, p0.y), new Vector3(p1.x, gmin - 0.6f, p1.y), new Vector3(p1.x, top, p1.y), new Vector3(p0.x, top, p0.y), outN, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+            }
+            return true;
+        }
+
         public void Build()
         {
             map = PgMap.Load();
             MakeTextures();
             MakeMaterials();
+            LoadHouses();
             treeRound = MakeRoundTree(); treeArauc = MakeAraucaria();
             BuildFarTerrain();
 
@@ -113,15 +193,34 @@ namespace CarretaJoy
                     if (d <= loadRadius && !live.ContainsKey(id)) want.Add((d, id));
                 }
             want.Sort((a, b) => a.d.CompareTo(b.d));
-            if (immediate) { foreach (var w in want) BuildChunk(w.id); }
+            if (immediate) { foreach (var w in want) BuildChunk(w.id, detailRadius > 0 && w.d < detailRadius); }
             else
             {
                 // um pedaço por quadro (o mais perto primeiro): sem travadas
                 pending = want.Count > 1;
-                if (want.Count > 0) BuildChunk(want[0].id);
+                if (want.Count > 0) BuildChunk(want[0].id, detailRadius > 0 && want[0].d < detailRadius);
                 var drop = new List<Vector2Int>();
                 foreach (var kv in live) if (DistToChunk(p, kv.Key) > unloadRadius) drop.Add(kv.Key);
-                foreach (var id in drop) { DestroyChunk(live[id]); live.Remove(id); liveRoads.Remove(id); }
+                foreach (var id in drop) { DestroyChunk(live[id]); live.Remove(id); liveRoads.Remove(id); detailed.Remove(id); }
+                // nível de detalhe: casas modeladas perto, casas simples longe (um pedaço por vez)
+                if (want.Count == 0)
+                {
+                    Vector2Int? swap = null; bool toDetail = false; float bestD = float.MaxValue;
+                    foreach (var kv in live)
+                    {
+                        float d = DistToChunk(p, kv.Key);
+                        bool isD = detailed.Contains(kv.Key);
+                        if (detailRadius > 0 && !isD && d < detailRadius && d < bestD) { swap = kv.Key; toDetail = true; bestD = d; }
+                        else if (isD && (detailRadius <= 0 || d > detailRadius + 120f) && swap == null) { swap = kv.Key; toDetail = false; }
+                    }
+                    if (swap.HasValue)
+                    {
+                        var id = swap.Value;
+                        DestroyChunk(live[id]); live.Remove(id); liveRoads.Remove(id);
+                        BuildChunk(id, toDetail);
+                        pending = true;
+                    }
+                }
             }
         }
 
@@ -140,8 +239,10 @@ namespace CarretaJoy
             Destroy(go);
         }
 
-        void BuildChunk(Vector2Int id)
+        void BuildChunk(Vector2Int id) => BuildChunk(id, false);
+        void BuildChunk(Vector2Int id, bool detail)
         {
+            if (detail) detailed.Add(id); else detailed.Remove(id);
             var root = new GameObject($"Pedaco_{id.x}_{id.y}");
             root.transform.SetParent(transform, false);
             live[id] = root;
@@ -153,7 +254,7 @@ namespace CarretaJoy
             foreach (var r in c.roads) AddRoad(mb, r);
             foreach (var w in c.water) AddRibbon(mb, water, w.pts, w.w, 0.06f, false, 6f);
             var coll = new MultiMesh();
-            foreach (var b in c.buildings) AddBuilding(mb, coll, b);
+            foreach (var b in c.buildings) AddBuilding(mb, coll, b, detail);
             foreach (var t in c.trees) AddTree(mb, t.p, t.kind);
             mb.Emit(root.transform, "Cidade", true);
             var cgo = coll.Emit(root.transform, "Colisao", false);
@@ -242,9 +343,9 @@ namespace CarretaJoy
             bool foot = t == "footway" || t == "path" || t == "steps" || t == "cycleway" || t == "pedestrian";
             float rank = t == "primary" || t == "trunk" || t == "motorway" ? 4 : t == "secondary" ? 3 : t == "tertiary" ? 2 : 1;
             if (r.sidewalk && !foot)
-                AddRibbon(mb, sidewalk, r.pts, r.width + 4.4f, 0.07f, false, 4f);
+                AddRibbon(mb, sidewalk, r.pts, r.width + 4.4f, 0.07f, false, (r.width + 4.4f) * 0.5f);
             Material m = foot ? sidewalk : r.unpaved || t == "track" ? dirt : asphalt;
-            AddRibbon(mb, m, r.pts, r.width, foot ? 0.1f : 0.11f + rank * 0.006f, !foot && !r.unpaved, foot ? 3f : 12f);
+            AddRibbon(mb, m, r.pts, r.width, foot ? 0.1f : 0.11f + rank * 0.006f, !foot && !r.unpaved, foot ? 3f : 20f);
         }
 
         void AddRibbon(MultiMesh mb, Material mat, Vector2[] pts, float width, float lift, bool lanes, float vScale)
@@ -277,7 +378,7 @@ namespace CarretaJoy
         }
 
         // ---------------- construções ----------------
-        void AddBuilding(MultiMesh mb, MultiMesh coll, PgMap.Building b)
+        void AddBuilding(MultiMesh mb, MultiMesh coll, PgMap.Building b, bool detail = false)
         {
             int n = b.pts.Length; if (n < 3) return;
             float gmin = float.MaxValue, gmax = float.MinValue;
@@ -286,8 +387,12 @@ namespace CarretaJoy
             cen /= n;
             float baseY = gmin - 0.6f, top = gmax + b.height;
             bool house = b.kind == 0, ind = b.kind == 4;
+            if (house && detail && b.height < 9f && KenneyHouse(mb, coll, b, gmin)) return;
             Material wall = WallMat(b.kind, b.color);
             var W = mb.Get(wall); var Cc = coll.Get(wall);
+            // lojas no térreo: comércio sempre, metade dos prédios de apartamento
+            bool shop = b.kind == 2 || (b.kind == 1 && (b.color & 1) == 0 && b.height < 40f);
+            var S = shop ? mb.Get(ShopMat(b.color)) : null;
             float per = 0;
             for (int i = 0; i < n; i++)
             {
@@ -297,10 +402,20 @@ namespace CarretaJoy
                 if (Vector2.Dot(new Vector2(outN.x, outN.z), (p0 + p1) / 2 - cen) < 0) outN = -outN;
                 var a = new Vector3(p0.x, baseY, p0.y); var bb = new Vector3(p1.x, baseY, p1.y);
                 var c = new Vector3(p1.x, top, p1.y); var d = new Vector3(p0.x, top, p0.y);
+                // a textura tem 4 x 4 janelas: cada janela = um vão de 3,2 m (3,6 m na casa) x um andar
                 float cell = house ? 3.6f : 3.2f, floorH = ind ? 7f : 3.1f;
-                float u0 = per / cell, u1 = (per + len) / cell, v0 = (baseY - gmin) / floorH, v1 = (top - gmin) / floorH;
+                float u0 = per / cell / 4f, u1 = (per + len) / cell / 4f, v0 = (baseY - gmin) / floorH / 4f, v1 = (top - gmin) / floorH / 4f;
                 if (ind) { u0 = u1 = 0.02f; v0 = v1 = 0.02f; }
-                W.Quad(a, bb, c, d, outN, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1));
+                if (shop && shopTex != null && top - gmin > 6.5f)
+                {
+                    // térreo com lojas e os andares de cima com janelas
+                    float gy = gmin + 3.6f;
+                    var am = new Vector3(p0.x, gy, p0.y); var bm = new Vector3(p1.x, gy, p1.y);
+                    S.Quad(a, bb, bm, am, outN, new Vector2(u0, 0f), new Vector2(u1, 0f), new Vector2(u1, 1f), new Vector2(u0, 1f));
+                    float vg = (gy - gmin) / floorH / 4f;
+                    W.Quad(am, bm, c, d, outN, new Vector2(u0, vg), new Vector2(u1, vg), new Vector2(u1, v1), new Vector2(u0, v1));
+                }
+                else W.Quad(a, bb, c, d, outN, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1));
                 Cc.Quad(a, bb, c, d, outN, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
                 per += len;
             }
@@ -345,8 +460,9 @@ namespace CarretaJoy
             Vector2 side1 = ((o[0] + o[1]) / 2 - cen).normalized, side2 = ((o[2] + o[3]) / 2 - cen).normalized;
             var hint1 = new Vector3(side1.x, 1.2f, side1.y); var hint2 = new Vector3(side2.x, 1.2f, side2.y);
             float L = Vector2.Distance(o[0], o[1]);
-            R.Quad(P(o[0], ey), P(o[1], ey), r1, r0, hint1, new Vector2(0, 0), new Vector2(L / 2, 0), new Vector2(L / 2, rh), new Vector2(0, rh));
-            R.Quad(P(o[2], ey), P(o[3], ey), r0, r1, hint2, new Vector2(0, 0), new Vector2(L / 2, 0), new Vector2(L / 2, rh), new Vector2(0, rh));
+            float sl = Mathf.Sqrt(rh * rh + span * span / 4f) / 3f;   // telha: uma repetição a cada 3 m
+            R.Quad(P(o[0], ey), P(o[1], ey), r1, r0, hint1, new Vector2(0, 0), new Vector2(L / 3f, 0), new Vector2(L / 3f, sl), new Vector2(0, sl));
+            R.Quad(P(o[2], ey), P(o[3], ey), r0, r1, hint2, new Vector2(0, 0), new Vector2(L / 3f, 0), new Vector2(L / 3f, sl), new Vector2(0, sl));
             // oitões (triângulos das pontas) na cor da parede
             var W = mb.Get(WallMat(0, color));
             Vector2 g1 = (m0 - cen).normalized, g2 = (m1 - cen).normalized;
@@ -383,9 +499,22 @@ namespace CarretaJoy
                 bool alt = (color / 8) % 2 == 1;
                 var bt = fac == 0 ? (alt ? winHouse2 : winHouse) : (alt ? winApt2 : winApt);
                 m.SetTexture("_BaseMap", bt);
-                m.SetTexture("_EmissionMap", fac == 0 ? winHouseGlow : winAptGlow);
+                m.SetTexture("_EmissionMap", fac == 0 ? (alt && winHouse2Glow ? winHouse2Glow : winHouseGlow) : (alt && winApt2Glow ? winApt2Glow : winAptGlow));
                 m.SetFloat("_Smoothness", 0.25f);
             }
+            wallMats[key] = m;
+            return m;
+        }
+
+        /// <summary>Térreo de loja (vitrine, toldo e letreiro) na cor do prédio.</summary>
+        Material ShopMat(int color)
+        {
+            int key = 9000 + color % 8;
+            if (wallMats.TryGetValue(key, out var m)) return m;
+            m = Mats.Glow(new Color(1f, 0.9f, 0.7f), 1.2f, true);
+            m.SetColor("_BaseColor", Color.Lerp(Color.white, AptCols[color % AptCols.Length], 0.5f));
+            m.SetTexture("_BaseMap", shopTex); m.SetTexture("_EmissionMap", shopGlow);
+            m.SetFloat("_Smoothness", 0.35f);
             wallMats[key] = m;
             return m;
         }
@@ -563,7 +692,7 @@ namespace CarretaJoy
         }
 
         // ---------------- materiais e texturas ----------------
-        Texture2D winAptGlow, winHouseGlow;
+        Texture2D winAptGlow, winHouseGlow, winApt2Glow, winHouse2Glow, shopTex, shopGlow, tileTex, slabTex, walkTex;
         void MakeTextures()
         {
             groundTex = Resources.Load<Texture2D>("Map/pg_ground");
@@ -577,9 +706,17 @@ namespace CarretaJoy
             }
             else groundRect = map.Bounds;
             var rnd = new System.Random(5);
-            winApt = Facade(rnd, false, out winAptGlow, 0); winApt2 = Facade(rnd, false, out _, 1);
-            winHouse = Facade(rnd, true, out winHouseGlow, 0); winHouse2 = Facade(rnd, true, out _, 1);
-            asphaltTex = Noise(rnd, new Color32(52, 52, 56, 255), 14, true);
+            // texturas feitas a partir de fotos CC0 (ambientCG; tools/pg/texturas.py); se faltarem, desenha na hora
+            winApt = Resources.Load<Texture2D>("City/fachada_predio"); winApt2 = Resources.Load<Texture2D>("City/fachada_predio2");
+            winHouse = Resources.Load<Texture2D>("City/fachada_casa"); winHouse2 = Resources.Load<Texture2D>("City/fachada_casa2");
+            winAptGlow = Resources.Load<Texture2D>("City/fachada_predio_luz"); winApt2Glow = Resources.Load<Texture2D>("City/fachada_predio2_luz");
+            winHouseGlow = Resources.Load<Texture2D>("City/fachada_casa_luz"); winHouse2Glow = Resources.Load<Texture2D>("City/fachada_casa2_luz");
+            shopTex = Resources.Load<Texture2D>("City/terreo_loja"); shopGlow = Resources.Load<Texture2D>("City/terreo_loja_luz");
+            tileTex = Resources.Load<Texture2D>("City/telha"); slabTex = Resources.Load<Texture2D>("City/laje"); walkTex = Resources.Load<Texture2D>("City/calcada");
+            asphaltTex = Resources.Load<Texture2D>("City/asfalto");
+            if (winApt == null) { winApt = Facade(rnd, false, out winAptGlow, 0); winApt2 = Facade(rnd, false, out winApt2Glow, 1); }
+            if (winHouse == null) { winHouse = Facade(rnd, true, out winHouseGlow, 0); winHouse2 = Facade(rnd, true, out winHouse2Glow, 1); }
+            if (asphaltTex == null) asphaltTex = Noise(rnd, new Color32(52, 52, 56, 255), 14, true);
             dirtTex = Noise(rnd, new Color32(150, 112, 78, 255), 26, false);
         }
 
@@ -645,11 +782,11 @@ namespace CarretaJoy
             ground.SetTexture("_BaseMap", groundTex); ground.SetColor("_BaseColor", Color.white); ground.SetFloat("_Smoothness", 0.05f);
             asphalt = Mats.Lit(Color.white, 0.4f); asphalt = new Material(asphalt); asphalt.SetTexture("_BaseMap", asphaltTex);
             dirt = new Material(Mats.Lit(Color.white, 0.05f)); dirt.SetTexture("_BaseMap", dirtTex);
-            sidewalk = Mats.Lit(new Color(0.78f, 0.76f, 0.72f), 0.15f);
+            sidewalk = new Material(Mats.Lit(new Color(0.9f, 0.88f, 0.84f), 0.15f)); if (walkTex) sidewalk.SetTexture("_BaseMap", walkTex);
             water = Mats.Lit(new Color(0.18f, 0.42f, 0.62f), 0.92f);
-            roofTile = Mats.Lit(new Color(0.72f, 0.33f, 0.2f), 0.2f);
-            roofTile2 = Mats.Lit(new Color(0.55f, 0.27f, 0.2f), 0.2f);
-            roofFlat = Mats.Lit(new Color(0.6f, 0.6f, 0.6f), 0.15f);
+            roofTile = new Material(Mats.Lit(tileTex ? Color.white : new Color(0.72f, 0.33f, 0.2f), 0.2f)); if (tileTex) roofTile.SetTexture("_BaseMap", tileTex);
+            roofTile2 = new Material(Mats.Lit(tileTex ? new Color(0.8f, 0.72f, 0.7f) : new Color(0.55f, 0.27f, 0.2f), 0.2f)); if (tileTex) roofTile2.SetTexture("_BaseMap", tileTex);
+            roofFlat = new Material(Mats.Lit(new Color(0.8f, 0.8f, 0.8f), 0.15f)); if (slabTex) roofFlat.SetTexture("_BaseMap", slabTex);
             trunkMat = Mats.Lit(new Color(0.38f, 0.26f, 0.17f), 0.1f);
             leafMat = Mats.Lit(new Color(0.24f, 0.52f, 0.22f), 0.1f);
             araucariaMat = Mats.Lit(new Color(0.12f, 0.33f, 0.16f), 0.1f);

@@ -1,3 +1,0 @@
-Pessoas: "Ultimate Animated Character Pack" de Quaternius (quaternius.com), licença Creative Commons Zero (CC0, domínio público).
-Fonte: https://opengameart.org/content/animated-characters-pack
-Esqueleto ajustado para Humanoid e malha separada por material com tools/pessoas.py.
