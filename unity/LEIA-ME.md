@@ -7,8 +7,9 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
 - Arthur (103 mil triângulos) e Afonso (150 mil), vindos dos modelos com esqueleto do rascunho,
   importados como **Humanoid**: qualquer animação Mixamo serve nos dois corpos sem deformar.
 - Animações: parado, andar e correr (as próprias do Arthur), dança Gangnam, pulo, mortal, flip e pirueta.
-- Cidade 5x5 com prédios coloridos (as janelas acendem à noite), árvores, postes, faixas e uma praça com
-  pista de dança que pisca no ritmo.
+- **Ponta Grossa real (v0.3.0):** ruas, relevo e bairros de verdade (OpenStreetMap + satélite), 231 mil construções,
+  86 mil árvores (araucárias!), Catedral, Estação Saudade, Vila Hilda e Estádio Germano Krüger. A cidade carrega em
+  pedaços de 200 m em volta do jogador. Ferramentas em `tools/pg`.
 - A carreta original, com neon, luzes coloridas de verdade no ritmo, faróis à noite e paradas de festa.
 - Sombras suaves, bloom (brilho das luzes), tonemapping ACES, neblina e dia/noite.
 - **Turma completa (v0.2.0):** Arthur, Afonso, Chaves, Fofão, Chapolin, Máscara, Homem-Aranha, Capitão América

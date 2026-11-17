@@ -14,7 +14,7 @@ namespace CarretaJoy
 
         Camera cam; CameraRig rig; Light sun; Volume volume; Bloom bloom; ColorAdjustments color;
         Material sky;
-        City city; Truck truck; Music music; TouchUI ui;
+        PgCity city; Truck truck; Music music; TouchUI ui;
         // turma: id do modelo, nome, altura (m)
         static readonly (string id, string nome, float h)[] ROSTER = {
             ("Arthur", "Arthur", 1.32f), ("Afonso", "Afonso", 1.18f), ("Chaves", "Chaves", 1.64f),
@@ -47,12 +47,13 @@ namespace CarretaJoy
         {
             BuildEnvironment();
 
-            city = new GameObject("Cidade").AddComponent<City>();
-            city.Build(7);
+            city = new GameObject("PontaGrossa").AddComponent<PgCity>();
+            city.Build();
 
             var tgo = new GameObject("Carreta");
             truck = tgo.AddComponent<Truck>();
             truck.Build(Resources.Load<GameObject>("Vehicles/Carreta"), city.Ring);
+            truck.SetStops(city.StopDistances);
 
             music = new GameObject("Musica").AddComponent<Music>();
 
@@ -74,13 +75,14 @@ namespace CarretaJoy
                 run = KidClips.Load("Animations/Arthur_AndarCorrer", "Running") ?? common.run,
             };
 
-            var start = city.PlazaCenter + new Vector3(0, 0.1f, -10f);
+            var start = city.PlazaCenter + new Vector3(0, 0.6f, -10f);
             for (int i = 0; i < ROSTER.Length; i++)
             {
                 var r = ROSTER[i];
                 var prefab = Resources.Load<GameObject>("Characters/" + r.id + "/" + r.id);
                 if (prefab == null) { Debug.LogWarning("Sem modelo: " + r.id); continue; }
                 var pos = start + new Vector3((i % 5 - 2) * 1.6f, 0, -(i / 5) * 1.8f);
+                pos.y = city.Height(pos.x, pos.z) + 0.6f;
                 var k = Kid.Create(r.nome, prefab, r.h, r.id == "Arthur" ? arthurClips : common, pos);
                 k.truck = truck;
                 SetupKidMaterials(k, r.id);
@@ -115,7 +117,7 @@ namespace CarretaJoy
             var cgo = new GameObject("Camera");
             cam = cgo.AddComponent<Camera>();
             cgo.tag = "MainCamera";
-            cam.nearClipPlane = 0.15f; cam.farClipPlane = 600f; cam.fieldOfView = 58f;
+            cam.nearClipPlane = 0.2f; cam.farClipPlane = 2000f; cam.fieldOfView = 58f;
             cgo.AddComponent<AudioListener>();
             var cd = cam.GetUniversalAdditionalCameraData();
             cd.renderPostProcessing = true;
@@ -132,7 +134,7 @@ namespace CarretaJoy
             RenderSettings.skybox = sky;
             RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.fog = true; RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogStartDistance = 120f; RenderSettings.fogEndDistance = 420f;
+            RenderSettings.fogStartDistance = 250f; RenderSettings.fogEndDistance = 1600f;
             RenderSettings.sun = sun;
 
             var vgo = new GameObject("PosProcessamento");
@@ -234,6 +236,7 @@ namespace CarretaJoy
             // a turma segue o jogador (e sobe/desce da carreta junto)
             TickCrew(dt);
 
+            city.EnsureLoaded(player.transform.position, false);
             truck.Tick(dt, player.transform.position, player.OnTruck || player.Busy, music.Beat);
 
             // contexto do botão SUBIR/DESCER

@@ -18,7 +18,9 @@ namespace CarretaJoy
         List<Vector3> path; float[] cum; float total;
         public float dist;
         public float speed;
-        public float cruise = 7f;
+        public float cruise = 11f;
+        List<float> stopList;
+        public void SetStops(List<float> s) { stopList = s; if (s != null && s.Count > 0) nextStop = s[0] + 0.01f; }
         float stopTimer, nextStop;
         public bool Stopped => stopTimer > 0;
         public Vector3 Velocity { get; private set; }
@@ -142,7 +144,7 @@ namespace CarretaJoy
             Vector3 dF, dB;
             Vector3 front = At(dist + 5f, out dF), back = At(dist - 5f, out dB);
             Vector3 pos = (front + back) / 2f;
-            Vector3 fwd = (front - back); fwd.y = 0;
+            Vector3 fwd = (front - back);
             var old = transform.position;
             transform.position = pos;
             if (fwd.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(fwd.normalized);
@@ -161,7 +163,17 @@ namespace CarretaJoy
                 if (BlockedAhead(player)) want = 0;                          // não atropela ninguém
                 float ahead = Mathf.Repeat(nextStop - dist, total);
                 if (ahead < 25f) want = Mathf.Min(want, 1.5f + ahead * 0.4f);
-                if (ahead < 0.5f || ahead > total - 1f) { stopTimer = 15f; nextStop = Mathf.Repeat(nextStop + total * 0.25f, total); }
+                if (ahead < 0.5f || ahead > total - 1f)
+                {
+                    stopTimer = 15f;
+                    if (stopList != null && stopList.Count > 0)
+                    {
+                        float cur = Mathf.Repeat(dist, total), nx = stopList[0];
+                        foreach (var s in stopList) if (s > cur + 1f) { nx = s; break; }
+                        nextStop = nx;
+                    }
+                    else nextStop = Mathf.Repeat(nextStop + total * 0.25f, total);
+                }
                 speed = Mathf.MoveTowards(speed, want, (want > speed ? 2.5f : 6f) * dt);
             }
             dist += speed * dt;

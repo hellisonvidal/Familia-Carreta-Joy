@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.2.0";
-        public const int VERSION_CODE = 2;
+        public const string VERSION = "0.3.0";
+        public const int VERSION_CODE = 3;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]

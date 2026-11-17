@@ -85,6 +85,18 @@ namespace CarretaJoy.EditorTools
 
         void OnPreprocessTexture()
         {
+            if (assetPath.Contains("/Resources/Map/"))
+            {
+                // mapa de cores do chão de Ponta Grossa (3528 x 3730, 4 m por pixel)
+                var tm = (TextureImporter)assetImporter;
+                tm.maxTextureSize = 4096; tm.mipmapEnabled = true; tm.wrapMode = TextureWrapMode.Clamp;
+                tm.anisoLevel = 4; tm.npotScale = TextureImporterNPOTScale.None;
+                tm.textureCompression = TextureImporterCompression.Compressed;
+                var a = tm.GetPlatformTextureSettings("Android");
+                a.overridden = true; a.maxTextureSize = 4096; a.format = TextureImporterFormat.ASTC_6x6;
+                tm.SetPlatformTextureSettings(a);
+                return;
+            }
             if (!(IsChar(assetPath) || IsVehicle(assetPath))) return;
             var ti = (TextureImporter)assetImporter;
             ti.maxTextureSize = 2048;
