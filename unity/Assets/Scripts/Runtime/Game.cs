@@ -15,11 +15,19 @@ namespace CarretaJoy
         Camera cam; CameraRig rig; Light sun; Volume volume; Bloom bloom; ColorAdjustments color;
         Material sky;
         City city; Truck truck; Music music; TouchUI ui;
-        Kid arthur, afonso, player, buddy;
+        // turma: id do modelo, nome, altura (m)
+        static readonly (string id, string nome, float h)[] ROSTER = {
+            ("Arthur", "Arthur", 1.32f), ("Afonso", "Afonso", 1.18f), ("Chaves", "Chaves", 1.64f),
+            ("Fofao", "Fofão", 1.70f), ("Chapolin", "Chapolin", 1.66f), ("Mascara", "Máscara", 1.80f),
+            ("Aranha", "Homem-Aranha", 1.78f), ("Capitao", "Capitão América", 1.86f), ("Hulk", "Hulk", 2.20f) };
+        readonly System.Collections.Generic.List<Kid> crew = new System.Collections.Generic.List<Kid>();
+        readonly System.Collections.Generic.Dictionary<Kid, float> copyDelay = new System.Collections.Generic.Dictionary<Kid, float>();
+        Kid player;
+        int playerIdx;
         bool night;
         int score;
         float fpsAcc; int fpsN;
-        float buddyTrickDelay = -1; string buddyTrick;
+        string copyTrick;
 
         void Awake()
         {
@@ -67,15 +75,21 @@ namespace CarretaJoy
             };
 
             var start = city.PlazaCenter + new Vector3(0, 0.1f, -10f);
-            arthur = Kid.Create("Arthur", Resources.Load<GameObject>("Characters/Arthur/Arthur"), 1.32f, arthurClips, start);
-            afonso = Kid.Create("Afonso", Resources.Load<GameObject>("Characters/Afonso/Afonso"), 1.18f, common, start + new Vector3(1.4f, 0, -0.6f));
-            arthur.truck = afonso.truck = truck;
-            SetupKidMaterials(arthur, "Arthur");
-            SetupKidMaterials(afonso, "Afonso");
+            for (int i = 0; i < ROSTER.Length; i++)
+            {
+                var r = ROSTER[i];
+                var prefab = Resources.Load<GameObject>("Characters/" + r.id + "/" + r.id);
+                if (prefab == null) { Debug.LogWarning("Sem modelo: " + r.id); continue; }
+                var pos = start + new Vector3((i % 5 - 2) * 1.6f, 0, -(i / 5) * 1.8f);
+                var k = Kid.Create(r.nome, prefab, r.h, r.id == "Arthur" ? arthurClips : common, pos);
+                k.truck = truck;
+                SetupKidMaterials(k, r.id);
+                crew.Add(k);
+            }
 
             ui = gameObject.AddComponent<TouchUI>();
             rig = cam.gameObject.AddComponent<CameraRig>();
-            SetPlayer(arthur);
+            SetPlayer(0);
             rig.yaw = 0;
             SetNight(false);
             ui.ShowToast("CARRETA JOY!");
@@ -167,14 +181,17 @@ namespace CarretaJoy
             DynamicGI.UpdateEnvironment();
         }
 
-        void SetPlayer(Kid k)
+        void SetPlayer(int idx)
         {
-            player = k; buddy = k == arthur ? afonso : arthur;
+            playerIdx = (idx + crew.Count) % crew.Count;
+            var k = crew[playerIdx];
+            player = k;
             rig.target = k;
             rig.yaw = k.transform.eulerAngles.y;
+            rig.distance = 4.2f + k.Height * 1.0f;
             player.Running = ui.B["correr"].toggled;
             ui.Who = k.Name;
-            ui.B["trocar"].label = "TROCAR: " + buddy.Name.ToUpper();
+            ui.B["trocar"].label = "TROCAR: " + crew[(playerIdx + 1) % crew.Count].Name.ToUpper();
         }
 
         public void AddScore(int pts, string msg)
@@ -196,13 +213,13 @@ namespace CarretaJoy
             // botões
             if (ui.Pressed("dia")) SetNight(!night);
             if (ui.Pressed("som")) { music.on = !music.on; ui.B["som"].toggled = !music.on; ui.B["som"].label = music.on ? "SOM" : "MUDO"; }
-            if (ui.Pressed("trocar")) { SetPlayer(buddy); ui.ShowToast("Agora: " + player.Name); }
+            if (ui.Pressed("trocar")) { SetPlayer(playerIdx + 1); ui.ShowToast("Agora: " + player.Name); }
             if (ui.Pressed("correr")) { var b = ui.B["correr"]; b.toggled = !b.toggled; player.Running = b.toggled; b.label = b.toggled ? "ANDAR" : "CORRER"; }
             if (ui.Pressed("pular")) player.Jump();
-            if (ui.Pressed("mortal")) { player.DoTrick("mortal"); BuddyCopy("mortal"); }
-            if (ui.Pressed("flip")) { player.DoTrick("flip"); BuddyCopy("flip"); }
-            if (ui.Pressed("pirueta")) { player.DoTrick("pirueta"); BuddyCopy("pirueta"); }
-            if (ui.Pressed("dancar")) { player.ToggleDance(); if (player.Dancing != buddy.Dancing) buddy.ToggleDance(); if (player.Dancing) AddScore(30, player.OnTruck ? "FESTA NA CARRETA!" : "DANÇA!"); }
+            if (ui.Pressed("mortal")) { player.DoTrick("mortal"); CrewCopy("mortal"); }
+            if (ui.Pressed("flip")) { player.DoTrick("flip"); CrewCopy("flip"); }
+            if (ui.Pressed("pirueta")) { player.DoTrick("pirueta"); CrewCopy("pirueta"); }
+            if (ui.Pressed("dancar")) { player.ToggleDance(); foreach (var c in crew) if (c != player && c.Dancing != player.Dancing) c.ToggleDance(); if (player.Dancing) AddScore(30, player.OnTruck ? "FESTA NA CARRETA!" : "DANÇA!"); }
             if (ui.Pressed("subir"))
             {
                 bool ok = player.ClimbOrDescend();
@@ -214,8 +231,8 @@ namespace CarretaJoy
             rig.Rotate(ui.CamDelta);
             player.Tick(rig.Flat(ui.Move), dt);
 
-            // amigo segue o jogador (e sobe/desce da carreta junto)
-            TickBuddy(dt);
+            // a turma segue o jogador (e sobe/desce da carreta junto)
+            TickCrew(dt);
 
             truck.Tick(dt, player.transform.position, player.OnTruck || player.Busy, music.Beat);
 
@@ -243,36 +260,55 @@ namespace CarretaJoy
 
         void LateUpdate() { rig.Tick(Mathf.Min(Time.deltaTime, 0.05f)); }
 
-        void BuddyCopy(string trick) { buddyTrick = trick; buddyTrickDelay = 0.35f; }
-
-        void TickBuddy(float dt)
+        void CrewCopy(string trick)
         {
-            var b = buddy; var p = player;
-            if (buddyTrickDelay >= 0) { buddyTrickDelay -= dt; if (buddyTrickDelay < 0 && !b.Busy) b.DoTrick(buddyTrick); }
+            copyTrick = trick;
+            int n = 0;
+            foreach (var c in crew) if (c != player) copyDelay[c] = 0.25f + 0.18f * n++;
+        }
 
-            if (p.OnTruck && !b.OnTruck && !b.Busy)
+        void TickCrew(float dt)
+        {
+            var p = player;
+            int slot = 0;
+            foreach (var b in crew)
             {
-                if (truck.DistanceTo(b.transform.position) < 3.5f) b.ClimbOrDescend();
-                else if (Vector3.Distance(b.transform.position, truck.transform.position) > 40f) b.PlaceOnTruck(truck, truck.transform.InverseTransformPoint(p.transform.position) + Vector3.right * 0.8f);
-            }
-            if (!p.OnTruck && !p.Busy && b.OnTruck && !b.Busy) b.ClimbOrDescend();
+                if (b == p) continue;
+                int k = slot++;
+                if (copyDelay.TryGetValue(b, out var cd) && cd >= 0)
+                {
+                    cd -= dt; copyDelay[b] = cd;
+                    if (cd < 0 && !b.Busy) b.DoTrick(copyTrick, false);
+                }
 
-            Vector3 target = p.transform.position - p.transform.forward * 1.2f + p.transform.right * 1.1f;
-            Vector3 to = target - b.transform.position; to.y = 0;
-            float dist = to.magnitude;
-            Vector3 wish = Vector3.zero;
-            if (!b.OnTruck && !p.OnTruck && dist > 45f && !b.Busy)
-            {
-                b.cc.enabled = false; b.transform.position = target + Vector3.up * 0.5f; b.cc.enabled = true; b.vel = Vector3.zero;
+                if (p.OnTruck && !b.OnTruck && !b.Busy)
+                {
+                    if (truck.DistanceTo(b.transform.position) < 3.5f) b.ClimbOrDescend();
+                    else if (Vector3.Distance(b.transform.position, truck.transform.position) > 40f)
+                        b.PlaceOnTruck(truck, truck.transform.InverseTransformPoint(p.transform.position) + new Vector3((k % 2 == 0 ? 0.8f : -0.8f), 0, -1.2f * (k / 2)));
+                }
+                if (!p.OnTruck && !p.Busy && b.OnTruck && !b.Busy) b.ClimbOrDescend();
+
+                // formação: duas filas atrás do jogador (mais juntinhos em cima da carreta)
+                float sp = p.OnTruck ? 0.8f : 1.0f;
+                float back = (1.2f + 1.3f * (k / 2)) * sp, side = (k % 2 == 0 ? 1.1f : -1.1f) * sp;
+                Vector3 target = p.transform.position - p.transform.forward * back + p.transform.right * side;
+                Vector3 to = target - b.transform.position; to.y = 0;
+                float dist = to.magnitude;
+                Vector3 wish = Vector3.zero;
+                if (!b.OnTruck && !p.OnTruck && dist > 45f && !b.Busy)
+                {
+                    b.cc.enabled = false; b.transform.position = target + Vector3.up * 0.5f; b.cc.enabled = true; b.vel = Vector3.zero;
+                }
+                else if (dist > 0.6f && !(b.Dancing && dist < 3f))
+                {
+                    wish = to / dist * Mathf.Clamp01(dist / 1.5f);
+                    if (b.OnTruck && p.OnTruck) wish *= 0.8f;
+                    b.Running = dist > 4f || p.HorizontalSpeed > p.WalkSpeed * 1.2f;
+                }
+                if (!b.OnTruck && p.Grounded && b.Grounded && p.transform.position.y - b.transform.position.y > 0.6f && dist < 3f) b.Jump();
+                b.Tick(wish, dt);
             }
-            else if (dist > 0.6f && !(b.Dancing && dist < 3f))
-            {
-                wish = to / dist * Mathf.Clamp01(dist / 1.5f);
-                if (b.OnTruck && p.OnTruck) wish *= 0.8f;
-                b.Running = dist > 4f || p.HorizontalSpeed > p.WalkSpeed * 1.2f;
-            }
-            if (!b.OnTruck && p.Grounded && b.Grounded && p.transform.position.y - b.transform.position.y > 0.6f && dist < 3f) b.Jump();
-            b.Tick(wish, dt);
         }
     }
 }

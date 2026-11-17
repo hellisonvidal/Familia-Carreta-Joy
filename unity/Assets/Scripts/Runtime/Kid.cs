@@ -191,7 +191,7 @@ namespace CarretaJoy
             if (Grounded) { vel.y = 6.2f; Grounded = false; Dancing = false; }
         }
 
-        public void DoTrick(string name)
+        public void DoTrick(string name, bool score = true)
         {
             if (Busy || Trick != null) return;
             AnimationClip c = name == "mortal" ? clips.mortal : name == "flip" ? clips.flip : clips.pirueta;
@@ -200,7 +200,7 @@ namespace CarretaJoy
             Trick = name; trickT = 0;
             anim.PlayTrick(c, 1.1f);
             trickLen = anim.TrickLength;
-            Game.I?.AddScore(name == "mortal" ? 150 : name == "flip" ? 120 : 180, name.ToUpper() + "!");
+            if (score) Game.I?.AddScore(name == "mortal" ? 150 : name == "flip" ? 120 : 180, name.ToUpper() + "!");
         }
 
         public void ToggleDance()

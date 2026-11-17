@@ -11,8 +11,11 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   pista de dança que pisca no ritmo.
 - A carreta original, com neon, luzes coloridas de verdade no ritmo, faróis à noite e paradas de festa.
 - Sombras suaves, bloom (brilho das luzes), tonemapping ACES, neblina e dia/noite.
+- **Turma completa (v0.2.0):** Arthur, Afonso, Chaves, Fofão, Chapolin, Máscara, Homem-Aranha, Capitão América
+  e Hulk, todos jogáveis (botão TROCAR). Quem não está no controle segue o jogador, sobe na carreta, dança junto e
+  repete as acrobacias.
 - Controles de tela multitoque: joystick, PULAR, MORTAL, FLIP, PIRUETA, CORRER, SUBIR/DESCER, DANÇAR,
-  TROCAR (Arthur ⇄ Afonso), DIA/NOITE e SOM. O outro menino acompanha e copia as acrobacias.
+  TROCAR (passa para o próximo personagem), DIA/NOITE e SOM. O outro menino acompanha e copia as acrobacias.
 - Música gerada na hora (funk/pop), mais alta perto da carreta.
 
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
@@ -45,5 +48,5 @@ F sobe/desce, G dança, Tab troca de menino, N dia/noite, e arrastar com o mouse
 
 ## Próximas fases
 2. Mundo aberto completo: as 5 cidades com subidas e descidas, carros, pessoas, parkour e dirigir a carreta.
-3. Personagens adultos, fantasias, Afonso começando agachado, combo e dança no ritmo.
+3. Fantasias, Afonso começando agachado, combo e dança no ritmo.
 4. Menu inicial, tempo da volta (5/10/15/20 min), controle de videogame, atualizador e publicação no lugar da versão atual.

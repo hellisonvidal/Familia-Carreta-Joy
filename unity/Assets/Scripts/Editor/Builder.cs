@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.1.0";
-        public const int VERSION_CODE = 1;
+        public const string VERSION = "0.2.0";
+        public const int VERSION_CODE = 2;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]
@@ -107,7 +107,7 @@ namespace CarretaJoy.EditorTools
             w.SetTexture("_EmissionMap", Texture2D.whiteTexture);
             w.SetColor("_EmissionColor", Color.white);
 
-            foreach (var kid in new[] { "Arthur", "Afonso" })
+            foreach (var kid in new[] { "Arthur", "Afonso", "Chaves", "Fofao", "Chapolin", "Mascara", "Aranha", "Capitao", "Hulk" })
             {
                 var k = Mat("Kid_" + kid, lit);
                 var albedo = AssetDatabase.LoadAssetAtPath<Texture2D>($"Assets/Resources/Characters/{kid}/{kid}_albedo.jpg");
