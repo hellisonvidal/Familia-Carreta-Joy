@@ -208,12 +208,15 @@ namespace CarretaJoy
         void OnDestroy() { anim?.Destroy(); }
 
         // ---------------- ações ----------------
+        float jumpBuf, airT;   // pulo apertado um pouco antes de tocar o chão / logo depois de sair dele
         public void Jump()
         {
-            if (Busy || Trick != null) return;
+            if (Busy || Trick != null) { jumpBuf = 0.18f; return; }
             if (OnTruck) { if (localVy == 0) localVy = 5.2f; Dancing = false; return; }
-            if (Grounded && TryLedge()) return;
-            if (Grounded) { vel.y = 6.2f; Grounded = false; Dancing = false; StandUp(); }
+            bool canJump = Grounded || airT < 0.12f;
+            if (Grounded && TryLedge()) { jumpBuf = 0; return; }
+            if (canJump && vel.y <= 0.5f) { vel.y = 6.2f; Grounded = false; airT = 1f; jumpBuf = 0; Dancing = false; StandUp(); }
+            else jumpBuf = 0.18f;
         }
 
         // ---------------- parkour: mureta / obstáculo baixo à frente ----------------
@@ -447,7 +450,7 @@ namespace CarretaJoy
             if (hv.sqrMagnitude > 0.05f && !tricking)
             {
                 var q = Quaternion.LookRotation(new Vector3(hv.x, 0, hv.z));
-                transform.rotation = Quaternion.Slerp(transform.rotation, q, 1 - Mathf.Exp(-dt * 12f));
+                transform.rotation = Quaternion.Slerp(transform.rotation, q, 1 - Mathf.Exp(-dt * 17f));
             }
             HorizontalSpeed = new Vector3(hv.x, 0, hv.z).magnitude;
             anim.Update(dt, HorizontalSpeed, Height, Grounded, Dancing, Trick != null);
@@ -491,7 +494,8 @@ namespace CarretaJoy
                 vel = Vector3.zero;
             }
             Vector3 want = wish * target;
-            float acc = wish.sqrMagnitude > 0.01f ? (Grounded ? 30f : 8f) : (Grounded ? 18f : 2f);
+            // resposta rápida: acelera e freia firme no chão, e ainda dá para corrigir no ar
+            float acc = wish.sqrMagnitude > 0.01f ? (Grounded ? 48f : 12f) : (Grounded ? 34f : 3f);
             h = Vector3.MoveTowards(h, want, acc * dt);
             vel.x = h.x; vel.z = h.z;
             vel.y += -20f * dt;
@@ -500,6 +504,8 @@ namespace CarretaJoy
             Grounded = (flags & CollisionFlags.Below) != 0;
             if (Grounded && vel.y < 0) vel.y = -2f;
             if (!was && Grounded) Game.I?.OnLand(this);
+            airT = Grounded ? 0f : airT + dt;
+            if (jumpBuf > 0) { jumpBuf -= dt; if (Grounded && Trick == null && !Busy) Jump(); }
             hv = h;
         }
 

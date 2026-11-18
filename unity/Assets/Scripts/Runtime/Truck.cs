@@ -302,6 +302,8 @@ namespace CarretaJoy
 
         // ---------------- dirigir (jogador no volante) ----------------
         public bool Manual;
+        /// <summary>Modo seguro: dirigindo, a carreta não passa de ~15 km/h e responde com mais suavidade.</summary>
+        public bool SafeMode = true;
         public System.Func<float, float, float> GroundHeight;
         float yaw;
         public float ManualSpeed => speed;
@@ -313,11 +315,13 @@ namespace CarretaJoy
         {
             lastSteer = steer;
             if (!Manual) { Manual = true; yaw = transform.eulerAngles.y; }
-            float maxF = 16f, maxR = 5f;
-            if (throttle > 0.05f) speed += throttle * (speed < 0 ? 9f : 3.5f) * dt;
-            else if (throttle < -0.05f) speed += throttle * (speed > 0 ? 9f : 2.5f) * dt;
+            float maxF = SafeMode ? 4.2f : 16f, maxR = SafeMode ? 2.2f : 5f;
+            float accel = SafeMode ? 2.2f : 3.5f;
+            if (throttle > 0.05f) speed += throttle * (speed < 0 ? 9f : accel) * dt;
+            else if (throttle < -0.05f) speed += throttle * (speed > 0 ? 9f : accel * 0.7f) * dt;
+            if (SafeMode && speed > maxF) speed = Mathf.MoveTowards(speed, maxF, 6f * dt);   // ligou o modo seguro andando rápido: freia
             else speed = Mathf.MoveTowards(speed, 0, 2f * dt);
-            speed = Mathf.Clamp(speed, -maxR, maxF);
+            speed = Mathf.Clamp(speed, -maxR, SafeMode ? Mathf.Max(maxF, speed) : maxF);
             // vira mais devagar em alta velocidade (carreta comprida)
             float turn = steer * Mathf.Clamp(speed / 6f, -1f, 1f) * (40f / (1f + Mathf.Abs(speed) * 0.08f));
             float newYaw = yaw + turn * dt;

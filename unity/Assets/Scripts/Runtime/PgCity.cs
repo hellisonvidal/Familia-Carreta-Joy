@@ -251,7 +251,17 @@ namespace CarretaJoy
             if (c == null) return;
             liveRoads[id] = c.roads;
             var mb = new MultiMesh();
-            foreach (var r in c.roads) AddRoad(mb, r);
+            // ruas e calçadas também têm chão de colisão: os pés pisam no asfalto (que fica uns centímetros
+            // acima do relevo), e não afundam nele
+            var groundColl = new MultiMesh();
+            foreach (var r in c.roads) { AddRoad(mb, r); AddRoad(groundColl, r); }
+            var rg = groundColl.Emit(root.transform, "ChaoRuas", false);
+            if (rg != null)
+            {
+                var rmr = rg.GetComponent<MeshRenderer>(); if (rmr) Destroy(rmr);
+                rg.AddComponent<MeshCollider>().sharedMesh = rg.GetComponent<MeshFilter>().sharedMesh;
+                rg.layer = GroundLayer;
+            }
             foreach (var w in c.water) AddRibbon(mb, water, w.pts, w.w, 0.06f, false, 6f);
             var coll = new MultiMesh();
             foreach (var b in c.buildings) AddBuilding(mb, coll, b, detail);

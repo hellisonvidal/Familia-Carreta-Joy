@@ -72,6 +72,7 @@ namespace CarretaJoy
             truck = MakeTruck(Settings.Truck);
 
             music = new GameObject("Musica").AddComponent<Music>();
+            music.OnTrack = t => { if (ui != null && playing) ui.ShowToast("♪ " + t); };
             horn = gameObject.AddComponent<AudioSource>();
             horn.clip = MakeHorn(); horn.loop = true; horn.playOnAwake = false; horn.volume = 0.5f;
 
@@ -201,6 +202,8 @@ namespace CarretaJoy
         }
 
         public void Resume() { }
+        public void NextMusic() => music.Next();
+        public string MusicTitle => music != null ? music.NowPlaying : "";
         void CheckUpdates() { if (Application.internetReachability != NetworkReachability.NotReachable) updater.Check(); }
         public void GoMenu() { if (Driving) ToggleDrive(false); if (group) { group = false; rig.distance = savedDist; } playing = false; menu.Open(MenuUI.Page.Main); }
         public void PreviewStart() { if (!playing) PlaceAtStart(); }
@@ -655,6 +658,13 @@ namespace CarretaJoy
         {
             SetVisible(false);
             ui.B["dirigir"].visible = true; ui.B["dirigir"].label = "SAIR";
+            if (ui.Pressed("seguro"))
+            {
+                Settings.SafeDrive = !Settings.SafeDrive; Settings.Save();
+                ui.ShowToast(Settings.SafeDrive ? "Modo seguro: devagar (até 15 km/h)" : "Modo livre: mais rápido");
+            }
+            truck.SafeMode = Settings.SafeDrive;
+            ui.B["seguro"].toggled = Settings.SafeDrive; ui.B["seguro"].label = Settings.SafeDrive ? "SEGURO" : "LIVRE";
             // joystick: lados viram, para frente acelera, para trás freia/ré
             truck.Drive(ui.Move.x, ui.Throttle, dt);
             if (ui.B["buzina"].held) { if (!horn.isPlaying) horn.Play(); } else if (horn.isPlaying) horn.Stop();
@@ -669,6 +679,7 @@ namespace CarretaJoy
             // manobras: abertas pelo botão MANOBRAS (o controle de videogame alcança sempre)
             foreach (var id in new[] { "mortal", "flip", "pirueta", "rolar", "deslizar", "ninja" }) ui.B[id].visible = foot && (tricksOpen || Pad.Connected);
             ui.B["buzina"].visible = !foot;
+            ui.B["seguro"].visible = !foot;
         }
 
         void Lights()

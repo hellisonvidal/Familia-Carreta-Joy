@@ -46,6 +46,10 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   `tools/pessoas_ubc.py` + roupas em `tools/roupas_ubc.py`) que acenam/gritam/dançam; arquibancada atrás na carreta; sons CC0 (`Resources/Sounds`);
   texturas da cidade (`tools/pg/texturas.py`, ambientCG CC0) e casas do City Kit Suburban (`tools/casas.py`) perto do jogador.
 
+- **v0.9.0:** pose de base dos personagens endireitada (`tools/endireitar.py`: pés para a frente, pernas retas);
+  ruas e calçadas com chão de colisão (pés não afundam); modo seguro ao dirigir; 10 músicas CC0 (`Resources/Music`,
+  lista com BPM em `musicas.txt`); controles mais rápidos (joystick, aceleração, pulo guardado); telas dentro da área segura.
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 

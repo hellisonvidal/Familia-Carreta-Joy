@@ -155,4 +155,9 @@ jobs:
             - Pessoas com proporção humana (Universal Base Characters da Quaternius, CC0), com roupas, tons de pele e cabelos variados, que acenam, gritam e chamam, dançam ou seguem andando quando a carreta passa; arquibancada com gente sentada na parte de trás da carreta
             - Sons de torcida, palmas e gritos
             - Cidade com texturas novas (reboco, tijolo, telha, calçada de pedra, asfalto, lojas no térreo) e casas modeladas perto do jogador
+            - **Novo na 0.9:** pernas retas e pés para a frente em todos os personagens (pose de base corrigida); pés não afundam mais no asfalto e na calçada
+            - **Modo seguro** ao dirigir a carreta (até ~15 km/h; botão SEGURO/LIVRE e em Ajustes)
+            - **10 músicas de verdade** (funk, disco, house, dance, jazz — todas CC0), tocando embaralhadas; "Próxima música" na pausa
+            - Controles mais rápidos: joystick mais sensível, aceleração e freada firmes, pulo "guardado" (aperta um pouco antes de cair e pula ao tocar o chão)
+            - Telas ajustadas: tudo dentro da área visível (respeita o entalhe/câmera do celular); menus sem nada cortado
             - Créditos: carros e casas Kenney (CC0), pessoas Quaternius (CC0), texturas ambientCG (CC0), sons OpenGameArt (CC0), capturas de movimento CMU (uso livre)

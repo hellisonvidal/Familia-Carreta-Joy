@@ -92,6 +92,25 @@ namespace CarretaJoy.EditorTools
             mi.clipAnimations = clips;
         }
 
+        void OnPreprocessAudio()
+        {
+            var ai = (AudioImporter)assetImporter;
+            var st = ai.defaultSampleSettings;
+            if (assetPath.Contains("/Resources/Music/"))
+            {
+                // músicas longas: tocam direto do arquivo (sem ocupar dezenas de MB de memória)
+                st.loadType = AudioClipLoadType.Streaming; st.compressionFormat = AudioCompressionFormat.Vorbis; st.quality = 0.55f;
+                ai.loadInBackground = true;
+            }
+            else if (assetPath.Contains("/Resources/Sounds/"))
+            {
+                st.loadType = AudioClipLoadType.DecompressOnLoad; st.compressionFormat = AudioCompressionFormat.Vorbis; st.quality = 0.6f;
+                ai.forceToMono = true;
+            }
+            else return;
+            ai.defaultSampleSettings = st;
+        }
+
         void OnPreprocessTexture()
         {
             if (assetPath.Contains("/Resources/Map/"))

@@ -3,8 +3,9 @@ using UnityEngine;
 namespace CarretaJoy
 {
     /// <summary>
-    /// Música da carreta gerada na hora (sintetizador): batida de funk/pop animada,
-    /// baixo, palmas, chimbal e uma melodia alegre. Não precisa de arquivo de áudio.
+    /// Música da carreta: lista de músicas de verdade (CC0, Resources/Music) tocadas em ordem embaralhada,
+    /// com a batida (BPM) de cada uma para as luzes piscarem no ritmo. Se não houver arquivos,
+    /// usa a batida sintetizada de reserva.
     /// </summary>
     [RequireComponent(typeof(AudioSource))]
     public class Music : MonoBehaviour
@@ -31,22 +32,71 @@ namespace CarretaJoy
             14, -1, 16, -1, 19, -1, 21, 19, 16, -1, 14, -1, 12, -1, -1, -1 };
 
         public float Beat { get; private set; }
+        public string NowPlaying { get; private set; } = "";
+        public System.Action<string> OnTrack;
+
+        // músicas de verdade
+        readonly System.Collections.Generic.List<(string file, float bpm, string title)> tracks = new System.Collections.Generic.List<(string, float, string)>();
+        int[] order; int cur = -1;
+        AudioSource src;
+        volatile bool synth = true;
 
         void Awake()
         {
             sr = AudioSettings.outputSampleRate;
-            var src = GetComponent<AudioSource>();
-            src.playOnAwake = true; src.loop = true; src.spatialBlend = 0f; src.volume = 1f;
-            src.Play();
+            src = GetComponent<AudioSource>();
+            src.spatialBlend = 0f; src.volume = 1f;
+            var list = Resources.Load<TextAsset>("Music/musicas");
+            if (list != null)
+                foreach (var line in list.text.Split('\n'))
+                {
+                    var p = line.Trim().Split(';');
+                    if (p.Length < 3) continue;
+                    float.TryParse(p[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float b);
+                    tracks.Add((p[0], b > 0 ? b : 120f, p[2]));
+                }
+            if (tracks.Count > 0)
+            {
+                synth = false;
+                order = new int[tracks.Count];
+                for (int i = 0; i < order.Length; i++) order[i] = i;
+                for (int i = order.Length - 1; i > 0; i--) { int j = Random.Range(0, i + 1); (order[i], order[j]) = (order[j], order[i]); }
+                src.loop = false;
+                Next();
+            }
+            else { src.playOnAwake = true; src.loop = true; src.Play(); }
         }
 
-        void Update() { Beat = (float)(n / sr * bpm / 60.0); }
+        /// <summary>Próxima música da lista.</summary>
+        public void Next()
+        {
+            if (synth || tracks.Count == 0) return;
+            var old = src.clip;
+            cur = (cur + 1) % tracks.Count;
+            var t = tracks[order[cur]];
+            var clip = Resources.Load<AudioClip>("Music/" + t.file);
+            if (clip == null) return;
+            src.clip = clip; src.time = 0; src.Play();
+            if (old != null && old != clip) Resources.UnloadAsset(old);
+            bpm = t.bpm; NowPlaying = t.title;
+            OnTrack?.Invoke(t.title);
+        }
+
+        void Update()
+        {
+            if (synth) { Beat = (float)(n / sr * bpm / 60.0); return; }
+            src.volume = on ? volume : 0f;
+            Beat = src.time * bpm / 60f;
+            // acabou: a próxima (o jogo pausado não conta)
+            if (!src.isPlaying && src.clip != null && Time.timeScale > 0 && src.time <= 0.01f) Next();
+        }
 
         float Noise() { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; return (seed / 4294967295f) * 2f - 1f; }
         static double Hz(int semi) => 261.63 * System.Math.Pow(2, semi / 12.0);
 
         void OnAudioFilterRead(float[] data, int ch)
         {
+            if (!synth) return;   // tocando arquivo: o som passa direto
             float vol = on ? volume : 0f;
             double spb = sr * 60.0 / bpm, sps = spb / 4.0; // amostras por batida / por passo
             for (int i = 0; i < data.Length; i += ch)

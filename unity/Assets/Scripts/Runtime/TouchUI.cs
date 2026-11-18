@@ -9,6 +9,7 @@ namespace CarretaJoy
     /// No computador: WASD/setas, espaço pula, Q mortal, E flip, R pirueta, Shift corre, F sobe/desce,
     /// G dança, V dirige, H buzina, C câmera, M mapa, Tab troca, N dia/noite, Esc pausa; mouse gira a câmera.
     /// </summary>
+    [DefaultExecutionOrder(-50)]   // lê os toques antes do jogo usar (resposta no mesmo quadro)
     public class TouchUI : MonoBehaviour
     {
         public class Btn
@@ -60,6 +61,7 @@ namespace CarretaJoy
             Add("subir", "SUBIR", false, new Color(0.1f, 0.65f, 0.75f));
             Add("dirigir", "DIRIGIR", false, new Color(0.95f, 0.45f, 0.1f));
             Add("buzina", "BUZINA", true, new Color(0.95f, 0.8f, 0.1f));
+            Add("seguro", "SEGURO", true, new Color(0.2f, 0.7f, 0.35f));
             Add("dancar", "DANÇAR", false, new Color(0.95f, 0.25f, 0.6f));
             Add("trocar", "TROCAR", false, new Color(0.2f, 0.2f, 0.3f));
             Add("camera", "CÂMERA", false, new Color(0.2f, 0.2f, 0.3f));
@@ -72,9 +74,13 @@ namespace CarretaJoy
         public bool Pressed(string id) => B.TryGetValue(id, out var b) && b.pressed;
         public void ShowToast(string s) { Toast = s; toastT = 1.6f; }
 
+        float ox, oy, sw;   // área segura (sem o entalhe/câmera do celular)
         void Layout()
         {
-            float W = Screen.width, H = Screen.height;
+            var sa = Screen.safeArea;
+            if (sa.width < 100 || sa.height < 100) sa = new Rect(0, 0, Screen.width, Screen.height);
+            float W = sa.width, H = sa.height;
+            ox = sa.x; oy = Screen.height - sa.yMax; sw = W;
             u = Mathf.Min(W, H) / 100f;
             // botões de ação um pouco menores (k), ancorados no canto de baixo à direita
             float k = 0.78f;
@@ -91,6 +97,7 @@ namespace CarretaJoy
             B["deslizar"].r = A(92, 47, 14);
             B["ninja"].r = A(87, 64, 14);
             B["buzina"].r = A(30, 30, 22);
+            B["seguro"].r = A(52, 22, 17);
             float bw = 22 * u, bh = 9 * u;
             B["subir"].r = new Rect(W / 2 + 1.5f * u, H - bh - 3 * u, bw, bh);
             B["dirigir"].r = new Rect(W / 2 + bw + 3 * u, H - bh - 3 * u, bw, bh);
@@ -103,6 +110,9 @@ namespace CarretaJoy
             miniRect = new Rect(W - ms - 3 * u, 14 * u, ms, ms);
             float bs = Mathf.Min(W, H) * 0.86f;
             bigRect = new Rect((W - bs) / 2, (H - bs) / 2, bs, bs);
+            // tudo dentro da área segura
+            foreach (var b in B.Values) { b.r.x += ox; b.r.y += oy; }
+            miniRect.x += ox; miniRect.y += oy; bigRect.x += ox; bigRect.y += oy;
         }
 
         Btn HitButton(Vector2 p)
@@ -154,11 +164,11 @@ namespace CarretaJoy
             }
             if (joyFinger >= 0)
             {
-                float R = 13 * u;
+                float R = 10.5f * u;
                 var d = joyPos - joyOrigin;
                 if (d.magnitude > R) { joyOrigin = joyPos - d.normalized * R; d = joyPos - joyOrigin; } // a base segue o dedo
                 Move = new Vector2(d.x, -d.y) / R;
-                float m = Move.magnitude; if (m < 0.12f) Move = Vector2.zero; else Move *= Mathf.Clamp01((m - 0.12f) / 0.88f) / m;
+                float m = Move.magnitude; if (m < 0.07f) Move = Vector2.zero; else Move *= Mathf.Clamp01((m - 0.07f) / 0.8f) / m;
             }
 
             // teclado e mouse (computador)
@@ -170,7 +180,7 @@ namespace CarretaJoy
                 void K(KeyCode c, string id) { if (Input.GetKeyDown(c) && B[id].visible) B[id].pressed = true; }
                 K(KeyCode.Space, "pular"); K(KeyCode.Q, "mortal"); K(KeyCode.E, "flip"); K(KeyCode.R, "pirueta");
                 if (Input.GetKeyDown(KeyCode.LeftShift)) B[B["correr"].toggled ? "andar" : "correr"].pressed = true; K(KeyCode.F, "subir"); K(KeyCode.G, "dancar"); K(KeyCode.V, "dirigir");
-                K(KeyCode.H, "buzina"); K(KeyCode.Z, "rolar"); K(KeyCode.X, "deslizar"); K(KeyCode.T, "ninja"); K(KeyCode.C, "camera"); K(KeyCode.Tab, "trocar"); K(KeyCode.N, "dia"); K(KeyCode.Escape, "pausa");
+                K(KeyCode.H, "buzina"); K(KeyCode.Z, "rolar"); K(KeyCode.X, "deslizar"); K(KeyCode.T, "ninja"); K(KeyCode.C, "camera"); K(KeyCode.Tab, "trocar"); K(KeyCode.N, "dia"); K(KeyCode.Escape, "pausa"); K(KeyCode.B, "seguro");
                 B["buzina"].held = Input.GetKey(KeyCode.H) || (B["buzina"].held && Input.GetMouseButton(0));
                 if (Input.GetKeyDown(KeyCode.M)) BigMap = !BigMap;
                 var mp = new Vector2(Input.mousePosition.x, H - Input.mousePosition.y);
@@ -193,7 +203,7 @@ namespace CarretaJoy
                 CamDelta += Pad.Right * 150f * Time.unscaledDeltaTime * Settings.Sensitivity;
                 void P(bool down, string id) { if (down && B[id].visible) B[id].pressed = true; }
                 P(Pad.Down(Pad.A), "pular"); P(Pad.Down(Pad.B), "subir"); P(Pad.Down(Pad.X), "mortal"); P(Pad.Down(Pad.Y), "flip");
-                P(Pad.Down(Pad.LB), "pirueta"); P(Pad.Down(9), "ninja");
+                P(Pad.Down(Pad.LB), "pirueta"); P(Pad.Down(9), "ninja"); P(Pad.Down(Pad.Y), "seguro");
                 // gatilhos: a pé rolam/deslizam; dirigindo aceleram/freiam
                 if (!B["buzina"].visible) { P(Pad.RT > 0.6f && !rtWas, "rolar"); P(Pad.LT > 0.6f && !ltWas, "deslizar"); }
                 rtWas = Pad.RT > 0.6f; ltWas = Pad.LT > 0.6f;
@@ -257,10 +267,10 @@ namespace CarretaJoy
             }
 
             label.fontSize = Mathf.RoundToInt(3.4f * u);
-            Shadowed(new Rect(3 * u, 2 * u, 40 * u, 10 * u), Score, big, TextAnchor.MiddleLeft);
+            Shadowed(new Rect(ox + 3 * u, oy + 2 * u, 40 * u, 10 * u), Score, big, TextAnchor.MiddleLeft);
             // medidor da festa da turma
             {
-                var fr = new Rect(Screen.width / 2f - 26 * u, 8.5f * u, 52 * u, 3.2f * u);
+                var fr = new Rect(ox + sw / 2f - 26 * u, oy + 8.5f * u, 52 * u, 3.2f * u);
                 GUI.color = new Color(0, 0, 0, 0.45f); GUI.DrawTexture(fr, rrect, ScaleMode.StretchToFill, true, 0, GUI.color, 0, 1.6f * u);
                 float f = Mathf.Clamp01(Festa);
                 var fc = FestaOn ? Color.HSVToRGB(Mathf.Repeat(Time.time * 0.5f, 1f), 0.8f, 1f) : Color.Lerp(new Color(1f, 0.35f, 0.7f), new Color(1f, 0.85f, 0.2f), f);
@@ -270,8 +280,8 @@ namespace CarretaJoy
                 GUI.Label(fr, FestaOn ? "FESTA DA TURMA!" : f >= 1f ? "FESTA CHEIA!" : "FESTA " + Mathf.RoundToInt(f * 100) + "%", small);
                 small.alignment = TextAnchor.UpperLeft;
             }
-            Shadowed(new Rect(Screen.width / 2 - 40 * u, 2 * u, 80 * u, 6 * u), Info, label);
-            Shadowed(new Rect(Screen.width - 60 * u, 4 * u, 20 * u, 4 * u), Mathf.RoundToInt(Fps) + " FPS", small);
+            Shadowed(new Rect(ox + sw / 2 - 40 * u, oy + 2 * u, 80 * u, 6 * u), Info, label);
+            Shadowed(new Rect(ox + sw - 60 * u, oy + 4 * u, 20 * u, 4 * u), Mathf.RoundToInt(Fps) + " FPS", small);
             DrawMap(BigMap ? bigRect : miniRect, BigMap ? 3000f : 520f);
             if (toastT > 0)
             {

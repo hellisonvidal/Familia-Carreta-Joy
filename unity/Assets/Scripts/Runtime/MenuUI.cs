@@ -30,7 +30,7 @@ namespace CarretaJoy
 
         void Styles()
         {
-            u = Mathf.Min(Screen.width, Screen.height) / 100f;
+            var sa = SafeRect(); u = Mathf.Min(sa.width, sa.height) / 100f;
             if (btn == null)
             {
                 title = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
@@ -59,6 +59,14 @@ namespace CarretaJoy
             return t;
         }
 
+        /// <summary>Área segura da tela (sem entalhe/câmera/cantos arredondados), em coordenadas da GUI.</summary>
+        static Rect SafeRect()
+        {
+            var sa = Screen.safeArea;
+            if (sa.width < 100 || sa.height < 100) return new Rect(0, 0, Screen.width, Screen.height);
+            return new Rect(sa.x, Screen.height - sa.yMax, sa.width, sa.height);
+        }
+
         void OnGUI()
         {
             if (page == Page.None || game == null) return;
@@ -77,6 +85,10 @@ namespace CarretaJoy
                 GUI.DrawTexture(new Rect(gx - gs / 2, H * 0.08f - gs / 2, gs, gs), glow);
             }
             GUI.color = Color.white;
+            // o conteúdo fica todo dentro da área segura
+            var g = SafeRect();
+            GUI.BeginGroup(g);
+            W = g.width; H = g.height;
             switch (page)
             {
                 case Page.Main: Main(W, H); break;
@@ -87,6 +99,7 @@ namespace CarretaJoy
                 case Page.Trucks: Trucks(W, H); break;
                 case Page.Combos: CombosPage(W, H); break;
             }
+            GUI.EndGroup();
         }
 
         bool B(Rect r, string s, bool sel = false) => GUI.Button(r, s, sel ? btnSel : btn);
@@ -96,7 +109,7 @@ namespace CarretaJoy
         {
             var up = game.updater;
             if (up == null || w < 20 * u || !(up.Available || up.Busy && up.Progress > 0)) return;
-            var r = new Rect(x, y, w, 10 * u);
+            var r = new Rect(x, y, w, 8 * u);
             if (up.Busy)
             {
                 GUI.color = new Color(0, 0, 0, 0.5f); GUI.DrawTexture(r, rr); GUI.color = new Color(0.3f, 0.85f, 0.4f);
@@ -152,14 +165,14 @@ namespace CarretaJoy
         void Main(float W, float H)
         {
             // coluna da esquerda: botões; direita: vitrine com a carreta, o personagem e o local escolhidos
-            float x = 5 * u, bw = Mathf.Min(58 * u, W * 0.36f), bh = 8.6f * u, gap = 10.2f * u, y = 27 * u;
+            float x = 5 * u, bw = Mathf.Min(58 * u, W * 0.36f), bh = 8f * u, gap = 9.4f * u, y = 26 * u;
             var c = title.alignment; title.alignment = TextAnchor.MiddleLeft; sub.alignment = TextAnchor.MiddleLeft;
             title.normal.textColor = new Color(0, 0, 0, 0.5f); GUI.Label(new Rect(x + 4, 4 * u + 4, W, 14 * u), "CARRETA JOY", title);
             title.normal.textColor = Color.HSVToRGB(Mathf.Repeat(Time.unscaledTime * 0.08f, 1f), 0.35f, 1f); GUI.Label(new Rect(x, 4 * u, W, 14 * u), "CARRETA JOY", title);
             sub.normal.textColor = Color.white; GUI.Label(new Rect(x + u, 17 * u, W, 6 * u), "Ponta Grossa - PR", sub);
             title.alignment = c; sub.alignment = TextAnchor.MiddleCenter;
             if (B(new Rect(x, y, bw, bh * 1.15f), "JOGAR", true)) game.StartGame();
-            y += gap * 1.1f;
+            y += gap * 1.12f;
             if (B(new Rect(x, y, bw, bh), "Personagem: " + game.CharName(Settings.StartChar))) Open(Page.Chars); y += gap;
             if (B(new Rect(x, y, bw, bh), game.TruckName(Settings.Truck))) Open(Page.Trucks); y += gap;
             if (B(new Rect(x, y, bw, bh), "Partida: " + game.StopName(Settings.StartStop))) Open(Page.Start); y += gap;
@@ -174,7 +187,7 @@ namespace CarretaJoy
                 float cw = Mathf.Min(sw, (H - 30 * u) * 1.6f), chh = cw / 1.6f;
                 var big = new Rect(sx + (sw - cw) / 2, 6 * u, cw, chh);
                 if (Card(big, Preview(game.TruckFile(Settings.Truck)), game.TruckName(Settings.Truck), false)) Open(Page.Trucks);
-                float sw2 = (cw - 2 * u) / 2, sh2 = Mathf.Min(H - big.yMax - 16 * u, sw2 / 1.6f);
+                float sw2 = (cw - 2 * u) / 2, sh2 = Mathf.Min(H - big.yMax - 14 * u, sw2 / 1.6f);
                 if (sh2 > 12 * u)
                 {
                     sw2 = Mathf.Min(sw2, sh2 * 1.6f);
@@ -182,10 +195,10 @@ namespace CarretaJoy
                     if (Card(new Rect(big.xMax - sh2 * 0.85f, big.yMax + 2 * u, sh2 * 0.85f, sh2), Portrait(Settings.StartChar), game.CharName(Settings.StartChar), false)) Open(Page.Chars);
                 }
             }
-            UpdateBox(W, x, H - 26 * u, bw);
-            small.alignment = TextAnchor.LowerLeft;
-            GUI.Label(new Rect(x, H - 13 * u, W, 5 * u), "versão " + Application.version, small);
-            GUI.Label(new Rect(x, H - 8 * u, W, 6 * u), (Pad.Connected ? "Controle: A jogar · Y personagem · X partida · LB carreta    " : "") + "Mapa: © colaboradores do OpenStreetMap", small);
+            UpdateBox(W, x, H - 15 * u, bw);
+            small.alignment = TextAnchor.LowerRight;
+            GUI.Label(new Rect(0, H - 10 * u, W - 3 * u, 4.5f * u), "versão " + Application.version, small);
+            GUI.Label(new Rect(0, H - 5.5f * u, W - 3 * u, 5 * u), (Pad.Connected ? "Controle: A jogar · Y personagem · X partida · LB carreta    " : "") + "Mapa: © colaboradores do OpenStreetMap", small);
             small.alignment = TextAnchor.MiddleLeft;
         }
 
@@ -249,7 +262,7 @@ namespace CarretaJoy
             bool inGame = page == Page.Picker;
             Title(W, 1 * u, inGame ? "QUEM VAI JOGAR?" : "ESCOLHA O PERSONAGEM", null);
             int n = game.CharCount, cols = 5;
-            float gx = 2 * u, cw = Mathf.Min(30 * u, (W - 8 * u - gx * (cols - 1)) / cols), ch = cw * 1.22f;
+            float gx = 2 * u, cw = Mathf.Min(30 * u, (W - 8 * u - gx * (cols - 1)) / cols, (H - 30 * u - gx * 2) / (2 * 1.22f)), ch = cw * 1.22f;
             float x0 = (W - (cw * cols + gx * (cols - 1))) / 2, y0 = 15 * u;
             for (int i = 0; i < n; i++)
             {
@@ -356,7 +369,7 @@ namespace CarretaJoy
         void SettingsPage(float W, float H)
         {
             Title(W, 2 * u, "AJUSTES", null);
-            float x = W / 2 - 60 * u, y = 16 * u, rowH = 9.4f * u, lw = 40 * u, cw = 80 * u;
+            float x = W / 2 - 60 * u, y = 15 * u, rowH = Mathf.Min(9.4f * u, (H - 15 * u - 24 * u) / 8f), lw = 40 * u, cw = 80 * u;
             void Row(string name) { GUI.Label(new Rect(x, y, lw, rowH * 0.9f), name, lbl); }
             int Choice(int cur, string[] opts)
             {
@@ -371,16 +384,17 @@ namespace CarretaJoy
             Row("Câmera"); Settings.CamMode = Choice(Settings.CamMode, Settings.CamNames); y += rowH;
             Row("Turma"); Settings.CrewMode = Choice(Settings.CrewMode, Settings.CrewNames); y += rowH;
             Row("Carreta"); Settings.TruckSpeed = Choice(Settings.TruckSpeed, Settings.TruckSpeedNames); y += rowH;
+            Row("Dirigir"); Settings.SafeDrive = Choice(Settings.SafeDrive ? 0 : 1, new[] { "Modo seguro (devagar)", "Livre" }) == 0; y += rowH;
             Row("Sensibilidade"); Settings.Sensitivity = Mathf.Lerp(0.4f, 2f, Slider(new Rect(x + lw, y, cw, rowH * 0.85f), Mathf.InverseLerp(0.4f, 2f, Settings.Sensitivity))); y += rowH;
-            if (B(new Rect(W / 2 - 20 * u, y + u, 40 * u, 10 * u), "OK", true)) { Settings.Save(); game.ApplySettings(); page = back; }
+            if (B(new Rect(W / 2 - 20 * u, y + u, 40 * u, 9 * u), "OK", true)) { Settings.Save(); game.ApplySettings(); page = back; }
             // atualizações
             var up = game.updater;
             if (up != null)
             {
                 float ux = W / 2 + 24 * u, uy = y + u;
-                if (!up.Busy && B(new Rect(ux, uy, 36 * u, 10 * u), up.Available ? "ATUALIZAR " + up.Latest : "Procurar versão nova", up.Available))
+                if (!up.Busy && B(new Rect(ux, uy, 36 * u, 9 * u), up.Available ? "ATUALIZAR " + up.Latest : "Procurar versão nova", up.Available))
                 { if (up.Available) up.DownloadAndInstall(); else up.Check(); }
-                GUI.Label(new Rect(W / 2 - 60 * u, uy + 11 * u, 120 * u, 5 * u), "versão " + Application.version + "   " + up.Status, small);
+                GUI.Label(new Rect(W / 2 - 60 * u, uy + 9.5f * u, 120 * u, 4.5f * u), "versão " + Application.version + "   " + up.Status, small);
             }
         }
 
@@ -400,8 +414,9 @@ namespace CarretaJoy
         void Pause(float W, float H)
         {
             Title(W, 4 * u, "PAUSA", null);
-            float bw = 62 * u, bh = 10 * u, x = (W - bw) / 2, y = 22 * u, gap = 12 * u;
+            float bw = 62 * u, bh = 9 * u, x = (W - bw) / 2, y = 20 * u, gap = 11f * u;
             if (B(new Rect(x, y, bw, bh), "Continuar", true)) { page = Page.None; game.Resume(); }
+            if (B(new Rect(x, y + gap * 4, bw, bh), "Próxima música" + (game.MusicTitle != "" ? " (agora: " + game.MusicTitle + ")" : ""))) game.NextMusic();
             if (B(new Rect(x, y + gap, bw, bh), "Trocar de personagem")) { cursor = game.PlayerIndex; Open(Page.Picker); }
             if (B(new Rect(x, y + gap * 2, bw / 2 - u, bh), "Ajustes")) Open(Page.Settings);
             if (B(new Rect(x + bw / 2 + u, y + gap * 2, bw / 2 - u, bh), game.TruckManual ? "Carreta: piloto auto" : "Recomeçar")) { if (game.TruckManual) game.TruckAuto(); else game.StartGame(); page = Page.None; game.Resume(); }
