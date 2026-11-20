@@ -15,6 +15,12 @@ namespace CarretaJoy.EditorTools
         static bool IsVehicle(string p) => p.Contains("/Resources/Vehicles/") || p.Contains("/Resources/Traffic/");
 
         static readonly string[] Loops = { "Idle", "Walk", "Run", "Danca_Gangnam", "Arthur_AndarCorrer" };
+        // animações em pé/sentadas no chão: heightFromFeet garante pés exatamente em Y = 0 (nunca afundam nem flutuam)
+        static readonly string[] GroundedClips = {
+            "Idle", "Walk", "Run", "Sprint_Loop", "Passeio_Loop", "Danca_Gangnam", "Danca2_Loop",
+            "Charleston_Loop", "Russa_Loop", "Salsa_Loop", "Acenar_Loop", "Chamar_Loop",
+            "Conversa_Loop", "Agachado_Loop", "Sentado_Loop", "Moonwalk"
+        };
 
         void OnPreprocessModel()
         {
@@ -69,6 +75,7 @@ namespace CarretaJoy.EditorTools
             string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
             bool loop = Loops.Contains(file) || file.EndsWith("_Loop");
             bool livre = assetPath.Contains("/Animations/Livres/") || assetPath.Contains("/Animations/CMU/");   // Quaternius (CC0) e CMU: corpo virado pela orientação do esqueleto
+            bool grounded = GroundedClips.Contains(file);
             var clips = mi.defaultClipAnimations;
             foreach (var c in clips)
             {
@@ -76,18 +83,29 @@ namespace CarretaJoy.EditorTools
                 c.loopPose = loop;
                 c.lockRootRotation = true;           // não gira o corpo sozinho
                 c.keepOriginalOrientation = !livre;
-                // altura sempre dentro da pose, medida do chão original do arquivo: o corpo sobe no mortal,
-                // agacha no rolamento e nunca afunda no chão (o jogo mantém os pés do menino no piso)
-                c.lockRootHeightY = true; c.keepOriginalPositionY = true; c.heightFromFeet = false;
-                // deslocamento para a frente/lados vira root motion (pelo centro de massa):
-                // nos ciclos (andar/correr/dançar) o jogo ignora, então o corpo fica no lugar sem "pular para trás"
-                // a cada passada; nas acrobacias o jogo aplica (o flip avança, a estrela vai para o lado)
-                c.lockRootPositionXZ = false; c.keepOriginalPositionXZ = false;
                 if (file == "Escalar")
                 {
                     // escalar: quem sobe o menino até o topo da mureta é o jogo; a pose não pode subir junto
-                    c.lockRootHeightY = false; c.keepOriginalPositionY = false;
+                    c.lockRootHeightY = false; c.keepOriginalPositionY = false; c.heightFromFeet = false;
                 }
+                else if (grounded)
+                {
+                    // andar/correr/parado/dançar/sentado: mede altura direto pelos pés -> nunca afunda nem flutua no asfalto!
+                    c.lockRootHeightY = true; c.keepOriginalPositionY = false; c.heightFromFeet = true;
+                }
+                else if (file == "PuloAr_Loop" || file == "Ninja_Loop")
+                {
+                    // pose no ar: a gravidade/física do CharacterController já controla a altura do corpo
+                    c.lockRootHeightY = true; c.keepOriginalPositionY = false; c.heightFromFeet = true;
+                }
+                else
+                {
+                    // acrobacias com salto próprio (mortal, flip, estrela, rolamento...): mantém o arco vertical da captura
+                    c.lockRootHeightY = true; c.keepOriginalPositionY = true; c.heightFromFeet = false;
+                }
+                // deslocamento para a frente/lados vira root motion (pelo centro de massa):
+                // nos ciclos (andar/correr/dançar) o jogo ignora; nas acrobacias o jogo aplica com gravidade
+                c.lockRootPositionXZ = false; c.keepOriginalPositionXZ = false;
             }
             mi.clipAnimations = clips;
         }

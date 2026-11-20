@@ -7,8 +7,8 @@ namespace CarretaJoy
 {
     /// <summary>
     /// Ponto de partida: monta luz, céu, pós-processamento, Ponta Grossa, carreta, a turma,
-    /// câmera, controles, menus e música. Mundo aberto: anda com qualquer personagem, sobe na
-    /// carreta ou assume o volante dela.
+    /// câmera, controles, menus e música. Mundo aberto: a turma corre e dança na rua acompanhando
+    /// a carreta (enquanto as pessoas comuns passeiam sentadas dentro dela), ou assume o volante.
     /// </summary>
     public class Game : MonoBehaviour
     {
@@ -129,7 +129,7 @@ namespace CarretaJoy
             people.Init(city, truck, common.dances);
             traffic = new GameObject("Transito").AddComponent<Traffic>();
             traffic.Init(city, truck);
-            traffic.Blocked = (p, r) => { foreach (var c in crew) if (!c.OnTruck && (c.transform.position - p).sqrMagnitude < r * r) return true; return false; };
+            traffic.Blocked = (p, r) => { foreach (var c in crew) if (!(Driving && c == player) && (c.transform.position - p).sqrMagnitude < r * r) return true; return false; };
 
             ui = gameObject.AddComponent<TouchUI>();
             menu = gameObject.AddComponent<MenuUI>(); menu.game = this;
@@ -393,7 +393,7 @@ namespace CarretaJoy
                 city.EnsureLoaded(truck.transform.position, false);
                 people.Tick(truck.transform.position, dt, truck.Stopped);
                 traffic.Tick(truck.transform.position, dt);
-                player.Tick(Vector3.zero, dt);
+                AccompanyTruckOnStreet(player, crew.Count - 1, dt);
                 TickCrew(dt);
                 Lights();
                 return;
@@ -418,15 +418,15 @@ namespace CarretaJoy
             {
                 if (Driving) TickDriving(dt);
                 else TickOnFoot(dt);
-                // os outros personagens
+                // os outros personagens (sempre na rua!)
                 TickCrew(dt);
-                if (festa >= FESTA_MAX && !Driving && !player.Busy && player.Trick == null && (player.Grounded || player.OnTruck)) StartGroup();
+                if (festa >= FESTA_MAX && !Driving && !player.Busy && player.Trick == null && player.Grounded) StartGroup();
             }
 
             Vector3 focus = Driving ? truck.transform.position : player.transform.position;
             city.EnsureLoaded(focus, false);
-            truck.Tick(dt, player.transform.position, player.OnTruck || player.Busy || Driving, music.Beat);
-            if (truck.Stopped && player.OnTruck && player.Dancing) { festaAcc += dt; if (festaAcc > 1f) { festaAcc = 0; AddScore(10, null); } }
+            truck.Tick(dt, player.transform.position, player.Busy || Driving, music.Beat);
+            if (truck.Stopped && !Driving && truck.DistanceTo(player.transform.position) < 12f && player.Dancing) { festaAcc += dt; if (festaAcc > 1f) { festaAcc = 0; AddScore(10, null); } }
             people.Tick(focus, dt, truck.Stopped);
             traffic.Tick(focus, dt);
 
@@ -439,7 +439,7 @@ namespace CarretaJoy
 
         void TickOnFoot(float dt)
         {
-            bool nearTruck = truck.DistanceTo(player.transform.position) < 3.5f;
+            bool nearTruck = truck.DistanceTo(player.transform.position) < 6f;
             if (ui.Pressed("correr")) { player.Running = true; ui.ShowToast("Correndo"); }
             if (ui.Pressed("andar")) { player.Running = false; ui.ShowToast("Andando"); }
             ui.B["correr"].toggled = player.Running; ui.B["andar"].toggled = !player.Running;
@@ -451,21 +451,18 @@ namespace CarretaJoy
             {
                 player.ToggleDance();
                 SyncCrewDance();
-                if (player.Dancing) AddScore(30, (player.OnTruck ? "FESTA NA CARRETA! " : "DANÇA: ") + Kid.DanceNames[Mathf.Clamp(player.DanceStyle, 0, Kid.DanceNames.Length - 1)].ToUpper());
+                if (player.Dancing) AddScore(30, (truck.Stopped && nearTruck ? "FESTA NA RUA! " : "DANÇA: ") + Kid.DanceNames[Mathf.Clamp(player.DanceStyle, 0, Kid.DanceNames.Length - 1)].ToUpper());
             }
-            if (ui.Pressed("subir")) { if (!player.ClimbOrDescend() && !player.OnTruck) ui.ShowToast("Chegue perto da carreta!"); }
 
             player.Tick(rig.Flat(ui.Move), dt);
 
-            // botões que aparecem conforme a situação
+            // botões que aparecem conforme a situação (personagens sempre na rua; carreta para dirigir ou passageiros)
             SetVisible(true);
-            var sb = ui.B["subir"];
-            sb.label = player.OnTruck ? "DESCER" : "SUBIR";
-            sb.visible = player.OnTruck || nearTruck;
-            ui.B["dirigir"].visible = !player.OnTruck && truck.DistanceTo(player.transform.position) < 6f;
+            ui.B["dirigir"].visible = nearTruck;
             ui.B["dirigir"].label = "DIRIGIR";
-            ui.Info = player.OnTruck ? (truck.Stopped ? "Parada de festa! Dancem!" : "Em cima da carreta!")
-                                     : nearTruck ? "Toque SUBIR ou DIRIGIR" : "Explore Ponta Grossa!";
+            ui.Info = (truck.Stopped && nearTruck) ? "Parada de festa! Dancem na rua!"
+                                                   : nearTruck ? "Toque DIRIGIR para assumir o volante"
+                                                   : "Acompanhe a carreta por Ponta Grossa!";
         }
 
         // ---------------- combos ----------------
@@ -554,12 +551,6 @@ namespace CarretaJoy
         {
             group = true; groupT = GROUP_TIME; groupStyle = 0;
             Vector3 c = player.transform.position;
-            if (player.OnTruck)
-            {
-                // desce todo mundo para a rua, do lado da carreta
-                var tp = truck.transform;
-                c = tp.TransformPoint(new Vector3(truck.HalfWidth + 6f, 0, 0));
-            }
             c.y = city.Height(c.x, c.z);
             // de frente para a câmera
             var f = cam.transform.position - c; f.y = 0;
@@ -599,7 +590,7 @@ namespace CarretaJoy
         void TickGroup(float dt)
         {
             SetVisible(true);
-            ui.B["subir"].visible = false; ui.B["dirigir"].visible = false;
+            ui.B["dirigir"].visible = false;
             ui.Info = "Festa da turma! Os botões mudam o passo de todos";
             // passos de dança enfileirados: os botões mudam o passo da turma inteira ao mesmo tempo
             if (ui.Pressed("dancar")) GroupStyle((groupStyle + 1) % Kid.DanceNames.Length);
@@ -675,7 +666,7 @@ namespace CarretaJoy
 
         void SetVisible(bool foot)
         {
-            foreach (var id in new[] { "pular", "correr", "andar", "manobras", "dancar", "subir" }) ui.B[id].visible = foot;
+            foreach (var id in new[] { "pular", "correr", "andar", "manobras", "dancar" }) ui.B[id].visible = foot;
             // manobras: abertas pelo botão MANOBRAS (o controle de videogame alcança sempre)
             foreach (var id in new[] { "mortal", "flip", "pirueta", "rolar", "deslizar", "ninja" }) ui.B[id].visible = foot && (tricksOpen || Pad.Connected);
             ui.B["buzina"].visible = !foot;
@@ -740,10 +731,14 @@ namespace CarretaJoy
             {
                 if (b == p) continue;
                 int k = slot++;
-                if (Settings.CrewMode == 0) { RideTruck(b, k, dt); continue; }
-                if (Settings.CrewMode == 2 || Driving || !playing)
+                if (Settings.CrewMode == 0 || !playing || (Driving && Settings.CrewMode != 2))
                 {
-                    // cada um fica no seu lugar (parado, dançando ou em cima da carreta)
+                    AccompanyTruckOnStreet(b, k, dt);
+                    continue;
+                }
+                if (Settings.CrewMode == 2)
+                {
+                    // livres: cada um fica no seu lugar na rua (parado ou dançando)
                     b.Tick(Vector3.zero, dt);
                     continue;
                 }
@@ -752,82 +747,105 @@ namespace CarretaJoy
                     cd -= dt; copyDelay[b] = cd;
                     if (cd < 0 && !b.Busy) b.DoTrick(copyTrick, false);
                 }
-                if (p.OnTruck && !b.OnTruck && !b.Busy)
-                {
-                    if (truck.DistanceTo(b.transform.position) < 3.5f) b.ClimbOrDescend();
-                    else if (Vector3.Distance(b.transform.position, truck.transform.position) > 40f)
-                        b.PlaceOnTruck(truck, truck.transform.InverseTransformPoint(p.transform.position) + new Vector3((k % 2 == 0 ? 0.8f : -0.8f), 0, -1.2f * (k / 2)));
-                }
-                if (!p.OnTruck && !p.Busy && b.OnTruck && !b.Busy) b.ClimbOrDescend();
-
-                float sp = p.OnTruck ? 0.8f : 1.0f;
-                float back = (1.4f + 1.4f * (k / 2)) * sp, side = (k % 2 == 0 ? 1.3f : -1.3f) * sp;
+                float back = 1.6f + 1.5f * (k / 2), side = k % 2 == 0 ? 1.4f : -1.4f;
                 Vector3 target = p.transform.position - p.transform.forward * back + p.transform.right * side;
                 Vector3 to = target - b.transform.position; to.y = 0;
                 float dist = to.magnitude;
                 Vector3 wish = Vector3.zero;
-                if (!b.OnTruck && !p.OnTruck && dist > 45f && !b.Busy)
+                if (dist > 45f && !b.Busy)
                 {
                     var tp = target; tp.y = city.Height(tp.x, tp.z) + 0.3f;
                     b.Teleport(tp, p.transform.rotation);
                 }
-                else if (dist > 0.8f && !(b.Dancing && dist < 3f))
+                else if (dist > 0.85f && !(b.Dancing && dist < 3f))
                 {
                     wish = to / dist * Mathf.Clamp01(dist / 1.5f);
-                    if (b.OnTruck && p.OnTruck) wish *= 0.8f;
-                    b.Running = dist > 4f || p.HorizontalSpeed > p.WalkSpeed * 1.2f;
+                    b.Running = dist > 3.5f || p.HorizontalSpeed > p.WalkSpeed * 1.15f;
                 }
-                if (!b.OnTruck && p.Grounded && b.Grounded && p.transform.position.y - b.transform.position.y > 0.6f && dist < 3f) b.Jump();
+                if (p.Grounded && b.Grounded && p.transform.position.y - b.transform.position.y > 0.6f && dist < 3f) b.Jump();
                 b.Tick(wish, dt);
+            }
+            SeparateCrew(dt);
+        }
+
+        /// <summary>Separação horizontal suave entre personagens na rua para ninguém atravessar o colega.</summary>
+        void SeparateCrew(float dt)
+        {
+            const float minDist = 0.82f;
+            float maxPush = 2.5f * dt;
+            for (int i = 0; i < crew.Count; i++)
+            {
+                var a = crew[i];
+                if (a.Busy || (Driving && a == player)) continue;
+                for (int j = i + 1; j < crew.Count; j++)
+                {
+                    var b = crew[j];
+                    if (b.Busy || (Driving && b == player)) continue;
+                    Vector3 d = a.transform.position - b.transform.position;
+                    d.y = 0f;
+                    float dist = d.magnitude;
+                    if (dist >= minDist || dist < 1e-4f) continue;
+                    float pen = Mathf.Min((minDist - dist) * 0.5f, maxPush);
+                    Vector3 dir = d / dist;
+                    if (a != player) a.PushHorizontal(dir * pen);
+                    if (b != player) b.PushHorizontal(-dir * pen);
+                }
             }
         }
 
-        /// <summary>A turma vai junto com a carreta pelo percurso: sobe e dança lá em cima.</summary>
-        void RideTruck(Kid b, int k, float dt)
+        /// <summary>
+        /// A turma acompanha a carreta sempre NA RUA (nunca em cima da carreta):
+        /// corre ao lado durante o trajeto e dança em volta nas paradas de festa.
+        /// </summary>
+        void AccompanyTruckOnStreet(Kid b, int k, float dt)
         {
-            // parada de festa: a turma desce e dança na rua, ao lado da carreta
-            if (truck.Stopped && truck.StopLeft > 3f && !Driving)
+            Vector3 slot = truck.StreetSlot(k, truck.Stopped);
+            Vector3 to = slot - b.transform.position; to.y = 0f;
+            float dist = to.magnitude;
+            if (dist > 45f && !b.Busy)
             {
-                if (b.OnTruck)
+                var tp = slot; tp.y = city.Height(tp.x, tp.z) + 0.2f;
+                b.ResetState();
+                b.Teleport(tp, truck.transform.rotation);
+                b.Tick(Vector3.zero, dt);
+                return;
+            }
+            if (truck.Stopped)
+            {
+                if (dist > 1.1f && !b.Dancing && !b.Busy && b.Trick == null)
                 {
-                    if (!b.Busy && b.Trick == null) { b.StopDance(); b.ClimbOrDescend(); }
-                    b.Tick(Vector3.zero, dt);
-                    return;
-                }
-                var slot = truck.transform.TransformPoint(new Vector3((k % 2 == 0 ? 1 : -1) * (truck.HalfWidth + 2.2f), 0, 3f - (k / 2) * 2.2f));
-                var tos = slot - b.transform.position; tos.y = 0;
-                if (tos.magnitude > 0.8f && !b.Dancing && !b.Busy && b.Trick == null)
-                {
-                    b.Running = tos.magnitude > 4f;
-                    b.Tick(tos.normalized * Mathf.Clamp01(tos.magnitude), dt);
+                    b.Running = dist > 3.5f;
+                    b.Tick((to / dist) * Mathf.Clamp01(dist / 1.2f), dt);
                 }
                 else
                 {
                     if (!b.Dancing && !b.Busy && b.Trick == null) b.SetDanceStyle((k + 1) % Kid.DanceNames.Length);
-                    var face = truck.transform.position - b.transform.position; face.y = 0;
-                    if (face.sqrMagnitude > 0.1f && b.Trick == null) b.transform.rotation = Quaternion.Slerp(b.transform.rotation, Quaternion.LookRotation(face), 1 - Mathf.Exp(-dt * 4f));
+                    var face = truck.transform.position - b.transform.position; face.y = 0f;
+                    if (face.sqrMagnitude > 0.1f && b.Trick == null)
+                        b.transform.rotation = Quaternion.Slerp(b.transform.rotation, Quaternion.LookRotation(face), 1f - Mathf.Exp(-dt * 4f));
                     b.Tick(Vector3.zero, dt);
                 }
                 return;
             }
-            if (b.OnTruck)
+            // carreta andando: corre e acompanha na rua ao lado dela
+            if (b.Dancing && dist > 1.6f) b.StopDance();
+            Vector3 leadSlot = slot + new Vector3(truck.Velocity.x, 0f, truck.Velocity.z) * 0.35f;
+            Vector3 toLead = leadSlot - b.transform.position; toLead.y = 0f;
+            float leadDist = toLead.magnitude;
+            float truckSpd = new Vector3(truck.Velocity.x, 0f, truck.Velocity.z).magnitude;
+            Vector3 wish = Vector3.zero;
+            if (leadDist > 0.65f)
             {
-                if (!b.Busy && b.Trick == null && !b.Dancing) b.ToggleDance();
-                b.Tick(Vector3.zero, dt);
-                return;
+                wish = (toLead / leadDist) * Mathf.Clamp01(leadDist / 1.1f);
+                b.Running = leadDist > 2.2f || truckSpd > b.WalkSpeed * 1.05f;
             }
-            if (!b.Busy && b.Trick == null)
+            else if (truckSpd > 0.35f)
             {
-                float d = truck.DistanceTo(b.transform.position);
-                if (d < 3.2f) { b.ClimbOrDescend(); b.Tick(Vector3.zero, dt); return; }
-                if (d > 25f) { b.ResetState(); b.PlaceOnTruck(truck, truck.RoofSlot(k)); b.Tick(Vector3.zero, dt); return; }
-                // corre até a carreta
-                var to = truck.transform.position - b.transform.position; to.y = 0;
-                b.Running = true;
-                b.Tick(to.normalized, dt);
-                return;
+                Vector3 fwd = truck.transform.forward; fwd.y = 0f;
+                if (fwd.sqrMagnitude > 0.01f) wish = fwd.normalized * Mathf.Clamp01(truckSpd / Mathf.Max(0.5f, b.WalkSpeed));
+                b.Running = truckSpd > b.WalkSpeed * 1.1f;
             }
-            b.Tick(Vector3.zero, dt);
+            b.Tick(wish, dt);
         }
 
         static AudioClip MakeHorn()

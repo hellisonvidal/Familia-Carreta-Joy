@@ -9,7 +9,7 @@ namespace CarretaJoy
         public static int Quality = 1;        // 0 leve, 1 médio, 2 alto
         public static int Fps = 60;
         public static int CamMode = 0;        // 0 TPS (ombro), 1 normal, 2 perto, 3 longe, 4 aérea
-        public static int CrewMode = 0;       // 0 vão na carreta, 1 me seguem, 2 ficam parados
+        public static int CrewMode = 0;       // 0 acompanham a carreta na rua, 1 me seguem, 2 ficam parados
         public static bool CrewFollows => CrewMode == 1;
         public static float Sensitivity = 1f;
         public static int StartStop = 0;
@@ -22,7 +22,7 @@ namespace CarretaJoy
 
         public static readonly string[] QualityNames = { "Leve", "Médio", "Alto" };
         public static readonly string[] CamNames = { "TPS", "Normal", "Perto", "Longe", "Aérea" };
-        public static readonly string[] CrewNames = { "Na carreta", "Me seguem", "Parados" };
+        public static readonly string[] CrewNames = { "Com a carreta", "Me seguem", "Parados" };
 
         public static void Load()
         {

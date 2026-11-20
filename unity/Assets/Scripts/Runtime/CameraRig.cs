@@ -31,7 +31,7 @@ namespace CarretaJoy
             // modos: 0 TPS (atrás do ombro), 1 normal, 2 perto, 3 longe, 4 aérea
             bool tps = mode == 0 && !drive;
             float hk = drive ? 1f : target.Height / 1.3f;
-            float baseD = drive ? 17f : tps ? 2.6f * Mathf.Max(0.9f, hk) + (target.OnTruck ? 1f : 0f) : target.OnTruck ? 8.5f : distance;
+            float baseD = drive ? 17f : tps ? 2.6f * Mathf.Max(0.9f, hk) : distance;
             float k = mode == 2 ? 0.6f : mode == 3 ? 1.8f : 1f;
             float want = baseD * k * zoom;
             float p = pitch;
@@ -41,7 +41,7 @@ namespace CarretaJoy
             curPitch = init ? Mathf.Lerp(curPitch, p, 1 - Mathf.Exp(-dt * 6f)) : p;
 
             Vector3 f = drive ? follow.position + Vector3.up * 3.2f
-                              : target.transform.position + Vector3.up * (target.Height * (tps ? 0.95f : 0.85f) + (target.OnTruck ? 0.6f : 0f));
+                              : target.transform.position + Vector3.up * (target.Height * (tps ? 0.95f : 0.85f));
             // TPS: personagem um pouco à esquerda da tela (câmera sobre o ombro direito)
             if (tps) f += Quaternion.Euler(0, yaw, 0) * Vector3.right * 0.55f * hk;
             focus = init ? Vector3.Lerp(focus, f, 1 - Mathf.Exp(-dt * 14f)) : f;

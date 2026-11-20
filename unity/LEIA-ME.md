@@ -50,6 +50,12 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   ruas e calçadas com chão de colisão (pés não afundam); modo seguro ao dirigir; 10 músicas CC0 (`Resources/Music`,
   lista com BPM em `musicas.txt`); controles mais rápidos (joystick, aceleração, pulo guardado); telas dentro da área segura.
 
+- **v0.10.0:** limpeza completa de rigging e pesos dos 9 personagens (`tools/fix_characters.py`: sem tronco colando nos braços,
+  T-pose padrão, pesos cruzados entre pernas removidos); animações de corrida e caminhada endireitadas (`tools/straighten_run.py`:
+  pernas retas no Arthur e em toda a turma); turma acompanha, corre e dança **na rua** ao redor da carreta enquanto os passageiros
+  comuns ficam **sentados dentro** das 4 carretas abertas (`tools/carretas.py`); física e animações corrigidas (FootIK apenas no chão,
+  aderência em ladeiras, colisão suave com a carreta e separação entre personagens).
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 

@@ -9,8 +9,9 @@ from mathutils import Vector, Matrix
 args = sys.argv[sys.argv.index('--') + 1:]
 OUT = args[0]
 RENDER = len(args) > 1 and args[1] == 'render'
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ORIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Carreta_original.fbx')   # a malha sem rodas separadas
-ALBEDO = '/home/user/familia-carreta-joy/unity/Assets/Resources/Vehicles/Carreta_albedo.jpg'
+ALBEDO = os.path.join(REPO, 'unity', 'Assets', 'Resources', 'Vehicles', 'Carreta_albedo.jpg')
 
 def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -209,7 +210,7 @@ def axles(ys, twin, start_idx, z=R):
         box('Preto', (0, y, z), (W - 0.6, 0.14, 0.14))                              # eixo
     return idx
 
-def trailer_base(y0, y1, deck, c_skirt='Pintura'):
+def trailer_base(y0, y1, floor_z, c_skirt='Pintura'):
     L = y1 - y0
     box('Preto', (0, (y0 + y1) / 2, 1.15), (W - 0.2, L, 0.3), bev=0.03)             # chassi
     box('Preto', (0, -5.2, 1.15), (1.2, 0.8, 0.12))                                 # quinta-roda
@@ -225,8 +226,55 @@ def trailer_base(y0, y1, deck, c_skirt='Pintura'):
     for s in (-1, 1):
         box('Lanterna', (s * (HW - 0.3), y1 + 0.12, 1.0), (0.45, 0.04, 0.16), bev=0.02)
     box('Preto', (0, y1 + 0.1, 0.55), (W - 0.4, 0.06, 0.12))                         # para-choque baixo
-    box('Preto', (0, (y0 + y1) / 2, deck - 0.04), (W, L, 0.08))                     # piso do palco
-    box('Piso', (0, (y0 + y1) / 2, deck + 0.005), (W - 0.1, L - 0.1, 0.02))
+    # piso interno dos passageiros (aberto nas laterais)
+    box('Preto', (0, (y0 + y1) / 2, floor_z - 0.06), (W, L, 0.12))
+    box('Piso', (0, (y0 + y1) / 2, floor_z + 0.005), (W - 0.1, L - 0.1, 0.02))
+
+
+def passenger_cabin(y0, y1, floor_z, roof_z, skirt_mat='Pintura', seat_mat='Pintura2', roof_mat='Pintura'):
+    """Carroceria aberta nas laterais com bancos DENTRO para os passageiros e teto coberto (carreta real)."""
+    L = y1 - y0
+    yc = (y0 + y1) / 2
+    # saia lateral baixa (fecha embaixo dos bancos e deixa a parte dos passageiros aberta)
+    skirt_h = 0.78
+    for s in (-1, 1):
+        box(skirt_mat, (s * (HW - 0.05), yc, floor_z + 0.08), (0.10, L, skirt_h), bev=0.03)
+    # parede frontal (atrás da cabine) e meia parede traseira
+    box(skirt_mat, (0, y0 + 0.08, (floor_z + roof_z) / 2), (W - 0.06, 0.16, roof_z - floor_z), bev=0.03)
+    box(skirt_mat, (0, y1 - 0.06, floor_z + 0.45), (W - 0.06, 0.12, 0.9), bev=0.03)
+    # grades de proteção cromadas nas laterais abertas (passageiros visíveis da rua!)
+    rail1, rail2 = floor_z + 0.62, floor_z + 0.90
+    for s in (-1, 1):
+        x = s * (HW - 0.05)
+        tube('Cromo', (x, y0 + 0.1, rail1), (x, y1 - 0.1, rail1), 0.03)
+        tube('Cromo', (x, y0 + 0.1, rail2), (x, y1 - 0.1, rail2), 0.035)
+        # colunas que seguram o teto
+        n_posts = 6
+        for k in range(n_posts + 1):
+            y = y0 + 0.25 + k * (L - 0.5) / n_posts
+            tube('Cromo', (x, y, floor_z), (x, y, roof_z), 0.045)
+    # teto coberto (com luzes e neon na borda — ninguém sobe em cima!)
+    box(roof_mat, (0, yc, roof_z + 0.06), (W + 0.04, L + 0.1, 0.14), bev=0.04)
+    for s in (-1, 1):
+        box('Neon', (s * (HW + 0.03), yc, roof_z + 0.06), (0.04, L - 0.2, 0.06))
+        box('Neon', (s * (HW + 0.03), yc, floor_z + 0.48), (0.04, L - 0.2, 0.05))
+    # 12 bancos internos (6 fileiras x 2 lados, corredor central, olhando para a frente -Y)
+    idx = 0
+    for row in range(6):
+        ry = y0 + 1.65 + row * 1.85
+        if ry > y1 - 1.2:
+            break
+        for s in (-1, 1):
+            sx = s * 0.72
+            # base / pés do banco
+            box('Preto', (sx, ry + 0.04, floor_z + 0.20), (0.68, 0.36, 0.40))
+            # assento almofadado
+            box(seat_mat, (sx, ry, floor_z + 0.43), (0.76, 0.46, 0.10), bev=0.03)
+            # encosto levemente inclinado
+            box(seat_mat, (sx, ry + 0.22, floor_z + 0.80), (0.76, 0.10, 0.68), bev=0.03, rot=('X', -8))
+            # marcador do assento (posição no piso onde os pés da pessoa sentada ficam)
+            marker(f'Assento_{idx}', (sx, ry - 0.18, floor_z))
+            idx += 1
 
 def railing(y0, y1, deck, gap_front=False):
     h = deck + 1.0
@@ -294,78 +342,58 @@ def palm(c, h):
             p = Vector((x, y, z + h)) + e * (0.35 + j * 0.45) + Vector((0, 0, -0.12 * j * j))
             box('Folha', tuple(p), (0.5, 0.22, 0.04), rot=('Z', math.degrees(a)))
 
-# ------------------------------------------------------------------ variações
+# ------------------------------------------------------------------ variações (todas abertas nas laterais com bancos DENTRO!)
 def variant_neon():
-    """Carreta Neon: baú com faixas de LED, palco com grade cromada, caixas de som e pórtico de luz."""
+    """Carreta Neon: carroceria aberta com bancos internos, faixas de LED, caixas de som traseiras e globo."""
     cab_over('Pintura', 'Pintura2')
-    deck = 3.25
-    trailer_base(-5.5, 8.0, deck)
-    box('Pintura', (0, 1.25, 2.25), (W, 13.4, 1.9), bev=0.06)                        # baú
+    floor, roof = 1.50, 3.55
+    trailer_base(-5.5, 8.0, floor)
+    passenger_cabin(-5.5, 8.0, floor, roof, skirt_mat='Pintura', seat_mat='Pintura2', roof_mat='Pintura')
     for s in (-1, 1):
-        for k, z in enumerate((1.75, 2.25, 2.75)):
-            box('Neon', (s * (HW + 0.01), 1.25, z), (0.03, 12.6, 0.07))
-        box('Pintura2', (s * (HW + 0.012), 1.25, 2.25), (0.02, 4.5, 1.3), bev=0.02)   # painel central
+        box('Pintura2', (s * (HW + 0.012), 1.25, floor + 0.12), (0.02, 5.2, 0.45), bev=0.02)
         for k in range(8):
-            cyl('Farol', (s * (HW + 0.02), -4.2 + k * 1.7, 3.05), 0.07, 0.03, axis='X', n=10)
-    railing(-5.3, 7.8, deck)
+            cyl('Farol', (s * (HW + 0.02), -4.2 + k * 1.7, roof + 0.08), 0.07, 0.03, axis='X', n=10)
+    # caixas de som na traseira viradas para a rua (onde a turma dança!)
     for s in (-1, 1):
-        speaker((s * 0.75, -4.75, deck + 0.75), 0.85, 1.5, 0.7, face=1)
-    speaker((0, -4.85, deck + 0.35), 0.6, 0.7, 0.55, face=1)
-    truss_arch(7.2, deck, deck + 2.8)
-    disco_ball((0, 7.2, deck + 2.25), 0.3)
+        speaker((s * 0.75, 7.65, floor + 1.05), 0.80, 1.4, 0.55, face=1)
+    # globo pendurado sob o teto
+    disco_ball((0, 1.2, roof - 0.55), 0.26)
     axles([4.0, 5.3, 6.6], True, axles([-7.0], False, axles([-4.35, -3.05], True, 0)))
-    marker('TetoA', (-HW + 0.25, -4.1, deck)); marker('TetoB', (HW - 0.25, 7.6, deck))
 
 def variant_tropical():
-    """Carreta Tropical: cabine bicuda, carroceria com ondas, coqueiros e toldo listrado."""
+    """Carreta Tropical: cabine bicuda, bancos internos, ondas coloridas, toldo listrado no teto e som traseiro."""
     cab_bonnet('Pintura', 'Pintura2')
-    deck = 3.0
-    trailer_base(-5.0, 8.0, deck)
-    box('Pintura', (0, 1.5, 2.1), (W, 12.9, 1.7), bev=0.06)
+    floor, roof = 1.50, 3.55
+    trailer_base(-5.0, 8.0, floor)
+    passenger_cabin(-5.0, 8.0, floor, roof, skirt_mat='Pintura', seat_mat='Madeira', roof_mat='Toldo')
     for s in (-1, 1):
-        for k in range(12):
-            y = -4.3 + k * 1.1
-            box('Pintura2', (s * (HW + 0.012), y, 2.05 + 0.25 * math.sin(k * 1.3)), (0.02, 1.0, 0.45), bev=0.02, rot=('X', 18 * math.cos(k * 1.3)))
-        box('Neon', (s * (HW + 0.015), 1.5, 2.9), (0.03, 12.5, 0.06))
-    railing(-4.8, 7.8, deck)
-    palm((-HW + 0.45, -4.4, deck), 2.6); palm((HW - 0.45, 7.3, deck), 2.6)
-    # toldo listrado na frente do palco
-    for k in range(6):
-        box('Pintura2' if k % 2 else 'Toldo', (-HW + 0.21 + k * 0.415, -3.3, deck + 2.55), (0.415, 2.4, 0.05), rot=('X', -6))
+        for k in range(11):
+            y = -4.2 + k * 1.15
+            box('Pintura2', (s * (HW + 0.015), y, floor + 0.08 + 0.12 * math.sin(k * 1.3)), (0.02, 0.95, 0.35), bev=0.02, rot=('X', 14 * math.cos(k * 1.3)))
+    # faixas listradas no teto
+    for k in range(10):
+        if k % 2 == 0:
+            box('Pintura2', (0, -4.3 + k * 1.3, roof + 0.14), (W + 0.06, 0.65, 0.04))
     for s in (-1, 1):
-        for y in (-4.4, -2.2):
-            tube('Cromo', (s * (HW - 0.1), y, deck), (s * (HW - 0.1), y, deck + 2.55 - (y + 3.3) * 0.1), 0.035)
-    for s in (-1, 1):
-        speaker((s * 0.7, 7.45, deck + 0.6), 0.8, 1.2, 0.6, face=-1)
+        speaker((s * 0.72, 7.65, floor + 1.0), 0.78, 1.3, 0.55, face=1)
     axles([4.2, 5.5, 6.8], True, axles([-7.0], False, axles([-4.35, -3.05], True, 0)))
-    marker('TetoA', (-HW + 0.25, -4.6, deck)); marker('TetoB', (HW - 0.25, 7.6, deck))
 
 def variant_disco():
-    """Carreta Disco: palco aberto com telão de LED, torres de luz e caixas dos dois lados."""
+    """Carreta Disco: carroceria aberta com painéis de LED, bancos internos, telão frontal no teto e som."""
     cab_over('Pintura', 'Pintura2')
-    deck = 2.6
-    trailer_base(-5.5, 8.0, deck)
-    box('Pintura2', (0, 1.25, 1.9), (W, 13.4, 1.25), bev=0.06)
+    floor, roof = 1.50, 3.55
+    trailer_base(-5.5, 8.0, floor)
+    passenger_cabin(-5.5, 8.0, floor, roof, skirt_mat='Pintura2', seat_mat='Pintura', roof_mat='Preto')
     for s in (-1, 1):
-        for k in range(16):
-            box('Neon' if k % 2 == 0 else 'Pintura', (s * (HW + 0.012), -5.0 + k * 0.84, 1.9), (0.02, 0.7, 0.9), bev=0.02)
-    railing(-5.3, 7.8, deck, gap_front=True)
-    # telão
-    box('Preto', (0, -5.15, deck + 1.6), (W - 0.2, 0.3, 2.4), bev=0.05)
-    box('Tela', (0, -4.99, deck + 1.65), (W - 0.45, 0.03, 2.1))
+        for k in range(14):
+            box('Neon' if k % 2 == 0 else 'Pintura', (s * (HW + 0.014), -4.9 + k * 0.95, floor + 0.10), (0.02, 0.72, 0.52), bev=0.02)
+    # letreiro luminoso acima da cabine
+    box('Preto', (0, -5.3, roof + 0.65), (W - 0.15, 0.25, 1.05), bev=0.04)
+    box('Tela', (0, -5.44, roof + 0.65), (W - 0.35, 0.03, 0.82))
     for s in (-1, 1):
-        speaker((s * (HW - 0.4), -4.5, deck + 0.6), 0.65, 1.2, 0.55, face=1)
-        speaker((s * (HW - 0.4), 7.3, deck + 0.6), 0.65, 1.2, 0.55, face=-1)
-        # torres de luz
-        x = s * (HW - 0.15)
-        tube('Cromo', (x, 2.0, deck), (x, 2.0, deck + 2.6), 0.05)
-        for k in range(3):
-            cyl('Preto', (x - s * 0.15, 2.0, deck + 1.6 + k * 0.4), 0.11, 0.22, axis='X', n=12)
-            cyl('Farol', (x - s * 0.27, 2.0, deck + 1.6 + k * 0.4), 0.09, 0.02, axis='X', n=12)
-    disco_ball((0, 2.0, deck + 2.4), 0.28)
-    tube('Cromo', (-HW + 0.15, 2.0, deck + 2.6), (HW - 0.15, 2.0, deck + 2.6), 0.04)
+        speaker((s * 0.75, 7.65, floor + 1.05), 0.80, 1.4, 0.55, face=1)
+    disco_ball((0, 1.5, roof - 0.55), 0.26)
     axles([4.0, 5.3, 6.6], True, axles([-7.0], False, axles([-4.35, -3.05], True, 0)))
-    marker('TetoA', (-HW + 0.25, -4.3, deck)); marker('TetoB', (HW - 0.25, 7.6, deck))
 
 def original_wheels():
     """Carreta original (malha única): põe rodas que giram por cima das rodas pintadas."""
@@ -449,4 +477,4 @@ for name, fn in (('Carreta', original_wheels), ('CarretaNeon', variant_neon), ('
     print('MODELO', name, 'triângulos', tris(), 'objetos', len(bpy.data.objects))
     export(os.path.join(OUT, name + '.fbx'))
     if RENDER:
-        preview('/home/user/familia-carreta-joy/unity/Assets/Resources/Previews/' + name + '.png', scale=(0.12 if name == 'Carreta' else 1.0), pal=PAL.get(name))
+        preview(os.path.join(REPO, 'unity', 'Assets', 'Resources', 'Previews', name + '.png'), scale=(0.12 if name == 'Carreta' else 1.0), pal=PAL.get(name))

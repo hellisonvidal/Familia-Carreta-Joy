@@ -8,7 +8,7 @@ namespace CarretaJoy
     /// <summary>
     /// Gente da cidade ("Universal Base Characters" da Quaternius, CC0, com roupas pintadas, tons de pele e cabelos sorteados):
     /// passeia pelas calçadas e conversa; quando a carreta passa, uns acenam, outros gritam e chamam,
-    /// outros dançam e alguns nem ligam. Vai gente sentada na arquibancada da parte de trás da carreta.
+    /// outros dançam e alguns nem ligam. Passageiros comuns passeiam sentados dentro da carreta.
     /// Só existe perto do jogador (aparece e some fora da vista).
     /// </summary>
     public class People : MonoBehaviour
@@ -79,10 +79,11 @@ namespace CarretaJoy
         void SeatRiders()
         {
             if (truck == null || prefabs.Count == 0) return;
-            int n = Mathf.Min(truck.Seats.Count, Settings.Quality == 0 ? 4 : 6);
+            int n = Mathf.Min(truck.Seats.Count, Settings.Quality == 0 ? 6 : Settings.Quality == 1 ? 10 : 12);
             for (int i = 0; i < n; i++)
             {
-                var p = Spawn(Random(1.5f, 1.85f));
+                // passageiros comuns sentados DENTRO da carreta (altura 1.50..1.75m para caber sob o teto)
+                var p = Spawn(Random(1.50f, 1.75f));
                 if (p == null) return;
                 p.mode = 2; p.seat = i;
                 p.go.transform.SetParent(truck.transform, false);
@@ -233,17 +234,18 @@ namespace CarretaJoy
 
             Vector3 tp = truck != null ? truck.transform.position : new Vector3(1e6f, 0, 0);
             foreach (var p in street) TickStreet(p, dt, tp);
-            // na carreta: sentados na arquibancada; nas paradas levantam e dançam
+            // dentro da carreta: passageiros comuns ficam sempre sentados nos bancos internos (nunca no teto!)
+            float tNow = Time.time;
             for (int i = 0; i < riders.Count; i++)
             {
                 var p = riders[i];
                 if (truck == null || p.seat >= truck.Seats.Count) continue;
                 var s = truck.Seats[p.seat];
-                var rot = Quaternion.Euler(0, s.yaw, 0);
-                p.go.transform.localPosition = truckStopped ? new Vector3(s.pos.x, truck.RoofY, s.pos.z) + rot * Vector3.forward * 0.55f
-                                                            : s.pos + rot * Vector3.forward * 0.12f;
-                p.go.transform.localRotation = truckStopped ? Quaternion.Euler(0, 0, 0) : rot;
-                Play(p, truckStopped && dances != null && dances.Length > 0 ? dances[(i + 1) % dances.Length] : sit, Random(0, 1f));
+                // leve balanço animado no banco ao som da música (nas paradas balança um pouco mais)
+                float sway = Mathf.Sin(tNow * (truckStopped ? 6.5f : 4.2f) + i * 1.1f) * (truckStopped ? 4.5f : 2.0f);
+                p.go.transform.localPosition = s.pos;
+                p.go.transform.localRotation = Quaternion.Euler(0, s.yaw, sway);
+                Play(p, sit, Random(0, 1f));
             }
             // torcida nas paradas de festa
             crowdT -= dt;

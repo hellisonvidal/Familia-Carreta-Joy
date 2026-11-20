@@ -4,9 +4,9 @@ using UnityEngine;
 namespace CarretaJoy
 {
     /// <summary>
-    /// A carreta: modelo original do rascunho, anda sozinha pela avenida de fora da cidade,
-    /// para nos pontos de festa, tem neon e luzes coloridas no ritmo da música.
-    /// O teto é o "palco": os meninos sobem pela lateral e dançam lá em cima.
+    /// A carreta: anda sozinha pelas ruas reais de Ponta Grossa, para nos pontos de festa,
+    /// tem neon, luzes coloridas no ritmo da música e passageiros comuns sentados DENTRO dela.
+    /// A turma de personagens acompanha correndo e dançando na rua ao redor da carreta.
     /// </summary>
     public class Truck : MonoBehaviour
     {
@@ -18,7 +18,7 @@ namespace CarretaJoy
         List<Vector3> path; float[] cum; float total;
         public float dist;
         public float speed;
-        public float cruise = 3.5f;   // devagar: a turma a pé acompanha (ajuste no menu)
+        public float cruise = 3.5f;   // devagar: a turma a pé acompanha na rua (ajuste no menu)
         List<float> stopList;
         public void SetStops(List<float> s) { stopList = s; if (s != null && s.Count > 0) nextStop = s[0] + 0.01f; }
         float stopTimer, nextStop;
@@ -33,6 +33,7 @@ namespace CarretaJoy
         Material headMat;
         BoxCollider body;
         bool night;
+        float smoothPitch, smoothRoll;
 
         // variações: modelo, nome no menu e as duas cores de pintura
         public static readonly (string file, string nome, Color c1, Color c2)[] Variants = {
@@ -50,7 +51,7 @@ namespace CarretaJoy
         readonly List<bool> wheelFront = new List<bool>();
         float wheelR = 0.52f, spin, steerVis;
         Vector3 lastPos; bool hasLast;
-        // bancos com gente sentada (posição local no teto e para onde olha)
+        // bancos DENTRO da carreta para as pessoas comuns (posição local no piso interno e direção)
         public readonly List<(Vector3 pos, float yaw)> Seats = new List<(Vector3, float)>();
 
         public void Build(GameObject prefab, List<Vector3> route, int variant = 0)
@@ -80,22 +81,9 @@ namespace CarretaJoy
             headMat = Mats.Glow(new Color(1, 0.97f, 0.85f), 4f);
             Paint(m, Variants[Variant]);
 
-            // palco: marcado no modelo (TetoA/TetoB) ou, na original, medido no jogo antigo
-            Transform ta = null, tb = null;
-            foreach (var t in m.GetComponentsInChildren<Transform>(true)) { if (t.name == "TetoA") ta = t; else if (t.name == "TetoB") tb = t; }
-            if (ta != null && tb != null)
-            {
-                Vector3 a = transform.InverseTransformPoint(ta.position), c = transform.InverseTransformPoint(tb.position);
-                RoofY = Mathf.Max(a.y, c.y) + 0.02f;
-                roofZ0 = Mathf.Min(a.z, c.z); roofZ1 = Mathf.Max(a.z, c.z);
-                HalfWidth = Mathf.Max(Mathf.Abs(a.x), Mathf.Abs(c.x)) + 0.25f;
-            }
-            else
-            {
-                RoofY = H - 0.12f;
-                // teto da carreta (sem a cabine): de -0.86 a +0.58 do comprimento do modelo (medido no jogo antigo)
-                roofZ0 = -0.86f / 1.9f * L + 0.5f; roofZ1 = 0.58f / 1.9f * L - 0.3f;
-            }
+            // altura do teto e área da carroceria (para colisor e luzes; ninguém sobe no teto)
+            RoofY = H - 0.12f;
+            roofZ0 = -0.86f / 1.9f * L + 0.5f; roofZ1 = 0.58f / 1.9f * L - 0.3f;
 
             body = gameObject.AddComponent<BoxCollider>();
             body.center = new Vector3(0, RoofY / 2f, 0); body.size = new Vector3(HalfWidth * 2, RoofY, L);
@@ -103,7 +91,7 @@ namespace CarretaJoy
 
             FindWheels(m.transform);
             Decorate(L, H);
-            Benches();
+            SetupSeats(m.transform);
             // camada "Ignore Raycast": a câmera não bate na carreta (os meninos continuam colidindo)
             foreach (var t in GetComponentsInChildren<Transform>(true)) t.gameObject.layer = 2;
             Place(0);
@@ -165,7 +153,7 @@ namespace CarretaJoy
         }
 
         /// <summary>Gira as rodas pelo quanto a carreta andou (e vira as da frente no volante).</summary>
-        void SpinWheels(float steer)
+        void SpinWheels(float steer, float dt)
         {
             if (wheels.Count == 0) return;
             var p = transform.position;
@@ -176,7 +164,7 @@ namespace CarretaJoy
                 if (Mathf.Abs(fwd) < 20f) spin = Mathf.Repeat(spin + fwd / wheelR * Mathf.Rad2Deg, 360f);
             }
             lastPos = p; hasLast = true;
-            steerVis = Mathf.MoveTowards(steerVis, steer * 28f, 120f * Time.deltaTime);
+            steerVis = Mathf.MoveTowards(steerVis, Mathf.Clamp(steer, -1f, 1f) * 28f, 120f * dt);
             for (int i = 0; i < wheels.Count; i++)
             {
                 if (wheels[i] == null) continue;
@@ -186,35 +174,36 @@ namespace CarretaJoy
             }
         }
 
-        /// <summary>Arquibancada na parte de trás do palco: duas fileiras de bancos com gente sentada olhando a rua.</summary>
-        void Benches()
+        /// <summary>
+        /// Assentos internos DENTRO da carreta para as pessoas comuns (nunca em cima do teto).
+        /// Usa os marcadores Assento_* do modelo quando existem, ou o layout interno da Carreta original.
+        /// </summary>
+        void SetupSeats(Transform root)
         {
-            var wood = Mats.Lit(new Color(0.45f, 0.3f, 0.17f), 0.2f);
-            var metal = Mats.Lit(new Color(0.75f, 0.76f, 0.8f), 0.7f, 0.8f);
-            float[] xs = { -HalfWidth + 0.55f, 0f, HalfWidth - 0.55f };
-            for (int row = 0; row < 2; row++)
+            Seats.Clear();
+            var markers = new List<(int idx, Transform t)>();
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
             {
-                float z = roofZ0 + 0.45f + row * 1.0f;
-                float h = 0.42f + row * 0.3f;                 // a fileira de dentro é mais alta (arquibancada)
-                foreach (var x in xs)
-                {
-                    var bench = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    Destroy(bench.GetComponent<Collider>());
-                    bench.name = "Banco";
-                    bench.transform.SetParent(transform, false);
-                    bench.transform.localPosition = new Vector3(x, RoofY + h / 2f, z + 0.1f);
-                    bench.transform.localScale = new Vector3(0.62f, h, 0.42f);
-                    bench.GetComponent<MeshRenderer>().sharedMaterial = wood;
-                    // encosto
-                    var back = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    Destroy(back.GetComponent<Collider>());
-                    back.transform.SetParent(transform, false);
-                    back.transform.localPosition = new Vector3(x, RoofY + h + 0.25f, z + 0.3f);
-                    back.transform.localScale = new Vector3(0.62f, 0.5f, 0.05f);
-                    back.GetComponent<MeshRenderer>().sharedMaterial = metal;
-                    Seats.Add((new Vector3(x, RoofY + h - 0.42f, z), 180f));   // olham para trás, para a rua
-                }
+                if (!t.name.StartsWith("Assento_")) continue;
+                int idx = 0;
+                int.TryParse(t.name.Substring(8), out idx);
+                markers.Add((idx, t));
             }
+            if (markers.Count > 0)
+            {
+                markers.Sort((a, b) => a.idx.CompareTo(b.idx));
+                foreach (var m in markers)
+                {
+                    Vector3 lp = transform.InverseTransformPoint(m.t.position);
+                    Seats.Add((lp, 0f));   // olhando para frente (+Z), sentados nos bancos internos
+                }
+                return;
+            }
+            // Carreta original (Carreta.fbx): piso interno em Y = 1.54m, duas fileiras de bancos em X = ±0.76m
+            float[] zs = { 3.4f, 1.7f, 0.0f, -1.7f, -3.4f, -5.0f };
+            foreach (float z in zs)
+                for (int side = -1; side <= 1; side += 2)
+                    Seats.Add((new Vector3(side * 0.76f, 1.54f, z), 0f));
         }
 
         void Decorate(float L, float H)
@@ -296,7 +285,26 @@ namespace CarretaJoy
             Vector3 fwd = (front - back);
             var old = transform.position;
             transform.position = pos;
-            if (fwd.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(fwd.normalized);
+            if (fwd.sqrMagnitude > 0.01f)
+            {
+                var targetRot = Quaternion.LookRotation(fwd.normalized);
+                if (dt > 0)
+                {
+                    Vector3 flatF = new Vector3(dF.x, 0, dF.z), flatB = new Vector3(dB.x, 0, dB.z);
+                    float turnAng = flatF.sqrMagnitude > 0.001f && flatB.sqrMagnitude > 0.001f
+                        ? Vector3.SignedAngle(flatB, flatF, Vector3.up) : 0f;
+                    lastSteer = Mathf.Clamp(turnAng / 24f, -1f, 1f);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, 1f - Mathf.Exp(-dt * 10f));
+                }
+                else
+                {
+                    lastSteer = 0f;
+                    transform.rotation = targetRot;
+                }
+                var e = transform.rotation.eulerAngles;
+                smoothPitch = e.x > 180f ? e.x - 360f : e.x;
+                smoothRoll = e.z > 180f ? e.z - 360f : e.z;
+            }
             Velocity = dt > 0 ? (pos - old) / dt : Vector3.zero;
         }
 
@@ -307,46 +315,89 @@ namespace CarretaJoy
         public System.Func<float, float, float> GroundHeight;
         float yaw;
         public float ManualSpeed => speed;
-        public Vector3 RoofSlot(int k) => ClampToRoof(new Vector3(k % 2 == 0 ? 0.55f : -0.55f, 0, Mathf.Lerp(roofZ0 + 2.6f, roofZ1 - 1.0f, (k / 2) / 4f)));
+
+        /// <summary>Posição na RUA (ao lado e atrás da carreta) onde cada personagem acompanha correndo ou dançando.</summary>
+        public Vector3 StreetSlot(int k, bool stopped)
+        {
+            int side = (k % 2 == 0) ? 1 : -1;
+            int row = k / 2;
+            float x = side * (HalfWidth + (stopped ? 2.8f + (row % 2) * 0.9f : 2.6f + (row % 2) * 0.7f));
+            float z = stopped ? (4.0f - row * 2.5f) : (2.2f - row * 2.4f);
+            Vector3 wp = transform.TransformPoint(new Vector3(x, 0f, z));
+            wp.y = Ground(wp);
+            return wp;
+        }
+
+        /// <summary>Empurra suavemente um personagem na rua para fora do corpo da carreta se houver sobreposição.</summary>
+        public Vector3 PushOut(Vector3 worldPos, float radius)
+        {
+            Vector3 lp = transform.InverseTransformPoint(worldPos);
+            float hw = HalfWidth + radius + 0.18f;
+            float hl = LENGTH * 0.5f + radius + 0.18f;
+            if (Mathf.Abs(lp.x) >= hw || Mathf.Abs(lp.z) >= hl || lp.y > RoofY + 0.4f) return Vector3.zero;
+            float dx = hw - Mathf.Abs(lp.x);
+            float dz = hl - Mathf.Abs(lp.z);
+            Vector3 localPush = dx <= dz
+                ? new Vector3((lp.x >= 0f ? 1f : -1f) * dx, 0f, 0f)
+                : new Vector3(0f, 0f, (lp.z >= 0f ? 1f : -1f) * dz);
+            Vector3 wp = transform.TransformDirection(localPush);
+            wp.y = 0f;
+            return wp;
+        }
 
         /// <summary>Volante: steer -1..1, acelerador -1 (ré/freio) .. 1.</summary>
         float lastSteer;
         public void Drive(float steer, float throttle, float dt)
         {
             lastSteer = steer;
-            if (!Manual) { Manual = true; yaw = transform.eulerAngles.y; }
+            if (!Manual)
+            {
+                Manual = true;
+                var e = transform.eulerAngles;
+                yaw = e.y;
+                smoothPitch = e.x > 180f ? e.x - 360f : e.x;
+                smoothRoll = e.z > 180f ? e.z - 360f : e.z;
+            }
             float maxF = SafeMode ? 4.2f : 16f, maxR = SafeMode ? 2.2f : 5f;
-            float accel = SafeMode ? 2.2f : 3.5f;
-            if (throttle > 0.05f) speed += throttle * (speed < 0 ? 9f : accel) * dt;
-            else if (throttle < -0.05f) speed += throttle * (speed > 0 ? 9f : accel * 0.7f) * dt;
+            float accel = SafeMode ? 2.4f : 3.8f;
+            if (throttle > 0.05f) speed += throttle * (speed < 0 ? 10f : accel) * dt;
+            else if (throttle < -0.05f) speed += throttle * (speed > 0 ? 10f : accel * 0.7f) * dt;
             if (SafeMode && speed > maxF) speed = Mathf.MoveTowards(speed, maxF, 6f * dt);   // ligou o modo seguro andando rápido: freia
-            else speed = Mathf.MoveTowards(speed, 0, 2f * dt);
+            else if (Mathf.Abs(throttle) <= 0.05f) speed = Mathf.MoveTowards(speed, 0, 2.8f * dt);
             speed = Mathf.Clamp(speed, -maxR, SafeMode ? Mathf.Max(maxF, speed) : maxF);
             // vira mais devagar em alta velocidade (carreta comprida)
-            float turn = steer * Mathf.Clamp(speed / 6f, -1f, 1f) * (40f / (1f + Mathf.Abs(speed) * 0.08f));
+            float turn = steer * Mathf.Clamp(speed / 5.5f, -1f, 1f) * (40f / (1f + Mathf.Abs(speed) * 0.08f));
             float newYaw = yaw + turn * dt;
             var rot = Quaternion.Euler(0, newYaw, 0);
-            Vector3 next = transform.position + rot * Vector3.forward * speed * dt;
+            Vector3 step = rot * Vector3.forward * speed * dt;
+            Vector3 next = transform.position + step;
             if (GroundHeight != null) next.y = Ground(next);
             // bate em prédios: confere o corpo da carreta na posição nova (acima do meio-fio)
-            var half = new Vector3(HalfWidth * 0.95f, 1.1f, LENGTH / 2f * 0.97f);
-            var ctr = next + Vector3.up * 2.0f;
-            if (Physics.CheckBox(ctr, half, rot, 1 << 0, QueryTriggerInteraction.Ignore))
+            var half = new Vector3(HalfWidth * 0.94f, 1.1f, LENGTH / 2f * 0.96f);
+            if (Physics.CheckBox(next + Vector3.up * 2.0f, half, rot, 1 << 0, QueryTriggerInteraction.Ignore))
             {
-                speed = -speed * 0.25f;   // tranco para trás
+                // tenta girar no lugar sem avançar antes de frear suave (evita tranco oscilando)
+                Vector3 stay = transform.position;
+                if (!Physics.CheckBox(stay + Vector3.up * 2.0f, half, rot, 1 << 0, QueryTriggerInteraction.Ignore))
+                    yaw = newYaw;
+                speed = Mathf.MoveTowards(speed, 0f, 18f * dt);
+                if (Mathf.Abs(speed) > 0.5f) speed *= 0.35f;
                 Velocity = Vector3.zero;
                 return;
             }
             yaw = newYaw;
             var old = transform.position;
-            // inclina conforme o chão nas rodas da frente e de trás / dos lados
+            // inclina suavemente conforme o chão nas rodas da frente/trás e laterais
             Vector3 fwd = rot * Vector3.forward, right = rot * Vector3.right;
             float hf = Ground(next + fwd * LENGTH * 0.4f), hb = Ground(next - fwd * LENGTH * 0.4f);
             float hl = Ground(next - right * HalfWidth), hr = Ground(next + right * HalfWidth);
-            float pitch = -Mathf.Atan2(hf - hb, LENGTH * 0.8f) * Mathf.Rad2Deg;
-            float roll = Mathf.Atan2(hl - hr, HalfWidth * 2f) * Mathf.Rad2Deg;
+            float targetPitch = Mathf.Clamp(-Mathf.Atan2(hf - hb, LENGTH * 0.8f) * Mathf.Rad2Deg, -18f, 18f);
+            float targetRoll = Mathf.Clamp(Mathf.Atan2(hl - hr, HalfWidth * 2f) * Mathf.Rad2Deg, -12f, 12f);
+            float k = dt > 0 ? 1f - Mathf.Exp(-dt * 10f) : 1f;
+            smoothPitch = Mathf.LerpAngle(smoothPitch, targetPitch, k);
+            smoothRoll = Mathf.LerpAngle(smoothRoll, targetRoll, k);
             next.y = (hf + hb) / 2f;
-            transform.SetPositionAndRotation(next, Quaternion.Euler(pitch, yaw, roll));
+            transform.SetPositionAndRotation(next, Quaternion.Euler(smoothPitch, yaw, smoothRoll));
             Velocity = dt > 0 ? (next - old) / dt : Vector3.zero;
         }
         float Ground(Vector3 p) => GroundHeight != null ? GroundHeight(p.x, p.z) : 0f;
@@ -404,21 +455,20 @@ namespace CarretaJoy
             nextStop = nx;
         }
 
-        public void Tick(float dt, Vector3 player, bool playerOnTruck, float beat)
+        public void Tick(float dt, Vector3 player, bool ignorePlayer, float beat)
         {
-            if (Returning) { TickReturn(dt); Lights(beat); SpinWheels(lastSteer); return; }
-            if (Manual) { Lights(beat); SpinWheels(lastSteer); return; }
+            if (Returning) { TickReturn(dt); Lights(beat); SpinWheels(lastSteer, dt); return; }
+            if (Manual) { Lights(beat); SpinWheels(lastSteer, dt); return; }
             // para nos pontos de festa
             if (stopTimer > 0) { stopTimer -= dt; speed = Mathf.MoveTowards(speed, 0, 8f * dt); }
             else
             {
                 float want = cruise;
                 float dp = DistanceTo(player);
-                if (!playerOnTruck && dp < 10f) want = Mathf.Min(want, 2.2f);   // perto: vai devagar para dar para subir
-                // comboio: espera quem ficou um pouco para trás (longe demais = foi passear, a carreta segue)
-                if (!playerOnTruck && dp > 35f && dp < 120f) want = 0;
-                else if (!playerOnTruck && dp > 22f && dp < 120f) want = Mathf.Min(want, 1.2f);
-                if (BlockedAhead(player)) want = 0;                          // não atropela ninguém
+                // comboio na rua: mantém ritmo confortável e espera quem ficou um pouco para trás
+                if (!ignorePlayer && dp > 35f && dp < 120f) want = 0;
+                else if (!ignorePlayer && dp > 20f && dp < 120f) want = Mathf.Min(want, 1.4f);
+                if (!ignorePlayer && BlockedAhead(player)) want = 0;          // não atropela ninguém
                 float ahead = Mathf.Repeat(nextStop - dist, total);
                 if (ahead < 25f) want = Mathf.Min(want, 1.5f + ahead * 0.4f);
                 if (ahead < 0.5f || ahead > total - 1f)
@@ -432,7 +482,7 @@ namespace CarretaJoy
             dist += speed * dt;
             Place(dt);
             Lights(beat);
-            SpinWheels(0);
+            SpinWheels(lastSteer, dt);
         }
 
         void Lights(float beat)
@@ -458,16 +508,6 @@ namespace CarretaJoy
             var lp = transform.InverseTransformPoint(p);
             return Mathf.Abs(lp.x) < HalfWidth + 0.8f && lp.z > LENGTH / 2f - 0.5f && lp.z < LENGTH / 2f + 4f && lp.y < 2f;
         }
-
-        // ---------------- teto ----------------
-        public Vector3 ClampToRoof(Vector3 lp)
-        {
-            lp.x = Mathf.Clamp(lp.x, -HalfWidth + 0.35f, HalfWidth - 0.35f);
-            lp.z = Mathf.Clamp(lp.z, roofZ0, roofZ1);
-            return lp;
-        }
-
-        public Vector3 RoofToWorld(Vector3 lp) => transform.TransformPoint(new Vector3(lp.x, RoofY + lp.y, lp.z));
 
         public float DistanceTo(Vector3 p)
         {
