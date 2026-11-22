@@ -131,7 +131,7 @@ namespace CarretaJoy.EditorTools
         {
             if (!IsAnim(assetPath) || clip == null) return;
             string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
-            if (file != "Run" && file != "Walk" && file != "Sprint_Loop" && file != "Passeio_Loop") return;
+            if (file != "Run" && file != "Walk" && file != "Sprint_Loop" && file != "Passeio_Loop" && file != "Arthur_AndarCorrer") return;
 
             // Remove torção lateral nos joelhos/pés e garante leve abertura simétrica (+0.02) no quadril:
             // pernas 100% retas e paralelas ao andar/correr, sem curvar para dentro nem encostar uma na outra
