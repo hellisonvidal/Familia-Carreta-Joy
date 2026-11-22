@@ -224,11 +224,11 @@ namespace CarretaJoy
             {
                 var k = crew[i];
                 k.ResetState();
-                // espalha dos dois lados da rua acompanhando o sentido da carreta (ninguém nasce atravessando ou colado nela)
+                // espalha dos dois lados da rua acompanhando o sentido da carreta (sempre dentro da pista livre, longe de paredes)
                 int side = (i % 2 == 0) ? 1 : -1;
                 int row = i / 2;
-                float lat = 3.2f + (row % 2) * 1.4f + (i == 0 ? 0.5f : 0f);
-                float zOff = 4.2f - row * 2.8f;
+                float lat = 1.8f + (row % 2) * 0.9f;
+                float zOff = 3.8f - row * 2.5f;
                 var p = truck.FreeStreetPoint(side, lat, zOff);
                 p.y = city.Height(p.x, p.z) + 0.15f;
                 Vector3 fwd = tp.forward; fwd.y = 0f;
@@ -241,6 +241,7 @@ namespace CarretaJoy
                     retargetT = 2.0f + i * 0.7f,
                     climbT = 16f + i * 5.5f,
                     trickT = 7f + i * 2.3f,
+                    lastPos = p,
                 };
                 if (ROSTER[i].id == "Afonso") k.StartCrouched();   // a pose dele: começa agachado e levanta ao andar
             }
@@ -750,13 +751,15 @@ namespace CarretaJoy
         class CrewAI
         {
             public int side = 1;           // -1 esquerda / +1 direita da carreta
-            public float lat = 3.8f;       // distância livre além da lateral da carreta (m)
+            public float lat = 2.2f;       // distância livre além da lateral da carreta (na rua, sem entrar em prédios)
             public float zOff = 0f;        // posição livre à frente/atrás ao longo da carreta (m)
             public float retargetT = 3f;   // tempo para escolher novo ponto livre na rua
             public float climbT = 22f;     // contagem até subir brevemente na carreta
             public float rideLeft = 0f;    // quanto tempo fica em cima antes de voltar à rua
             public bool wantClimb;         // indo até a lateral para subir
             public float trickT = 9f;      // contagem para pulo/acrobacia espontânea na rua
+            public Vector3 lastPos;        // detecção de travamento em paredes/esquinas
+            public float stuckT;
         }
         readonly Dictionary<Kid, CrewAI> crewAI = new Dictionary<Kid, CrewAI>();
         // danças em pé para a turma na rua (exclui Russa_Loop = 3 para ninguém começar se revirando no chão)
@@ -879,13 +882,13 @@ namespace CarretaJoy
                 return;
             }
 
-            // atualiza ponto livre na rua ao lado da carreta periodicamente (movimentação orgânica e solta)
+            // atualiza ponto livre na rua ao lado da carreta periodicamente (faixa segura na pista, longe de paredes)
             ai.retargetT -= dt;
             if (ai.retargetT <= 0f)
             {
-                ai.retargetT = Random.Range(2.8f, 5.8f);
-                ai.lat = Random.Range(2.6f, 6.2f);
-                ai.zOff = Random.Range(-7.5f, 5.5f);
+                ai.retargetT = Random.Range(2.8f, 5.5f);
+                ai.lat = Random.Range(1.55f, 3.2f);
+                ai.zOff = Random.Range(-7.5f, 4.8f);
             }
 
             // se ficou muito longe (ex: teletransporte/curva fechada), reaparece limpo na rua do seu lado
@@ -894,10 +897,11 @@ namespace CarretaJoy
             float dist = toGoal.magnitude;
             if (dist > 45f && !b.Busy)
             {
-                ai.wantClimb = false;
+                ai.wantClimb = false; ai.stuckT = 0f;
                 var tp = goal; tp.y = city.Height(tp.x, tp.z) + 0.2f;
                 b.ResetState();
                 b.Teleport(tp, truck.transform.rotation);
+                ai.lastPos = tp;
                 b.Tick(Vector3.zero, dt);
                 return;
             }
@@ -911,11 +915,13 @@ namespace CarretaJoy
                     Vector3 dir = truck.SteerAround(b.transform.position, goal);
                     b.Running = dist > 4.5f;
                     b.Tick(dir * Mathf.Clamp01(dist / 1.5f), dt);
+                    CheckCrewStuck(b, ai, dt, true);
                 }
                 else
                 {
                     if (!b.Dancing && !b.Busy && b.Trick == null)
                         b.SetDanceStyle(StreetDances[(k + (int)(Time.time * 0.05f)) % StreetDances.Length]);
+                    ai.stuckT = 0f; ai.lastPos = b.transform.position;
                     b.Tick(Vector3.zero, dt);
                 }
                 return;
@@ -942,19 +948,20 @@ namespace CarretaJoy
                 float td = truck.DistanceTo(b.transform.position);
                 if (td < 3.4f)
                 {
-                    if (b.ClimbOrDescend(false)) { ai.wantClimb = false; b.Tick(Vector3.zero, dt); return; }
+                    if (b.ClimbOrDescend(false)) { ai.wantClimb = false; ai.stuckT = 0f; b.Tick(Vector3.zero, dt); return; }
                 }
                 // aproxima pela lateral do próprio lado da carreta (nunca atravessando)
-                Vector3 sidePt = truck.FreeStreetPoint(ai.side, 1.8f, Mathf.Clamp(ai.zOff, -4f, 3f));
+                Vector3 sidePt = truck.FreeStreetPoint(ai.side, 1.5f, Mathf.Clamp(ai.zOff, -4f, 3f));
                 Vector3 dir = truck.SteerAround(b.transform.position, sidePt);
                 b.Running = true;
                 b.Tick(dir, dt);
+                CheckCrewStuck(b, ai, dt, true);
                 return;
             }
 
             // movimentação livre acompanhando a carreta na rua ao lado dela
             if (b.Dancing && dist > 1.5f) b.StopDance();
-            Vector3 leadGoal = goal + new Vector3(truck.Velocity.x, 0f, truck.Velocity.z) * 0.4f;
+            Vector3 leadGoal = truck.FreeStreetPoint(ai.side, ai.lat, ai.zOff + 1.4f);
             Vector3 toLead = leadGoal - b.transform.position; toLead.y = 0f;
             float leadDist = toLead.magnitude;
             float truckSpd = new Vector3(truck.Velocity.x, 0f, truck.Velocity.z).magnitude;
@@ -981,6 +988,35 @@ namespace CarretaJoy
                 else b.DoTrick(StreetTricks[Random.Range(0, StreetTricks.Length)], false);
             }
             b.Tick(wish, dt);
+            CheckCrewStuck(b, ai, dt, wish.sqrMagnitude > 0.16f);
+        }
+
+        /// <summary>Se um personagem encostar/travar na parede de um prédio, puxa-o de volta para a pista livre.</summary>
+        void CheckCrewStuck(Kid b, CrewAI ai, float dt, bool tryingToMove)
+        {
+            Vector3 moved = b.transform.position - ai.lastPos; moved.y = 0f;
+            ai.lastPos = b.transform.position;
+            bool blocked = tryingToMove && !b.Busy && b.Trick == null && (b.HitWall || moved.magnitude < 0.35f * dt);
+            if (!blocked) { ai.stuckT = Mathf.Max(0f, ai.stuckT - dt * 2f); return; }
+            ai.stuckT += dt;
+            if (ai.stuckT > 0.45f)
+            {
+                // puxa o alvo para mais perto da pista livre e ajusta a posição longitudinal
+                ai.lat = 1.45f;
+                ai.zOff = Mathf.Clamp(ai.zOff - 1.5f, -7.5f, 3.5f);
+                ai.wantClimb = false;
+            }
+            if (ai.stuckT > 2.0f)
+            {
+                // preso em quina/muro fechado: recoloca limpo na pista livre atrás/ao lado da carreta
+                ai.stuckT = 0f;
+                ai.side = -ai.side;
+                ai.lat = 1.6f;
+                Vector3 safe = truck.FreeStreetPoint(ai.side, ai.lat, -3.5f);
+                safe.y = city.Height(safe.x, safe.z) + 0.15f;
+                b.Teleport(safe, truck.transform.rotation);
+                ai.lastPos = safe;
+            }
         }
 
         static AudioClip MakeHorn()

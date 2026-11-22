@@ -127,6 +127,30 @@ namespace CarretaJoy.EditorTools
             mi.clipAnimations = clips;
         }
 
+        void OnPostprocessAnimation(GameObject root, AnimationClip clip)
+        {
+            if (!IsAnim(assetPath) || clip == null) return;
+            string file = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+            if (file != "Run" && file != "Walk" && file != "Sprint_Loop" && file != "Passeio_Loop") return;
+
+            // Remove torção lateral nos joelhos/pés e garante leve abertura simétrica (+0.02) no quadril:
+            // pernas 100% retas e paralelas ao andar/correr, sem curvar para dentro nem encostar uma na outra
+            foreach (var b in AnimationUtility.GetCurveBindings(clip))
+            {
+                string n = b.propertyName;
+                if (n == "Left Lower Leg Twist In-Out" || n == "Right Lower Leg Twist In-Out"
+                 || n == "Left Foot Twist In-Out" || n == "Right Foot Twist In-Out"
+                 || n == "Left Upper Leg Twist In-Out" || n == "Right Upper Leg Twist In-Out")
+                {
+                    AnimationUtility.SetEditorCurve(clip, b, AnimationCurve.Constant(0f, clip.length, 0f));
+                }
+                else if (n == "Left Upper Leg In-Out" || n == "Right Upper Leg In-Out")
+                {
+                    AnimationUtility.SetEditorCurve(clip, b, AnimationCurve.Constant(0f, clip.length, 0.02f));
+                }
+            }
+        }
+
         void OnPreprocessAudio()
         {
             var ai = (AudioImporter)assetImporter;

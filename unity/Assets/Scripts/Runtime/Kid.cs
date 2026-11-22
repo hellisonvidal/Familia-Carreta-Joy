@@ -62,8 +62,8 @@ namespace CarretaJoy
             if (slots[i].IsValid()) { graph.Disconnect(mixer, i); slots[i].Destroy(); }
             if (clip == null) return;
             var p = AnimationClipPlayable.Create(graph, clip);
-            // FootIK apenas nos estados no chão; em acrobacias e no ar FootIK entorta as pernas tentando alcançar o piso
-            p.SetApplyFootIK(i != TRICK && i != AIR);
+            // FootIK apenas parado/dançando; em corrida/caminhada o FootIK do Humanoid puxava os dois pés para X=0 (pernas curvadas para dentro)
+            p.SetApplyFootIK(i == IDLE || i == DANCE);
             graph.Connect(p, 0, mixer, i);
             slots[i] = p;
         }
@@ -152,6 +152,7 @@ namespace CarretaJoy
         public float WalkSpeed => 1.85f * Mathf.Lerp(1f, Height / 1.3f, 0.35f);
         public float RunSpeed => 5.4f * Mathf.Lerp(1f, Height / 1.3f, 0.25f);
         public float HorizontalSpeed { get; private set; }
+        public bool HitWall { get; private set; }
         public bool Busy => climbT >= 0;
 
         public static Kid Create(string name, GameObject prefab, float height, KidClips clips, Vector3 pos)
@@ -528,6 +529,7 @@ namespace CarretaJoy
             bool was = Grounded;
             var flags = cc.Move(vel * dt);
             Grounded = (flags & CollisionFlags.Below) != 0;
+            HitWall = (flags & CollisionFlags.Sides) != 0;
             // encaixe suave descendo ladeiras / degraus de calçada
             if (was && !Grounded && vel.y <= 0f)
             {

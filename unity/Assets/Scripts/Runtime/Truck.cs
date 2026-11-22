@@ -316,41 +316,92 @@ namespace CarretaJoy
         float yaw;
         public float ManualSpeed => speed;
 
-        /// <summary>Posição livre na RUA ao lado da carreta (side = -1 esquerda / +1 direita).</summary>
+        const int WallMask = 1 << 0;   // prédios/paredes ficam na layer 0 (chão = 8, personagens/carreta = 2)
+
+        /// <summary>
+        /// Posição livre na RUA ao lado da carreta (side = -1 esquerda / +1 direita),
+        /// verificada contra paredes de prédios para o destino nunca cair dentro de construções.
+        /// </summary>
         public Vector3 FreeStreetPoint(int side, float lat, float zOff)
         {
-            float x = (side >= 0 ? 1f : -1f) * (HalfWidth + Mathf.Max(2.2f, lat));
-            Vector3 wp = transform.TransformPoint(new Vector3(x, 0f, zOff));
+            float s = side >= 0 ? 1f : -1f;
+            float wantLat = Mathf.Clamp(lat, 1.35f, 3.6f);
+            Vector3 edge = transform.TransformPoint(new Vector3(s * (HalfWidth + 0.45f), 0f, zOff));
+            Vector3 outDir = transform.TransformDirection(new Vector3(s, 0f, 0f));
+            outDir.y = 0f;
+            if (outDir.sqrMagnitude > 1e-4f) outDir.Normalize();
+
+            float baseY = Ground(edge) + 0.9f;
+            Vector3 rayFrom = new Vector3(edge.x, baseY, edge.z);
+            float clearLat = wantLat - 0.45f;
+            if (Physics.SphereCast(rayFrom, 0.35f, outDir, out var hit, clearLat + 0.65f, WallMask, QueryTriggerInteraction.Ignore))
+            {
+                float safeDist = hit.distance - 0.65f;
+                if (safeDist < 0.75f)
+                {
+                    // rua muito estreita deste lado: tenta atrás da carreta (sempre sobre a pista livre)
+                    Vector3 rear = transform.TransformPoint(new Vector3(s * Mathf.Min(HalfWidth, 1.1f), 0f, -LENGTH * 0.5f - 2.6f));
+                    rear.y = Ground(rear);
+                    return rear;
+                }
+                clearLat = Mathf.Min(clearLat, safeDist);
+            }
+            Vector3 wp = edge + outDir * clearLat;
             wp.y = Ground(wp);
             return wp;
         }
 
-        /// <summary>Direção horizontal de pos até goal desviando da carroceria da carreta (nunca corre contra a lateral dela).</summary>
+        /// <summary>Direção horizontal de pos até goal desviando da carreta e deslizando por paredes de prédios.</summary>
         public Vector3 SteerAround(Vector3 pos, Vector3 goal)
         {
             Vector3 lp = transform.InverseTransformPoint(pos);
             Vector3 lg = transform.InverseTransformPoint(goal);
-            float safeX = HalfWidth + 1.4f;
-            float safeZ = LENGTH * 0.5f + 1.5f;
-            // se o destino está do outro lado da carreta enquanto o personagem está na faixa Z dela, contorna pela traseira ou frente
-            if (Mathf.Sign(lp.x) != Mathf.Sign(lg.x) && Mathf.Abs(lp.x) < safeX + 4f && Mathf.Abs(lp.z) < safeZ)
+            float safeX = HalfWidth + 1.3f;
+            float safeZ = LENGTH * 0.5f + 1.4f;
+            Vector3 dir;
+            // se o destino está do outro lado da carreta enquanto o personagem está na faixa Z dela, contorna pela traseira/frente
+            if (Mathf.Sign(lp.x) != Mathf.Sign(lg.x) && Mathf.Abs(lp.x) < safeX + 3.5f && Mathf.Abs(lp.z) < safeZ)
             {
                 float wrapZ = lp.z >= 0f ? safeZ + 1.2f : -safeZ - 1.2f;
-                Vector3 wp = transform.TransformPoint(new Vector3(Mathf.Sign(lp.x == 0f ? 1f : lp.x) * (safeX + 0.8f), 0f, wrapZ));
+                Vector3 wp = transform.TransformPoint(new Vector3(Mathf.Sign(lp.x == 0f ? 1f : lp.x) * (safeX + 0.6f), 0f, wrapZ));
                 Vector3 d = wp - pos; d.y = 0f;
-                return d.sqrMagnitude > 1e-4f ? d.normalized : Vector3.zero;
+                dir = d.sqrMagnitude > 1e-4f ? d.normalized : Vector3.zero;
             }
-            Vector3 to = goal - pos; to.y = 0f;
-            if (to.sqrMagnitude < 1e-4f) return Vector3.zero;
-            Vector3 dir = to.normalized;
-            // se está muito próximo da lateral, adiciona leve afastamento lateral para andar paralelo à carreta
-            if (Mathf.Abs(lp.z) < safeZ && Mathf.Abs(lp.x) < safeX + 0.6f)
+            else
             {
-                float s = lp.x >= 0f ? 1f : -1f;
-                Vector3 outDir = transform.TransformDirection(new Vector3(s, 0f, 0f));
-                outDir.y = 0f;
-                float push = Mathf.InverseLerp(safeX + 0.6f, HalfWidth, Mathf.Abs(lp.x));
-                dir = (dir + outDir.normalized * push * 1.4f).normalized;
+                Vector3 to = goal - pos; to.y = 0f;
+                if (to.sqrMagnitude < 1e-4f) return Vector3.zero;
+                dir = to.normalized;
+                // se está muito próximo da lateral da carreta, anda paralelo sem empurrar contra ela
+                if (Mathf.Abs(lp.z) < safeZ && Mathf.Abs(lp.x) < safeX + 0.5f)
+                {
+                    float s = lp.x >= 0f ? 1f : -1f;
+                    Vector3 outDir = transform.TransformDirection(new Vector3(s, 0f, 0f));
+                    outDir.y = 0f;
+                    float push = Mathf.InverseLerp(safeX + 0.5f, HalfWidth, Mathf.Abs(lp.x));
+                    dir = (dir + outDir.normalized * push * 1.3f).normalized;
+                }
+            }
+            // desvio de paredes de prédios: projeta a direção na tangente da parede + direção da rua
+            if (dir.sqrMagnitude > 1e-4f)
+            {
+                Vector3 probe = pos + Vector3.up * 0.85f;
+                if (Physics.SphereCast(probe, 0.36f, dir, out var wh, 1.8f, WallMask, QueryTriggerInteraction.Ignore))
+                {
+                    Vector3 n = wh.normal; n.y = 0f;
+                    if (n.sqrMagnitude > 1e-4f)
+                    {
+                        n.Normalize();
+                        Vector3 tang = Vector3.ProjectOnPlane(dir, n);
+                        Vector3 roadF = transform.forward; roadF.y = 0f;
+                        if (tang.sqrMagnitude < 0.05f && roadF.sqrMagnitude > 1e-4f)
+                            tang = Vector3.ProjectOnPlane(roadF.normalized, n);
+                        if (tang.sqrMagnitude > 1e-4f)
+                            dir = (tang.normalized + n * 0.35f).normalized;
+                        else
+                            dir = n;
+                    }
+                }
             }
             return dir;
         }
