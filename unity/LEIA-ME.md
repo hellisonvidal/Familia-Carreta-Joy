@@ -56,6 +56,8 @@ separada da versão atual (pacote `com.familia.carretajoy.unity`), então dá pa
   comuns ficam **sentados dentro** das 4 carretas abertas (`tools/carretas.py`); física e animações corrigidas (FootIK apenas no chão,
   aderência em ladeiras, colisão suave com a carreta e separação entre personagens).
 
+- **v0.10.2:** corrigidas definitivamente as pernas tortas ao andar/correr em todos os 9 personagens (`ImportRules.cs` usa `CopyFromOther` do Avatar T-pose limpo de `Idle.fbx` e `Passeio_Loop.fbx`); corrigido o Fofão começando no chão (`Russa_Loop` removida das danças automáticas da turma); movimentação livre dos personagens na rua ao lado da carreta com desvio da carroceria e subidas ocasionais na carreta; corrigido o menu inicial para não pular direto para a seleção de carreta (`MenuUI.cs` + `Pad.cs`).
+
 Todo o projeto é montado por código (`Assets/Scripts/Editor/Builder.cs`): pipeline, materiais, cena e
 ajustes do Android. Os modelos ficam em `Assets/Resources`.
 

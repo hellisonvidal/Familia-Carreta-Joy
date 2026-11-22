@@ -31,7 +31,7 @@ namespace CarretaJoy
             // modos: 0 TPS (atrás do ombro), 1 normal, 2 perto, 3 longe, 4 aérea
             bool tps = mode == 0 && !drive;
             float hk = drive ? 1f : target.Height / 1.3f;
-            float baseD = drive ? 17f : tps ? 2.6f * Mathf.Max(0.9f, hk) : distance;
+            float baseD = drive ? 17f : tps ? 2.6f * Mathf.Max(0.9f, hk) : target.OnTruck ? 6.5f : distance;
             float k = mode == 2 ? 0.6f : mode == 3 ? 1.8f : 1f;
             float want = baseD * k * zoom;
             float p = pitch;

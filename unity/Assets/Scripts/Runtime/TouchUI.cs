@@ -62,6 +62,7 @@ namespace CarretaJoy
             Add("buzina", "BUZINA", true, new Color(0.95f, 0.8f, 0.1f));
             Add("seguro", "SEGURO", true, new Color(0.2f, 0.7f, 0.35f));
             Add("dancar", "DANÇAR", false, new Color(0.95f, 0.25f, 0.6f));
+            Add("subir", "SUBIR", false, new Color(0.15f, 0.78f, 0.45f));
             Add("trocar", "TROCAR", false, new Color(0.2f, 0.2f, 0.3f));
             Add("camera", "CÂMERA", false, new Color(0.2f, 0.2f, 0.3f));
             Add("dia", "NOITE", false, new Color(0.2f, 0.2f, 0.45f));
@@ -97,9 +98,10 @@ namespace CarretaJoy
             B["ninja"].r = A(87, 64, 14);
             B["buzina"].r = A(30, 30, 22);
             B["seguro"].r = A(52, 22, 17);
-            float bw = 22 * u, bh = 9 * u;
-            B["dancar"].r = new Rect(W / 2 - bw - 1.5f * u, H - bh - 3 * u, bw, bh);
-            B["dirigir"].r = new Rect(W / 2 + 1.5f * u, H - bh - 3 * u, bw, bh);
+            float bw = 20 * u, bh = 9 * u;
+            B["dancar"].r = new Rect(W / 2 - bw * 1.5f - 2 * u, H - bh - 3 * u, bw, bh);
+            B["subir"].r = new Rect(W / 2 - bw * 0.5f, H - bh - 3 * u, bw, bh);
+            B["dirigir"].r = new Rect(W / 2 + bw * 0.5f + 2 * u, H - bh - 3 * u, bw, bh);
             B["trocar"].r = new Rect(3 * u, 13 * u, 34 * u, 9 * u);
             B["camera"].r = new Rect(3 * u, 24 * u, 22 * u, 8 * u);
             B["pausa"].r = new Rect(W - 13 * u, 3 * u, 10 * u, 9 * u);
@@ -177,7 +179,7 @@ namespace CarretaJoy
                 if (k != Vector2.zero) Move = k.normalized;
                 void K(KeyCode c, string id) { if (Input.GetKeyDown(c) && B[id].visible) B[id].pressed = true; }
                 K(KeyCode.Space, "pular"); K(KeyCode.Q, "mortal"); K(KeyCode.E, "flip"); K(KeyCode.R, "pirueta");
-                if (Input.GetKeyDown(KeyCode.LeftShift)) B[B["correr"].toggled ? "andar" : "correr"].pressed = true; K(KeyCode.G, "dancar"); K(KeyCode.V, "dirigir");
+                if (Input.GetKeyDown(KeyCode.LeftShift)) B[B["correr"].toggled ? "andar" : "correr"].pressed = true; K(KeyCode.F, "subir"); K(KeyCode.G, "dancar"); K(KeyCode.V, "dirigir");
                 K(KeyCode.H, "buzina"); K(KeyCode.Z, "rolar"); K(KeyCode.X, "deslizar"); K(KeyCode.T, "ninja"); K(KeyCode.C, "camera"); K(KeyCode.Tab, "trocar"); K(KeyCode.N, "dia"); K(KeyCode.Escape, "pausa"); K(KeyCode.B, "seguro");
                 B["buzina"].held = Input.GetKey(KeyCode.H) || (B["buzina"].held && Input.GetMouseButton(0));
                 if (Input.GetKeyDown(KeyCode.M)) BigMap = !BigMap;
@@ -200,7 +202,7 @@ namespace CarretaJoy
                 if (Move == Vector2.zero) Move = Pad.Left;
                 CamDelta += Pad.Right * 150f * Time.unscaledDeltaTime * Settings.Sensitivity;
                 void P(bool down, string id) { if (down && B[id].visible) B[id].pressed = true; }
-                P(Pad.Down(Pad.A), "pular"); P(Pad.Down(Pad.B), "dancar"); P(Pad.Down(Pad.X), "mortal"); P(Pad.Down(Pad.Y), "flip");
+                P(Pad.Down(Pad.A), "pular"); P(Pad.Down(Pad.B), B["subir"].visible ? "subir" : "dancar"); P(Pad.Down(Pad.X), "mortal"); P(Pad.Down(Pad.Y), "flip");
                 P(Pad.Down(Pad.LB), "pirueta"); P(Pad.Down(9), "ninja"); P(Pad.Down(Pad.Y), "seguro");
                 // gatilhos: a pé rolam/deslizam; dirigindo aceleram/freiam
                 if (!B["buzina"].visible) { P(Pad.RT > 0.6f && !rtWas, "rolar"); P(Pad.LT > 0.6f && !ltWas, "deslizar"); }

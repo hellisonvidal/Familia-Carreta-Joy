@@ -23,10 +23,20 @@ namespace CarretaJoy
             for (int i = 0; i < 64; i++) { float t = i / 63f; grad.SetPixel(0, i, Color.Lerp(new Color(0.35f, 0.05f, 0.35f, 0.85f), new Color(0.04f, 0.02f, 0.12f, 0.92f), t)); }
             grad.Apply();
             glow = TouchUI.MakeCircle(64);
+            unlockTime = Time.unscaledTime + 0.8f;
         }
 
         int openedFrame = -1;
-        public void Open(Page p) { openedFrame = Time.frameCount; if (p == Page.Settings || p == Page.Chars || p == Page.Start || p == Page.Trucks || p == Page.Combos) back = page; page = p; scroll = Vector2.zero; }
+        float unlockTime;
+        bool CanClick => Time.frameCount != openedFrame && Time.unscaledTime >= unlockTime;
+        public void Open(Page p)
+        {
+            openedFrame = Time.frameCount;
+            unlockTime = Time.unscaledTime + 0.35f;
+            if (p == Page.Settings || p == Page.Chars || p == Page.Start || p == Page.Trucks || p == Page.Combos) back = page;
+            page = p;
+            scroll = Vector2.zero;
+        }
 
         void Styles()
         {
@@ -102,7 +112,7 @@ namespace CarretaJoy
             GUI.EndGroup();
         }
 
-        bool B(Rect r, string s, bool sel = false) => GUI.Button(r, s, sel ? btnSel : btn);
+        bool B(Rect r, string s, bool sel = false) => GUI.Button(r, s, sel ? btnSel : btn) && CanClick;
 
         /// <summary>Aviso de versão nova no menu inicial: baixa e instala sem sair do jogo.</summary>
         void UpdateBox(float W, float x, float y, float w)
@@ -138,7 +148,7 @@ namespace CarretaJoy
         }
 
         /// <summary>Cartão com foto, moldura neon e legenda.</summary>
-        bool Card(Rect r, Texture img, string caption, bool sel, bool hover = false, string note = null)
+        bool Card(Rect r, Texture img, string caption, bool sel, bool hover = false, string note = null, bool clickable = true)
         {
             // sombra
             GUI.color = new Color(0, 0, 0, 0.45f);
@@ -159,12 +169,12 @@ namespace CarretaJoy
             GUI.Label(new Rect(inner.x, imgR.yMax, inner.width, capH), caption, lbl);
             lbl.fontSize = fs; lbl.alignment = TextAnchor.MiddleLeft;
             if (note != null) { GUI.color = new Color(1, 0.85f, 0.2f); GUI.Label(new Rect(imgR.x + u, imgR.y + u, imgR.width, 4 * u), note, small); GUI.color = Color.white; }
-            return GUI.Button(r, GUIContent.none, GUIStyle.none);
+            return clickable && GUI.Button(r, GUIContent.none, GUIStyle.none) && CanClick;
         }
 
         void Main(float W, float H)
         {
-            // coluna da esquerda: botões; direita: vitrine com a carreta, o personagem e o local escolhidos
+            // coluna da esquerda: botões; direita: vitrine visual da carreta, personagem e local escolhidos
             float x = 5 * u, bw = Mathf.Min(58 * u, W * 0.36f), bh = 8f * u, gap = 9.4f * u, y = 26 * u;
             var c = title.alignment; title.alignment = TextAnchor.MiddleLeft; sub.alignment = TextAnchor.MiddleLeft;
             title.normal.textColor = new Color(0, 0, 0, 0.5f); GUI.Label(new Rect(x + 4, 4 * u + 4, W, 14 * u), "CARRETA JOY", title);
@@ -174,25 +184,25 @@ namespace CarretaJoy
             if (B(new Rect(x, y, bw, bh * 1.15f), "JOGAR", true)) game.StartGame();
             y += gap * 1.12f;
             if (B(new Rect(x, y, bw, bh), "Personagem: " + game.CharName(Settings.StartChar))) Open(Page.Chars); y += gap;
-            if (B(new Rect(x, y, bw, bh), game.TruckName(Settings.Truck))) Open(Page.Trucks); y += gap;
+            if (B(new Rect(x, y, bw, bh), "Carreta: " + game.TruckName(Settings.Truck))) Open(Page.Trucks); y += gap;
             if (B(new Rect(x, y, bw, bh), "Partida: " + game.StopName(Settings.StartStop))) Open(Page.Start); y += gap;
             if (B(new Rect(x, y, bw / 2 - u, bh), "Combos")) Open(Page.Combos);
             if (B(new Rect(x + bw / 2 + u, y, bw / 2 - u, bh), "Ajustes")) Open(Page.Settings); y += gap;
             if (B(new Rect(x, y, bw, bh * 0.8f), "Sair")) Application.Quit();
 
-            // vitrine
+            // vitrine apenas visual (evita abrir a seleção de carreta por toque acidental ao abrir o jogo)
             float sx = x + bw + 5 * u, sw = W - sx - 4 * u;
             if (sw > 40 * u)
             {
                 float cw = Mathf.Min(sw, (H - 30 * u) * 1.6f), chh = cw / 1.6f;
                 var big = new Rect(sx + (sw - cw) / 2, 6 * u, cw, chh);
-                if (Card(big, Preview(game.TruckFile(Settings.Truck)), game.TruckName(Settings.Truck), false)) Open(Page.Trucks);
+                Card(big, Preview(game.TruckFile(Settings.Truck)), game.TruckName(Settings.Truck), false, false, null, false);
                 float sw2 = (cw - 2 * u) / 2, sh2 = Mathf.Min(H - big.yMax - 14 * u, sw2 / 1.6f);
                 if (sh2 > 12 * u)
                 {
                     sw2 = Mathf.Min(sw2, sh2 * 1.6f);
-                    if (Card(new Rect(big.x, big.yMax + 2 * u, sw2, sh2), Preview("Partida_" + Settings.StartStop), game.StopName(Settings.StartStop), false)) Open(Page.Start);
-                    if (Card(new Rect(big.xMax - sh2 * 0.85f, big.yMax + 2 * u, sh2 * 0.85f, sh2), Portrait(Settings.StartChar), game.CharName(Settings.StartChar), false)) Open(Page.Chars);
+                    Card(new Rect(big.x, big.yMax + 2 * u, sw2, sh2), Preview("Partida_" + Settings.StartStop), game.StopName(Settings.StartStop), false, false, null, false);
+                    Card(new Rect(big.xMax - sh2 * 0.85f, big.yMax + 2 * u, sh2 * 0.85f, sh2), Portrait(Settings.StartChar), game.CharName(Settings.StartChar), false, false, null, false);
                 }
             }
             UpdateBox(W, x, H - 15 * u, bw);
@@ -280,7 +290,7 @@ namespace CarretaJoy
                 lbl.alignment = TextAnchor.MiddleCenter; lbl.fontSize = Mathf.RoundToInt(Mathf.Min(3.4f * u, cw / Mathf.Max(6, game.CharName(i).Length) * 1.7f));
                 GUI.Label(new Rect(rect.x, img.yMax, rect.width, rect.yMax - img.yMax), game.CharName(i), lbl);
                 lbl.alignment = TextAnchor.MiddleLeft;
-                if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) PickChar(i);
+                if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && CanClick) PickChar(i);
             }
             float bw = 46 * u, bh = 9 * u, y = y0 + 2 * (ch + gx) + u;
             if (inGame)
@@ -300,8 +310,9 @@ namespace CarretaJoy
         // ---------------- controle de videogame nos menus ----------------
         void Update()
         {
-            if (page == Page.None || game == null || Time.frameCount == openedFrame) return;
+            if (page == Page.None || game == null || !CanClick) return;
             Pad.Update();
+            if (!Pad.Connected) return;
             bool a = Pad.Down(Pad.A), bk = Pad.Down(Pad.B), st = Pad.Start;
             int dx = (Pad.DRight || StickEdge(1) ? 1 : 0) - (Pad.DLeft || StickEdge(2) ? 1 : 0);
             int dy = (Pad.DDown || StickEdge(3) ? 1 : 0) - (Pad.DUp || StickEdge(4) ? 1 : 0);

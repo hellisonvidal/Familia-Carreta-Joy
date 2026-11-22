@@ -18,8 +18,8 @@ namespace CarretaJoy.EditorTools
     /// </summary>
     public static class Builder
     {
-        public const string VERSION = "0.10.1";
-        public const int VERSION_CODE = 12;
+        public const string VERSION = "0.10.2";
+        public const int VERSION_CODE = 13;
         const string SCENE = "Assets/Scenes/Main.unity";
 
         [MenuItem("Carreta Joy/Preparar projeto")]
@@ -29,6 +29,11 @@ namespace CarretaJoy.EditorTools
             Directory.CreateDirectory("Assets/Settings");
             Directory.CreateDirectory("Assets/Scenes");
             Directory.CreateDirectory("Assets/Resources/Materials");
+
+            // importa primeiro os avatares de referência (T-pose limpa) antes das animações que copiam o Avatar deles
+            foreach (var refAnim in new[] { "Assets/Resources/Animations/Idle.fbx", "Assets/Resources/Animations/Livres/Passeio_Loop.fbx" })
+                if (File.Exists(refAnim))
+                    AssetDatabase.ImportAsset(refAnim, ImportAssetOptions.ForceUpdate);
 
             // garante que modelos e animações passaram pelas regras de importação
             foreach (var dir in new[] { "Assets/Resources/Characters", "Assets/Resources/Animations", "Assets/Resources/Vehicles", "Assets/Resources/People", "Assets/Resources/Traffic", "Assets/Resources/Houses", "Assets/Resources/City", "Assets/Resources/Sounds", "Assets/Resources/Music" })

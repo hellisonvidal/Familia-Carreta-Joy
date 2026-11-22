@@ -139,9 +139,11 @@ namespace CarretaJoy
         float trickT, trickLen;
         Vector3 rootAccum;
 
-        // carreta (referência para colisão na rua; personagens ficam sempre na rua)
+        // carreta (personagens andam livres na rua ao lado e sobem nela algumas vezes)
         public Truck truck;
-        float climbT = -1; Vector3 climbFrom;
+        public bool OnTruck;
+        Vector3 local; float localVy;
+        float climbT = -1; Vector3 climbFrom, climbToLocal; bool climbingUp;
 
         /// <summary>Altura do chão (definida pela cidade); null = chão plano em y = 0.</summary>
         public static System.Func<float, float, float> GroundHeight;
@@ -216,6 +218,7 @@ namespace CarretaJoy
         public void Jump()
         {
             if (Busy || Trick != null) { jumpBuf = 0.18f; return; }
+            if (OnTruck) { if (localVy == 0) localVy = 5.2f; Dancing = false; return; }
             bool canJump = Grounded || airT < 0.12f;
             if (Grounded && TryLedge()) { jumpBuf = 0; return; }
             if (canJump && vel.y <= 0.5f) { vel.y = 6.2f; Grounded = false; airT = 1f; jumpBuf = 0; Dancing = false; StandUp(); }
@@ -223,7 +226,7 @@ namespace CarretaJoy
         }
 
         // ---------------- parkour: mureta / obstáculo baixo à frente ----------------
-        Vector3 ledgeTo;
+        bool ledge; Vector3 ledgeTo;
         bool TryLedge()
         {
             if (clips.climb == null) return false;
@@ -236,8 +239,8 @@ namespace CarretaJoy
             if (dh < 0.45f || dh > 2.1f) return false;
             // precisa caber em cima
             if (Physics.CheckCapsule(top.point + Vector3.up * (cc.radius + 0.05f), top.point + Vector3.up * (Height - cc.radius), cc.radius * 0.9f, ~(1 << 2), QueryTriggerInteraction.Ignore)) return false;
-            ledgeTo = top.point + Vector3.up * 0.05f;
-            climbT = 0; climbFrom = p;
+            ledge = true; ledgeTo = top.point + Vector3.up * 0.05f;
+            climbingUp = false; climbT = 0; climbFrom = p;
             cc.enabled = false; Dancing = false; StandUp();
             anim.PlayTrick(clips.climb, 0.9f); Trick = "escalar"; trickLen = 0.75f; trickT = 0;
             Game.I?.AddScore(60, "PARKOUR!");
@@ -281,17 +284,17 @@ namespace CarretaJoy
             switch (name)
             {
                 case "rolar":
-                    if (!Grounded) return;
+                    if (OnTruck || !Grounded) return;
                     BeginSteps(name, new Step { clip = clips.roll, speed = 1.15f, physics = true, push = Mathf.Max(sp, 3.5f) * Height / 1.3f });
                     pts = 90; break;
                 case "deslizar":
-                    if (!Grounded) return;
+                    if (OnTruck || !Grounded) return;
                     BeginSteps(name, new Step { clip = clips.slideIn, physics = true, push = Mathf.Max(sp, 5.5f) * Height / 1.3f },
                                      new Step { clip = clips.slideLoop, len = 0.45f, physics = true },
                                      new Step { clip = clips.slideOut, physics = true });
                     pts = 110; break;
                 case "ninja":
-                    if (!Grounded) return;
+                    if (OnTruck || !Grounded) return;
                     BeginSteps(name, new Step { clip = clips.ninjaIn, len = clips.ninjaIn ? clips.ninjaIn.length * 0.5f : 0.3f, physics = true },
                                      new Step { clip = clips.ninjaLoop, physics = true, untilLand = true, jumpV = 8.5f, push = Mathf.Max(sp, 2.5f) },
                                      new Step { clip = clips.ninjaOut, len = clips.ninjaOut ? clips.ninjaOut.length * 0.6f : 0.4f, physics = true });
@@ -365,12 +368,39 @@ namespace CarretaJoy
             if (Trick != null) rootAccum += delta;
         }
 
+        /// <summary>Perto da carreta: sobe pela lateral. Em cima: pula de volta para a rua.</summary>
+        public bool ClimbOrDescend(bool awardScore = true)
+        {
+            if (truck == null || Busy || Trick != null) return false;
+            if (!OnTruck)
+            {
+                if (truck.DistanceTo(transform.position) > 3.8f) return false;
+                climbingUp = true; ledge = false; climbT = 0; climbFrom = transform.position;
+                var lp = truck.transform.InverseTransformPoint(transform.position);
+                climbToLocal = truck.ClampToRoof(new Vector3(lp.x * 0.35f, 0, lp.z));
+                cc.enabled = false; Dancing = false; StandUp();
+                anim.PlayTrick(clips.climb ?? clips.jump, clips.climb ? 0.9f : 1.2f);
+                Trick = awardScore ? "subir" : "subir_ai"; trickLen = 0.75f; trickT = 0;
+                return true;
+            }
+            else
+            {
+                climbingUp = false; ledge = false; climbT = 0;
+                climbFrom = transform.position;
+                float side = local.x >= 0 ? 1 : -1;
+                climbToLocal = new Vector3(side * (truck.HalfWidth + 2.2f), 0, local.z);
+                Dancing = false;
+                anim.PlayTrick(clips.jump, 1.2f); Trick = "descer"; trickLen = 0.75f; trickT = 0;
+                return true;
+            }
+        }
+
         bool hidden;
         /// <summary>Volta ao estado normal (no chão, sem acrobacia, sem dança).</summary>
         public void ResetState()
         {
-            climbT = -1; Trick = null; Dancing = false; vel = Vector3.zero; rootAccum = Vector3.zero;
-            steps.Clear(); pushV = 0; airT = 0; jumpBuf = 0;
+            OnTruck = false; climbT = -1; Trick = null; Dancing = false; vel = Vector3.zero; localVy = 0; rootAccum = Vector3.zero;
+            steps.Clear(); pushV = 0; airT = 0; jumpBuf = 0; ledge = false;
             if (!hidden) cc.enabled = true;
         }
         public void Teleport(Vector3 p, Quaternion rot)
@@ -389,7 +419,7 @@ namespace CarretaJoy
         /// <summary>Separação suave na rua entre personagens para ninguém atravessar o outro.</summary>
         public void PushHorizontal(Vector3 delta)
         {
-            if (hidden || Busy || !cc.enabled) return;
+            if (hidden || Busy || OnTruck || !cc.enabled) return;
             delta.y = 0f;
             if (delta.sqrMagnitude > 1e-6f) cc.Move(delta);
         }
@@ -415,14 +445,15 @@ namespace CarretaJoy
                 {
                     bool rm = st != null && !st.physics;
                     if (st != null) NextStep(); else Trick = null;
-                    if (Trick == null && rm) vel.y = 0;
+                    if (Trick == null && rm && !OnTruck) vel.y = 0;
                 }
                 tricking = Trick != null;
             }
 
             float target = Running ? RunSpeed : WalkSpeed;
             Vector3 hv;
-            TickGround(wish, target, dt, tricking, out hv);
+            if (OnTruck) TickOnTruck(wish, target, dt, tricking, out hv);
+            else TickGround(wish, target, dt, tricking, out hv);
 
             // vira para onde está indo
             if (hv.sqrMagnitude > 0.05f && !tricking)
@@ -514,20 +545,57 @@ namespace CarretaJoy
             hv = h;
         }
 
+        void TickOnTruck(Vector3 wish, float target, float dt, bool tricking, out Vector3 hv)
+        {
+            Vector3 lw = truck.transform.InverseTransformDirection(wish) * target * 0.75f;
+            Vector3 cur = new Vector3(vel.x, 0, vel.z);
+            cur = Vector3.MoveTowards(cur, tricking ? Vector3.zero : lw, 20f * dt);
+            vel.x = cur.x; vel.z = cur.z;
+            local += cur * dt;
+            if (tricking)
+            {
+                var d = truck.transform.InverseTransformDirection(Vector3.ClampMagnitude(rootAccum, 0.5f));
+                rootAccum = Vector3.zero;
+                local += new Vector3(d.x, 0, d.z);
+                local.y = Mathf.Max(0, local.y + d.y);
+            }
+            else
+            {
+                rootAccum = Vector3.zero;
+                if (localVy != 0 || local.y > 0)
+                {
+                    localVy -= 20f * dt; local.y += localVy * dt;
+                    if (local.y <= 0) { local.y = 0; localVy = 0; Game.I?.OnLand(this); }
+                }
+            }
+            local = truck.ClampToRoof(local);
+            Grounded = local.y <= 0.001f;
+            airT = Grounded ? 0f : airT + dt;
+            transform.position = truck.RoofToWorld(local);
+            hv = truck.transform.TransformDirection(cur);
+        }
+
         void TickClimb(float dt)
         {
             climbT += dt / 0.75f;
             float u = Mathf.Clamp01(climbT);
             float e = u * u * (3 - 2 * u);
-            Vector3 p = Vector3.Lerp(climbFrom, ledgeTo, e);
-            p.y += Mathf.Sin(u * Mathf.PI) * 0.3f;
+            Vector3 to = ledge ? ledgeTo
+                       : climbingUp ? truck.RoofToWorld(climbToLocal)
+                       : truck.transform.TransformPoint(climbToLocal) + Vector3.up * 0.05f;
+            if (!climbingUp && !ledge) to.y = Ground(to) + 0.12f;
+            Vector3 p = Vector3.Lerp(climbFrom, to, e);
+            p.y += Mathf.Sin(u * Mathf.PI) * (ledge ? 0.3f : 1.1f);
             transform.position = p;
-            var dir = ledgeTo - climbFrom; dir.y = 0;
+            var dir = to - climbFrom; dir.y = 0;
             if (dir.sqrMagnitude > 0.01f) transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(dir), 1 - Mathf.Exp(-dt * 10f));
             if (u >= 1)
             {
+                bool award = Trick == "subir";
                 climbT = -1; Trick = null;
-                cc.enabled = true; vel = Vector3.zero; transform.position = ledgeTo; Grounded = true; airT = 0f;
+                if (ledge) { ledge = false; cc.enabled = true; vel = Vector3.zero; transform.position = to; Grounded = true; airT = 0f; }
+                else if (climbingUp) { OnTruck = true; local = climbToLocal; localVy = 0; vel = Vector3.zero; Grounded = true; airT = 0f; if (award) Game.I?.AddScore(50, "SUBIU!"); }
+                else { OnTruck = false; cc.enabled = true; vel = Vector3.zero; Grounded = true; airT = 0f; transform.position = to; }
             }
         }
     }

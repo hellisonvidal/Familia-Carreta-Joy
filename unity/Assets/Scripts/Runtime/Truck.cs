@@ -316,17 +316,55 @@ namespace CarretaJoy
         float yaw;
         public float ManualSpeed => speed;
 
-        /// <summary>Posição na RUA (ao lado e atrás da carreta) onde cada personagem acompanha correndo ou dançando.</summary>
-        public Vector3 StreetSlot(int k, bool stopped)
+        /// <summary>Posição livre na RUA ao lado da carreta (side = -1 esquerda / +1 direita).</summary>
+        public Vector3 FreeStreetPoint(int side, float lat, float zOff)
         {
-            int side = (k % 2 == 0) ? 1 : -1;
-            int row = k / 2;
-            float x = side * (HalfWidth + (stopped ? 2.8f + (row % 2) * 0.9f : 2.6f + (row % 2) * 0.7f));
-            float z = stopped ? (4.0f - row * 2.5f) : (2.2f - row * 2.4f);
-            Vector3 wp = transform.TransformPoint(new Vector3(x, 0f, z));
+            float x = (side >= 0 ? 1f : -1f) * (HalfWidth + Mathf.Max(2.2f, lat));
+            Vector3 wp = transform.TransformPoint(new Vector3(x, 0f, zOff));
             wp.y = Ground(wp);
             return wp;
         }
+
+        /// <summary>Direção horizontal de pos até goal desviando da carroceria da carreta (nunca corre contra a lateral dela).</summary>
+        public Vector3 SteerAround(Vector3 pos, Vector3 goal)
+        {
+            Vector3 lp = transform.InverseTransformPoint(pos);
+            Vector3 lg = transform.InverseTransformPoint(goal);
+            float safeX = HalfWidth + 1.4f;
+            float safeZ = LENGTH * 0.5f + 1.5f;
+            // se o destino está do outro lado da carreta enquanto o personagem está na faixa Z dela, contorna pela traseira ou frente
+            if (Mathf.Sign(lp.x) != Mathf.Sign(lg.x) && Mathf.Abs(lp.x) < safeX + 4f && Mathf.Abs(lp.z) < safeZ)
+            {
+                float wrapZ = lp.z >= 0f ? safeZ + 1.2f : -safeZ - 1.2f;
+                Vector3 wp = transform.TransformPoint(new Vector3(Mathf.Sign(lp.x == 0f ? 1f : lp.x) * (safeX + 0.8f), 0f, wrapZ));
+                Vector3 d = wp - pos; d.y = 0f;
+                return d.sqrMagnitude > 1e-4f ? d.normalized : Vector3.zero;
+            }
+            Vector3 to = goal - pos; to.y = 0f;
+            if (to.sqrMagnitude < 1e-4f) return Vector3.zero;
+            Vector3 dir = to.normalized;
+            // se está muito próximo da lateral, adiciona leve afastamento lateral para andar paralelo à carreta
+            if (Mathf.Abs(lp.z) < safeZ && Mathf.Abs(lp.x) < safeX + 0.6f)
+            {
+                float s = lp.x >= 0f ? 1f : -1f;
+                Vector3 outDir = transform.TransformDirection(new Vector3(s, 0f, 0f));
+                outDir.y = 0f;
+                float push = Mathf.InverseLerp(safeX + 0.6f, HalfWidth, Mathf.Abs(lp.x));
+                dir = (dir + outDir.normalized * push * 1.4f).normalized;
+            }
+            return dir;
+        }
+
+        public Vector3 ClampToRoof(Vector3 lp)
+        {
+            lp.x = Mathf.Clamp(lp.x, -HalfWidth + 0.35f, HalfWidth - 0.35f);
+            lp.z = Mathf.Clamp(lp.z, roofZ0, roofZ1);
+            return lp;
+        }
+
+        public Vector3 RoofToWorld(Vector3 lp) => transform.TransformPoint(new Vector3(lp.x, RoofY + lp.y, lp.z));
+
+        public Vector3 RoofSlot(int k) => ClampToRoof(new Vector3(k % 2 == 0 ? 0.55f : -0.55f, 0f, Mathf.Lerp(roofZ0 + 1.5f, roofZ1 - 1.0f, (k % 4) / 3f)));
 
         /// <summary>Empurra suavemente um personagem na rua para fora do corpo da carreta se houver sobreposição.</summary>
         public Vector3 PushOut(Vector3 worldPos, float radius)

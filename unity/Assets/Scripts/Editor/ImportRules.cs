@@ -42,7 +42,24 @@ namespace CarretaJoy.EditorTools
             else if (IsAnim(assetPath))
             {
                 mi.animationType = ModelImporterAnimationType.Human;
-                mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                // Usa o Avatar T-pose limpo de Idle.fbx (Mixamo) ou Passeio_Loop.fbx (Quaternius) para evitar que
+                // o Unity gere um Avatar com joelho/pé torcido em clipes que começam com a perna dobrada (Run.fbx, Sprint_Loop.fbx)!
+                string fn = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+                Avatar refAv = null;
+                if (fn == "Run" || fn == "Walk" || fn == "Jump" || fn == "Mortal" || fn == "Flip" || fn == "RunToFlip")
+                    refAv = AssetDatabase.LoadAssetAtPath<Avatar>("Assets/Resources/Animations/Idle.fbx");
+                else if (fn == "Sprint_Loop")
+                    refAv = AssetDatabase.LoadAssetAtPath<Avatar>("Assets/Resources/Animations/Livres/Passeio_Loop.fbx");
+
+                if (refAv != null && refAv.isValid && refAv.isHuman)
+                {
+                    mi.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
+                    mi.sourceAvatar = refAv;
+                }
+                else
+                {
+                    mi.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+                }
                 mi.importAnimation = true;
                 mi.materialImportMode = ModelImporterMaterialImportMode.None;
                 mi.animationCompression = ModelImporterAnimationCompression.Optimal;

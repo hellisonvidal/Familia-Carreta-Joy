@@ -60,8 +60,8 @@ namespace CarretaJoy
             prevD = DPad;
         }
 
-        public static bool Down(int b) => Input.GetKeyDown(KeyCode.JoystickButton0 + b);
-        public static bool Held(int b) => Input.GetKey(KeyCode.JoystickButton0 + b);
+        public static bool Down(int b) => Connected && Input.GetKeyDown(KeyCode.JoystickButton0 + b);
+        public static bool Held(int b) => Connected && Input.GetKey(KeyCode.JoystickButton0 + b);
         public static bool Start => Down(7) && !Android || Down(10) && Android;
         public static bool Select => Down(6) && !Android || Down(11);
         public const int A = 0, B = 1, X = 2, Y = 3, LB = 4, RB = 5, L3W = 8, L3A = 8;
