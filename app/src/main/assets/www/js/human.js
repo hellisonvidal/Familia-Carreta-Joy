@@ -209,7 +209,7 @@ export class HumanBody {
     const aOut = 0.16, dir = [Math.sin(aOut), -Math.cos(aOut), 0];
     const L1 = 0.172 * H, L2 = 0.15 * H, L3 = 0.1 * H;
     const sh = [shX, shY, -0.004 * H], el = sh.map((v, i) => v + dir[i] * L1), wr = el.map((v, i) => v + dir[i] * L2);
-    const th = [hipX, hipY, 0], kn = [hipX * 1.02, hipY - 0.245 * H, 0.004 * H];
+    const th = [hipX, hipY, 0], kn = [hipX, hipY - 0.245 * H, 0.004 * H];
     const at = { hips: [0, hipY, 0], spine: [0, waistY, 0], neck: [0, neckY, -0.004 * H], head: [0, headY, 0], shL: sh, elL: el, shR: [-sh[0], sh[1], sh[2]], elR: [-el[0], el[1], el[2]], thL: th, knL: kn, thR: [-th[0], th[1], th[2]], knR: [-kn[0], kn[1], kn[2]] };
     const { bones, list, index, rest } = makeBones(at);
     this.rest = rest; this.armRest = aOut; this.legRest = 0;
@@ -254,7 +254,7 @@ export class HumanBody {
         const [dd, rx, rz] = LP[i], d = dd * H;
         const k = ss(0.245 * H - 0.025 * H, 0.245 * H + 0.025 * H, d);
         const ft = dd / 0.468;
-        return { c: [s * lerp(th[0], kn[0] * 1.05, ft), hipY + 0.02 * H - d, lerp(0, kn[2], ft)], rx: rx * H * Math.sqrt(F), rz: rz * H * Math.sqrt(F), v: ft, w: { ['th' + n]: 1 - k, ['kn' + n]: k } };
+        return { c: [s * lerp(th[0], kn[0], ft), hipY + 0.02 * H - d, lerp(0, kn[2], ft)], rx: rx * H * Math.sqrt(F), rz: rz * H * Math.sqrt(F), v: ft, w: { ['th' + n]: 1 - k, ['kn' + n]: k } };
       }, s > 0 ? [1, 0.5625, 0.5, 1] : AT.leg, false, true);
     }
     const geo = B.geometry();
@@ -286,9 +286,9 @@ export class HumanBody {
       const n = s > 0 ? 'L' : 'R', kb = bones['kn' + n];
       const shoe = new THREE.Mesh(new THREE.CapsuleGeometry(0.03 * H * Math.sqrt(F), 0.085 * H, 4, 10), std(C.sapatos));
       shoe.rotation.x = Math.PI / 2; shoe.scale.set(1.05, 1, 0.75);
-      shoe.position.set(s * (kn[0] * 1.05 - kn[0]), (0.03 * H) - kn[1], 0.035 * H); kb.add(shoe);
+      shoe.position.set(0, (0.03 * H) - kn[1], 0.035 * H); kb.add(shoe);
       shoe.castShadow = true;
-      if (C.sola !== undefined) { const so = new THREE.Mesh(new THREE.BoxGeometry(0.06 * H, 0.012 * H, 0.15 * H), std(C.sola)); so.position.set(shoe.position.x, shoe.position.y - 0.022 * H, shoe.position.z); kb.add(so); }
+      if (C.sola !== undefined) { const so = new THREE.Mesh(new THREE.BoxGeometry(0.06 * H, 0.012 * H, 0.15 * H), std(C.sola)); so.position.set(0, shoe.position.y - 0.022 * H, shoe.position.z); kb.add(so); }
     }
     this.J = bones;
   }
